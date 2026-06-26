@@ -13,6 +13,23 @@ actions:
       const MARKER_TLDR = "## 📝 TLDR";
       const MARKER_GLANCE = "## 🧭 Glance";
       const MARKER_DETAIL = "## 🧩 Detailed Summary";
+      const LEGACY_ORIG_ABSTRACT = "\u539F\u6587\u6458\u8981";
+      const LEGACY_GLANCE = "\u901F\u89C8\u533A";
+      const LEGACY_DETAIL = "\u8BBA\u6587\u8BE6\u7EC6\u603B\u7ED3";
+      const LEGACY_DETAIL_AREA = "\u533A";
+      const LEGACY_DETAIL_AUTO = "\uFF08\u81EA\u52A8\u751F\u6210\uFF09";
+      const LEGACY_BY = "\u7531";
+      const LEGACY_AUTO_GEN = "\u81EA\u52A8\u751F\u6210";
+      const LEGACY_DPR_AUTO = "daily-paper-reader " + LEGACY_AUTO_GEN;
+      const LEGACY_DETAIL_EMOJI = "\u{1F9FA} " + LEGACY_DETAIL;
+      const LEGACY_DETAIL_AREA_FULL = LEGACY_DETAIL + LEGACY_DETAIL_AREA;
+      const LEGACY_DUAL_TITLE_AREA = "\u53CC\u8BED\u6807\u9898\u533A\u57DF";
+      const LEGACY_MIDDLE_INFO = "\u4E2D\u95F4\u4FE1\u606F\u533A";
+      const LEGACY_GLANCE_CARD = "\u901F\u89C8\u5361";
+      const LEGACY_PAGE_NAV = "\u9875\u9762\u5BFC\u822A\u4E0E\u4EA4\u4E92\u5C42";
+      const LEGACY_PAPER_BODY = "\u8BBA\u6587\u6B63\u6587";
+      const LEGACY_ARTICLE_META = "\u6587\u7AE0\u5143\u4FE1\u606F";
+      const LEGACY_DETAIL_HEADING = LEGACY_DETAIL + "(?:" + LEGACY_DETAIL_AREA + "|" + LEGACY_DETAIL_AUTO + ")?";
       const BR_PLACEHOLDER = /__BR__/g;
       const AUTO_NOTE_TAG = "dpr-ai-summary-note";
       const RETRY_DELAYS = [300, 800, 1500];
@@ -165,10 +182,10 @@ actions:
               continue;
             }
           }
-          if (!started && /^> (?:由\s*)?daily-paper-reader (?:自动生成|auto-generated)/i.test(t)) {
+          if (!started && new RegExp("^> (?:" + LEGACY_BY + "\\s*)?daily-paper-reader (?:" + LEGACY_AUTO_GEN + "|auto-generated)", "i").test(t)) {
             continue;
           }
-          if (!started && (t.includes("daily-paper-reader auto-generated") || t.includes("daily-paper-reader 自动生成"))) {
+          if (!started && (t.includes("daily-paper-reader auto-generated") || t.includes(LEGACY_DPR_AUTO))) {
             continue;
           }
           started = true;
@@ -203,44 +220,44 @@ actions:
         if (text.includes("💬") || text.includes("chat history")) {
           return "💬 Chat History";
         }
-        if (text.includes("at a glance") || text.includes("glance") || text.includes("速览区")) {
+        if (text.includes("at a glance") || text.includes("glance") || text.includes(LEGACY_GLANCE)) {
           return "🧭 Glance";
         }
         if (
           text.includes("detailed summary") ||
-          text.includes("🧩 论文详细总结") ||
-          text.includes("论文详细总结区")
+          text.includes(LEGACY_DETAIL_EMOJI) ||
+          text.includes(LEGACY_DETAIL_AREA_FULL)
         ) {
           return "🧩 Detailed Summary";
         }
         if (
           text.includes("📄") ||
           text.includes("original abstract") ||
-          text.includes("原文摘要")
+          text.includes(LEGACY_ORIG_ABSTRACT)
         ) {
           return "📄 Original Abstract";
         }
-        if (text.includes("paper-title-row") || text.includes("双语标题区域") || text.includes("bilingual title")) {
-          return "paper-title-row (bilingual title area)";
+        if (text.includes("paper-title-row") || text.includes(LEGACY_DUAL_TITLE_AREA) || text.includes("dual title")) {
+          return "paper-title-row (dual title area)";
         }
-        if (text.includes("paper-meta-row") || text.includes("中间信息区") || text.includes("middle info")) {
+        if (text.includes("paper-meta-row") || text.includes(LEGACY_MIDDLE_INFO) || text.includes("middle info")) {
           return "paper-meta-row (middle info area)";
         }
-        if (text.includes("paper-glance-section") || text.includes("速览卡")) {
+        if (text.includes("paper-glance-section") || text.includes(LEGACY_GLANCE_CARD)) {
           return "paper-glance-section (glance card)";
         }
         if (
-          text.includes("页面导航与交互层") || text.includes("page navigation and interaction layer") ||
+          text.includes(LEGACY_PAGE_NAV) || text.includes("page navigation and interaction layer") ||
           text.includes("dpr-title-bar") ||
           text.includes("paper-chat-container") ||
           text.includes("chat-history")
         ) {
           return "Page navigation and interaction layer";
         }
-        if (text.includes("论文正文") || text.includes("paper body") || text.includes("paper-content")) {
+        if (text.includes(LEGACY_PAPER_BODY) || text.includes("paper body") || text.includes("paper-content")) {
           return "📝 Paper Body";
         }
-        if (text.includes("文章元信息") || text.includes("article metadata")) {
+        if (text.includes(LEGACY_ARTICLE_META) || text.includes("article metadata")) {
           return "📋 Article Metadata";
         }
         return normalizeSectionTitle(raw).trim();
@@ -262,7 +279,7 @@ actions:
           "📝 TLDR",
           "🧭 Glance",
           "🧩 Detailed Summary",
-          "paper-title-row (bilingual title area)",
+          "paper-title-row (dual title area)",
           "paper-meta-row (middle info area)",
           "paper-glance-section (glance card)",
           "📝 Paper Body",
@@ -319,11 +336,11 @@ actions:
           },
           {
             title: "📄 Original Abstract",
-            regex: /#{1,6}\s*📄\s*(?:Original\s*Abstract|原文摘要)/i,
+            regex: new RegExp("#{1,6}\\s*📄\\s*(?:Original\\s*Abstract|" + LEGACY_ORIG_ABSTRACT + ")", "i"),
           },
           {
             title: "📄 Original Abstract",
-            regex: /#{1,6}\s*(?:Original\s*Abstract|原文摘要)/i,
+            regex: new RegExp("#{1,6}\\s*(?:Original\\s*Abstract|" + LEGACY_ORIG_ABSTRACT + ")", "i"),
           },
           {
             title: "📝 TLDR",
@@ -335,19 +352,19 @@ actions:
           },
           {
             title: "🧭 Glance",
-            regex: /#{1,6}\s*🧭\s*(?:At a Glance|Glance|速览区)/i,
+            regex: new RegExp("#{1,6}\\s*🧭\\s*(?:At a Glance|Glance|" + LEGACY_GLANCE + ")", "i"),
           },
           {
             title: "🧭 Glance",
-            regex: /#{1,6}\s*(?:At a Glance|速览区)/i,
+            regex: new RegExp("#{1,6}\\s*(?:At a Glance|" + LEGACY_GLANCE + ")", "i"),
           },
           {
             title: "🧩 Detailed Summary",
-            regex: /#{1,6}\s*🧩\s*(?:Detailed Summary(?: \(auto-generated\))?|论文详细总结(?:区|（自动生成）)?)/i,
+            regex: new RegExp("#{1,6}\\s*🧩\\s*(?:Detailed Summary(?: \\(auto-generated\\))?|" + LEGACY_DETAIL_HEADING + ")", "i"),
           },
           {
             title: "🧩 Detailed Summary",
-            regex: /#{1,6}\s*(?:Detailed Summary(?: \(auto-generated\))?|论文详细总结(?:区|（自动生成）)?)/i,
+            regex: new RegExp("#{1,6}\\s*(?:Detailed Summary(?: \\(auto-generated\\))?|" + LEGACY_DETAIL_HEADING + ")", "i"),
           },
         ];
 
@@ -414,15 +431,15 @@ actions:
         const normalized = normalizeSourceText(text);
         const detectPatterns = [
           /#{1,6}\s*💬\s*Chat\s*History/i,
-          /#{1,6}\s*📄\s*(?:Original\s*Abstract|原文摘要)/i,
+          new RegExp("#{1,6}\\s*📄\\s*(?:Original\\s*Abstract|" + LEGACY_ORIG_ABSTRACT + ")", "i"),
           /#{1,6}\s*📝\s*TLDR/i,
-          /#{1,6}\s*🧭\s*(?:At a Glance|Glance|速览区)/i,
-          /#{1,6}\s*🧩\s*(?:Detailed Summary(?: \(auto-generated\))?|论文详细总结(?:区|（自动生成）)?)/i,
+          new RegExp("#{1,6}\\s*🧭\\s*(?:At a Glance|Glance|" + LEGACY_GLANCE + ")", "i"),
+          new RegExp("#{1,6}\\s*🧩\\s*(?:Detailed Summary(?: \\(auto-generated\\))?|" + LEGACY_DETAIL_HEADING + ")", "i"),
           /#{1,6}\s*Chat\s*History/i,
-          /#{1,6}\s*(?:Original\s*Abstract|原文摘要)/i,
+          new RegExp("#{1,6}\\s*(?:Original\\s*Abstract|" + LEGACY_ORIG_ABSTRACT + ")", "i"),
           /#{1,6}\s*TLDR/i,
-          /#{1,6}\s*(?:At a Glance|速览区)/i,
-          /#{1,6}\s*(?:Detailed Summary(?: \(auto-generated\))?|论文详细总结(?:区|（自动生成）)?)/i,
+          new RegExp("#{1,6}\\s*(?:At a Glance|" + LEGACY_GLANCE + ")", "i"),
+          new RegExp("#{1,6}\\s*(?:Detailed Summary(?: \\(auto-generated\\))?|" + LEGACY_DETAIL_HEADING + ")", "i"),
         ];
         return detectPatterns.some((pattern) => pattern.test(normalized));
       }

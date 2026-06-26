@@ -99,7 +99,6 @@ class ConferenceWorkflowAndUiTest(unittest.TestCase):
         self.assertIn("profile_tag: profileTags.join(',')", manager)
         self.assertIn("Conference Paper Retrieval", manager)
         self.assertNotIn("showPrettyConfirm", manager)
-        self.assertNotIn("确认对 <strong>", manager)
         self.assertNotIn("dpr-run-confirm", css)
         self.assertNotIn("runConferenceMaintain(conf, years)", manager)
 

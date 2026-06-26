@@ -184,12 +184,12 @@ class LlmRefineRecoveryTest(unittest.TestCase):
         self.assertEqual(user_content.count("User requirements list:"), 2)
         self.assertEqual(user_content.count("Papers:"), 2)
         self.assertIn("method_en", user_content)
-        self.assertNotIn("title_zh", user_content)
+        self.assertNotIn("title_alt", user_content)
         self.assertIn("60-90 words", user_content)
         self.assertIn("15-35 words", user_content)
         self.assertIn("length targets are guidance", user_content)
         self.assertIn("same style as a paper-page TLDR abstract", user_content)
-        self.assertNotIn("Chinese characters", user_content)
+        self.assertNotIn("non-English characters", user_content)
         self.assertTrue(user_content.rstrip().endswith("Output must be strict JSON only, no markdown, no fences, no extra text."))
 
 

@@ -111,7 +111,7 @@ Scheduled trigger (UTC 18:30 / Beijing 02:30)
 
 ### 5. LLM refine + selection `src/4.llm_refine_papers.py` + `src/5.select_papers.py`
 
-- **Step 4**: only processes ≥4★ candidates (~RRF ≥0.5); DeepSeek gives 0–10 refine score + bilingual summaries
+- **Step 4**: only processes ≥4★ candidates (~RRF ≥0.5); DeepSeek gives 0–10 refine score + English summaries
 - **Step 5**: tiered selection — ≥8 → deep-read, 6–8 → quick skim; ≥9 prioritized and can break cap
 - **Quota** = base + tag_count (more subscription tags → larger quota)
 - **Carryover**: `archive/carryover.json` carries high-scoring papers across days

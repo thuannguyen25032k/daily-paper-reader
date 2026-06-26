@@ -39,6 +39,7 @@ from model_loader import load_sentence_transformer  # noqa: E402
 from source_config import get_source_backend, get_supabase_shared_config  # noqa: E402
 from subscription_plan import build_pipeline_inputs  # noqa: E402
 from supabase_source import match_papers_by_bm25, match_papers_by_embedding  # noqa: E402
+from legacy_config_fields import read_note  # noqa: E402
 
 
 CONFERENCE_DEFAULTS: Dict[str, Dict[str, str]] = {
@@ -461,7 +462,7 @@ def build_result_for_queries(
                 "paper_tag": query.get("paper_tag"),
                 "paper_sources": conferences,
                 "query_text": q_text,
-                "logic_cn": query.get("logic_cn") or "",
+                "note": read_note(query),
                 "retrieval_mode": f"supabase_{mode}",
                 "sim_scores": sim_scores,
             }

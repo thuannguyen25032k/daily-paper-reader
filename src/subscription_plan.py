@@ -12,6 +12,11 @@ from typing import Any, Dict, List, Tuple
 import re
 
 try:
+  from legacy_config_fields import read_note
+except Exception:  # pragma: no cover
+  from src.legacy_config_fields import read_note
+
+try:
   from source_config import list_known_source_keys, validate_profile_paper_sources
 except Exception:  # pragma: no cover - compatibility with the package import path
   from src.source_config import list_known_source_keys, validate_profile_paper_sources
@@ -192,7 +197,7 @@ def _normalize_intent_query_entry(item: Any) -> Dict[str, Any]:
     "query": query,
     "enabled": _as_bool(item.get("enabled"), True),
     "source": _norm_text(item.get("source") or "manual"),
-    "note": _norm_text(item.get("note") or ""),
+    "note": read_note(item),
     "embedding_cache": copy.deepcopy(item.get("embedding_cache")) if isinstance(item.get("embedding_cache"), dict) else None,
     "_cache_ref": copy.deepcopy(item.get("_cache_ref")) if isinstance(item.get("_cache_ref"), dict) else None,
   }
@@ -233,7 +238,6 @@ def _normalize_keyword_entry(item: Any) -> Dict[str, Any]:
     return {
       "keyword": keyword,
       "query": keyword,
-      "logic_cn": "",
       "enabled": True,
       "source": "manual",
       "note": "",
@@ -252,10 +256,9 @@ def _normalize_keyword_entry(item: Any) -> Dict[str, Any]:
   return {
     "keyword": keyword,
     "query": query,
-    "logic_cn": _norm_text(item.get("logic_cn") or ""),
+    "note": read_note(item),
     "enabled": _as_bool(item.get("enabled"), True),
     "source": _norm_text(item.get("source") or "manual"),
-    "note": _norm_text(item.get("note") or ""),
     "embedding_cache": copy.deepcopy(item.get("embedding_cache")) if isinstance(item.get("embedding_cache"), dict) else None,
     "_cache_ref": copy.deepcopy(item.get("_cache_ref")) if isinstance(item.get("_cache_ref"), dict) else None,
   }
@@ -390,7 +393,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
         raw_query = raw_text
 
       expr = _normalize_keyword_expr(raw_text)
-      logic_cn = _norm_text(normalized.get("logic_cn") or "")
+      note = _norm_text(read_note(normalized))
       source = _norm_text(normalized.get("source") or "manual")
       bm25_queries.append(
         {
@@ -401,7 +404,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
           "query_text": expr,
           "query_terms": [{"text": expr, "weight": MAIN_TERM_WEIGHT}],
           "boolean_expr": "",
-          "logic_cn": logic_cn,
+          "note": note,
           "source": source,
           "or_soft_weight": OR_SOFT_WEIGHT,
         }
@@ -413,18 +416,18 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
           "paper_tag": paper_tag_keyword,
           "paper_sources": copy.deepcopy(paper_sources),
           "query_text": raw_query,
-          "logic_cn": logic_cn,
+          "note": note,
           "source": source,
           "embedding_cache": copy.deepcopy(normalized.get("embedding_cache")) if isinstance(normalized.get("embedding_cache"), dict) else None,
           "cache_ref": copy.deepcopy(normalized.get("_cache_ref")) if isinstance(normalized.get("_cache_ref"), dict) else None,
         }
       )
-      context_keywords.append({"tag": paper_tag_keyword, "keyword": raw_text, "logic_cn": logic_cn})
+      context_keywords.append({"tag": paper_tag_keyword, "keyword": raw_text, "note": note})
       context_queries.append(
         {
           "tag": paper_tag_query,
           "query": raw_query,
-          "logic_cn": logic_cn,
+          "note": note,
         }
       )
 
@@ -439,6 +442,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
       if not raw_query:
         continue
 
+      intent_note = _norm_text(read_note(normalized_intent))
       source = _norm_text(normalized_intent.get("source") or "manual")
       intent_query_tag = paper_tag_query
 
@@ -451,7 +455,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
           "query_text": raw_query,
           "query_terms": [{"text": raw_query, "weight": MAIN_TERM_WEIGHT}],
           "boolean_expr": "",
-          "logic_cn": "",
+          "note": intent_note,
           "source": source,
           "or_soft_weight": OR_SOFT_WEIGHT,
         }
@@ -463,7 +467,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
           "paper_tag": f"query:{tag}",
           "paper_sources": copy.deepcopy(paper_sources),
           "query_text": raw_query,
-          "logic_cn": "",
+          "note": intent_note,
           "source": source,
           "embedding_cache": copy.deepcopy(normalized_intent.get("embedding_cache")) if isinstance(normalized_intent.get("embedding_cache"), dict) else None,
           "cache_ref": copy.deepcopy(normalized_intent.get("_cache_ref")) if isinstance(normalized_intent.get("_cache_ref"), dict) else None,
@@ -473,7 +477,7 @@ def _build_from_profiles(subs: Dict[str, Any], known_sources: List[str]) -> Dict
         {
           "tag": intent_query_tag,
           "query": raw_query,
-          "logic_cn": "",
+          "note": intent_note,
         }
       )
 

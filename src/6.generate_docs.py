@@ -30,6 +30,21 @@ try:
 except Exception:  # pragma: no cover
     from src.paper_figures import ensure_paper_media
 
+try:
+    from legacy_paper_markers import (
+        LEGACY_DEEP_READ_ZONE,
+        LEGACY_HOME,
+        LEGACY_QUICK_SKIM_ZONE,
+        LEGACY_QUOTA_EXHAUSTED,
+    )
+except Exception:  # pragma: no cover
+    from src.legacy_paper_markers import (
+        LEGACY_DEEP_READ_ZONE,
+        LEGACY_HOME,
+        LEGACY_QUICK_SKIM_ZONE,
+        LEGACY_QUOTA_EXHAUSTED,
+    )
+
 CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d")
 RANGE_DATE_RE = re.compile(r"^(\d{8})-(\d{8})$")
@@ -624,7 +639,7 @@ def generate_glance_overview(
             msg = str(e)
             if (
                 "insufficient_user_quota" in msg
-                or "quota" in msg.lower() or "额度不足" in msg
+                or "quota" in msg.lower() or LEGACY_QUOTA_EXHAUSTED in msg
                 or "insufficient quota" in msg
                 or ("403" in msg and "Forbidden" in msg)
             ):
@@ -729,7 +744,7 @@ def normalize_meta_tags_line(content: str) -> Tuple[str, bool]:
     if not content:
         return content, False
     pattern = re.compile(
-        r'<span\s+class="tag-label\s+tag-(?:blue|green)">\s*(?:精读区|速读区|Deep Read|Quick Skim)\s*</span>\s*',
+        rf'<span\s+class="tag-label\s+tag-(?:blue|green)">\s*(?:{re.escape(LEGACY_DEEP_READ_ZONE)}|{re.escape(LEGACY_QUICK_SKIM_ZONE)}|Deep Read|Quick Skim)\s*</span>\s*',
         re.IGNORECASE,
     )
     fixed = pattern.sub("", content)
@@ -1573,10 +1588,10 @@ def _extract_day_block_papers(block_lines: List[str]) -> Tuple[List[str], List[s
     quick_lines: List[str] = []
     current = "deep"
     for line in block_lines:
-        if "Deep Read" in line or "精读区" in line:
+        if "Deep Read" in line or LEGACY_DEEP_READ_ZONE in line:
             current = "deep"
             continue
-        if "Quick Skim" in line or "速读区" in line:
+        if "Quick Skim" in line or LEGACY_QUICK_SKIM_ZONE in line:
             current = "quick"
             continue
         if 'href="#/' in line and line.strip().startswith("*"):
@@ -1647,7 +1662,7 @@ def update_sidebar(
             daily_idx = i
             break
     if daily_idx == -1:
-        if not any(("[Home]" in line or "[首页]" in line) for line in lines):
+        if not any(("[Home]" in line or f"[{LEGACY_HOME}]" in line) for line in lines):
             lines.append("* [Home](/)\n")
         lines.append("* Daily Papers\n")
         daily_idx = len(lines) - 1

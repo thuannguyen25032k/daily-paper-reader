@@ -46,6 +46,29 @@ window.$docsify = {
       };
 
       const defaultAuthors = ['Daily Paper Reader Team', 'Docsify Renderer'];
+      const L = (typeof window !== 'undefined' && window.LegacyPaperMarkers) || {};
+      const LC = (typeof window !== 'undefined' && window.LegacyConfigFields) || {};
+      const readTitleAlt = (meta) => (
+        LC.readTitleAlt ? LC.readTitleAlt(meta) : ''
+      );
+      const queryTitleAltEl = (root = document) =>
+        root.querySelector('.paper-title-row .paper-title-alt')
+        || root.querySelector('.paper-title-alt')
+        || root.querySelector('.paper-title-row .paper-title-zh')
+        || root.querySelector('.paper-title-zh')
+        || root.querySelector('h1.paper-title-alt')
+        || root.querySelector('h1.paper-title-zh');
+      const queryTitlePrimaryEl = (root = document) =>
+        root.querySelector('.paper-title-row .paper-title-primary')
+        || root.querySelector('.paper-title-primary')
+        || root.querySelector('.paper-title-row .paper-title-en')
+        || root.querySelector('.paper-title-en')
+        || root.querySelector('h1.paper-title-primary')
+        || root.querySelector('h1.paper-title-en');
+      const queryDprTitleAltEl = () =>
+        document.querySelector('.dpr-title-alt') || document.querySelector('.dpr-title-cn');
+      const queryDprTitlePrimaryEl = () =>
+        document.querySelector('.dpr-title-primary') || document.querySelector('.dpr-title-en');
 
       // Zotero abstract structure markers: make later re-parsing easy inside the Zotero plugin
       const START_MARKER = '【🤖 AI Summary】';
@@ -53,9 +76,9 @@ window.$docsify = {
       const ORIG_MARKER = '【📄 Original Abstract】';
       const TLDR_MARKER = '【📝 TLDR】';
       const GLANCE_MARKER = '【🧭 Glance】';
-      const GLANCE_MARKER_LEGACY = '【🧭 速览区】';
+      const GLANCE_MARKER_LEGACY = L.GLANCE_MARKER || '';
       const DETAIL_MARKER = '【🧩 Detailed Summary】';
-      const DETAIL_MARKER_LEGACY = '【🧩 论文详细总结区】';
+      const DETAIL_MARKER_LEGACY = L.DETAIL_MARKER || '';
       let latestPaperRawMarkdown = '';
 
       const extractSectionByTitle = (rawContent, matchFn) => {
@@ -137,7 +160,13 @@ window.$docsify = {
           '',
         );
         text = text.replace(/^Tags:\s*.*$/gim, '');
-        text = text.replace(/^>?\s*(?:由\s*)?daily-paper-reader\s*(?:自动生成|auto-generated)\s*$/gim, '');
+        text = text.replace(
+          new RegExp(
+            `^>?\\s*(?:${escapeRegExp(L.BY || '')}\\s*)?daily-paper-reader\\s*(?:${escapeRegExp(L.AUTO_GENERATED || '')}|auto-generated)\\s*$`,
+            'gim',
+          ),
+          '',
+        );
         return text.trim();
       };
 
@@ -250,8 +279,8 @@ window.$docsify = {
               const t = normalizeTextForMeta(title).replace(/^\s*#{1,6}\s*/, '').trim().toLowerCase();
               return (
                 t.includes('detailed summary') ||
-                t.includes('论文详细总结') ||
-                t.includes('论文详细总结（自动生成）') ||
+                (L.DETAILED_SUMMARY && t.includes(L.DETAILED_SUMMARY)) ||
+                (L.DETAILED_SUMMARY_AUTO && t.includes(L.DETAILED_SUMMARY_AUTO)) ||
                 t.includes('ai summary') ||
                 t.includes('🤖 ai summary')
               );
@@ -266,7 +295,7 @@ window.$docsify = {
                 .toLowerCase();
               return (
                 t === 'abstract' ||
-                t.includes('原文摘要') ||
+                (L.ORIGINAL_ABSTRACT && t.includes(L.ORIGINAL_ABSTRACT)) ||
                 t.includes('original abstract')
               );
             },
@@ -278,7 +307,11 @@ window.$docsify = {
                 .replace(/^\s*#{1,6}\s*/, '')
                 .trim()
                 .toLowerCase();
-              return t.includes('tldr') || t.includes('tl;dr') || t.includes('摘要要点');
+              return (
+                t.includes('tldr') ||
+                t.includes('tl;dr') ||
+                (L.TLDR_POINTS && t.includes(L.TLDR_POINTS))
+              );
             },
           ),
         };
@@ -298,9 +331,9 @@ window.$docsify = {
             'interaction area',
             'page navigation and interaction layer',
             'original abstract',
-            '原文摘要',
+            ...(L.ORIGINAL_ABSTRACT ? [L.ORIGINAL_ABSTRACT] : []),
             'detailed summary',
-            '论文详细总结',
+            ...(L.DETAILED_SUMMARY ? [L.DETAILED_SUMMARY] : []),
             'ai summary',
             'chat history',
           ];
@@ -314,7 +347,9 @@ window.$docsify = {
             (node.classList.contains('paper-title-row') ||
               node.classList.contains('paper-meta-row') ||
               node.classList.contains('paper-glance-section') ||
-              node.classList.contains('paper-title-cn') ||
+              node.classList.contains('paper-title-alt') ||
+              node.classList.contains('paper-title-primary') ||
+              node.classList.contains('paper-title-zh') ||
               node.classList.contains('paper-title-en'))
           );
         const sections = [];
@@ -398,13 +433,13 @@ window.$docsify = {
       ) => {
         try {
           // Prefer the custom title bar (avoids unstable innerText after the h1 is hidden/modified)
-          const dprEn = document.querySelector('.dpr-title-en');
-          const dprCn = document.querySelector('.dpr-title-cn');
+          const dprPrimary = queryDprTitlePrimaryEl();
+          const dprAlt = queryDprTitleAltEl();
           let title = '';
-          if (dprEn && (dprEn.textContent || '').trim()) {
-            title = (dprEn.textContent || '').trim();
-          } else if (dprCn && (dprCn.textContent || '').trim()) {
-            title = (dprCn.textContent || '').trim();
+          if (dprPrimary && (dprPrimary.textContent || '').trim()) {
+            title = (dprPrimary.textContent || '').trim();
+          } else if (dprAlt && (dprAlt.textContent || '').trim()) {
+            title = (dprAlt.textContent || '').trim();
           } else {
             const titleEl = document.querySelector('.markdown-section h1');
             title = titleEl ? (titleEl.textContent || '').trim() : document.title;
@@ -682,12 +717,10 @@ window.$docsify = {
             };
             const getNodeText = (el) =>
               normalizeTextForMeta(el && (el.innerText || el.textContent || ''));
-            const titleZhText = getNodeText(
-              document.querySelector('.paper-title-row .paper-title-zh'),
-            ) || getNodeText(document.querySelector('.paper-title-zh'));
-            const titleEnText = getNodeText(
-              document.querySelector('.paper-title-row .paper-title-en'),
-            ) || getNodeText(document.querySelector('.dpr-title-en'));
+            const titleAltText = getNodeText(queryTitleAltEl(document));
+            const titlePrimaryText = getNodeText(queryTitlePrimaryEl(document))
+              || getNodeText(document.querySelector('.dpr-title-primary'))
+              || getNodeText(document.querySelector('.dpr-title-en'));
             const metaLeftRows = Array.from(
               document.querySelectorAll('.paper-meta-left p'),
             ).flatMap((el) => splitBlockText(getNodeText(el)));
@@ -710,7 +743,7 @@ window.$docsify = {
               value ? [`- **${label}**: ${Array.isArray(value) ? value.join(' / ') : String(value)}`] : [];
 
             const titleRowText = [
-              `- **Title (ZH/EN)**: ${titleZhText || frontmatterPaperMeta.title_zh || '-'} / ${titleEnText || frontmatterPaperMeta.title || '-'}`,
+              `- **Title**: ${titlePrimaryText || frontmatterPaperMeta.title || titleAltText || readTitleAlt(frontmatterPaperMeta) || '-'}`,
             ].filter(Boolean);
 
             const metaPairs = collectLabeledPairs([...metaLeftRows, ...metaRightRows]);
@@ -766,7 +799,7 @@ window.$docsify = {
             ];
 
             addMetaSectionBlock(
-              'paper-title-row (bilingual title area)',
+              'paper-title-row (dual title area)',
               titleRowText.join('\n'),
             );
             addMetaSectionBlock(
@@ -1012,10 +1045,10 @@ window.$docsify = {
         });
 
         // Preprocess: manually convert **...** and *...* into HTML tags
-        // Works around marked failing to detect bold/italic next to CJK characters
+        // Works around marked failing to detect bold/italic next to non-Latin characters
         // Note: only match within a single line and under 100 characters, to avoid false matches
         protectedText = protectedText.replace(/\*\*([^*\n]{1,100}?)\*\*/g, '<strong>$1</strong>');
-        // Italic: require surrounding spaces or CJK boundaries to avoid matching multiplication signs, etc.
+        // Italic: require surrounding spaces or script boundaries to avoid matching multiplication signs, etc.
         protectedText = protectedText.replace(/(?<=[^\*]|^)\*([^*\n]{1,50}?)\*(?=[^\*]|$)/g, '<em>$1</em>');
 
         const lines = protectedText.split('\n');
@@ -1278,8 +1311,8 @@ window.$docsify = {
         const normalizeSection = (section) => {
           const v = String(section || '').trim();
           if (!v) return '';
-          if (/深度|精读|deep/i.test(v)) return 'deep';
-          if (/速读|速览|quick/i.test(v)) return 'quick';
+          if (L.DEEP && new RegExp(`${L.DEEP}|${L.DEEP_READ}|deep`, 'i').test(v)) return 'deep';
+          if (L.QUICK_READ && new RegExp(`${L.QUICK_READ}|${L.QUICK_GLANCE}|quick`, 'i').test(v)) return 'quick';
           return v.toLowerCase();
         };
 
@@ -1335,7 +1368,10 @@ window.$docsify = {
           const abstractFromBody = trimBeforeMarkers(
             extractSectionByTitle(body, (title) => {
               const normalized = String(title || '').trim().toLowerCase();
-              return normalized === 'abstract' || normalized === '摘要';
+              return (
+                normalized === 'abstract' ||
+                (L.ABSTRACT_SHORT && normalized === L.ABSTRACT_SHORT)
+              );
             }),
             [],
           ).trim();
@@ -2382,8 +2418,9 @@ window.$docsify = {
         const body = parsed && typeof parsed.body === 'string'
           ? parsed.body
           : String(pageMd || '').replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
-        const heading = String(safeMeta.title_zh || safeMeta.title || paperId || 'Paper Share').trim();
-        const subtitle = safeMeta.title_zh && safeMeta.title ? String(safeMeta.title).trim() : '';
+        const titleAlt = readTitleAlt(safeMeta);
+        const heading = String(titleAlt || safeMeta.title || paperId || 'Paper Share').trim();
+        const subtitle = titleAlt && safeMeta.title ? String(safeMeta.title).trim() : '';
         const tags = Array.isArray(safeMeta.tags) ? safeMeta.tags : [];
         const pageUrl = `${String(window.location.origin || '').replace(/\/+$/, '')}/#/${paperId}`;
         const parts = [];
@@ -2979,7 +3016,11 @@ window.$docsify = {
             const legacyScoreTitle = String(
               (legacyScoreNode && legacyScoreNode.getAttribute('title')) || '',
             );
-            const scoreMatch = legacyScoreTitle.match(/(?:评分：|Score:)\s*([0-9]+(?:\.[0-9]+)?)\s*\/10/);
+            const scoreMatch = legacyScoreTitle.match(
+              new RegExp(
+                `(?:${escapeRegExp(L.SCORE_PREFIX || 'Score:')}|Score:)\\s*([0-9]+(?:\\.[0-9]+)?)\\s*/10`,
+              ),
+            );
             const legacyScore = scoreMatch ? scoreMatch[1] : '-';
             const legacyTags = [];
             const tagNodes = a.querySelectorAll('.dpr-sidebar-tag');
@@ -3074,7 +3115,7 @@ window.$docsify = {
         });
       };
 
-      // Paper-page title bar in sidebar/body: English on the right, Chinese on the left, vertical bar in between
+      // Paper-page title bar: primary English title with optional alternate title on the left
       const isPaperRouteFile = (file) => {
         const f = String(file || '');
         return (
@@ -3159,33 +3200,31 @@ window.$docsify = {
         const h1s = Array.from(root.querySelectorAll('h1'));
         if (!h1s.length) return;
 
-        // Prefer reading the title from the h1 with the paper-title-zh / paper-title-en class (frontmatter rendering)
-        const paperTitleZh = root.querySelector('h1.paper-title-zh');
-        const paperTitleEn = root.querySelector('h1.paper-title-en');
+        // Prefer reading the title from class-named h1 elements rendered by frontmatter
+        const paperTitleAlt = queryTitleAltEl(root);
+        const paperTitlePrimary = queryTitlePrimaryEl(root);
 
-        let cnTitle = '';
-        let enTitle = '';
+        let altTitle = '';
+        let primaryTitle = '';
 
-        if (paperTitleZh || paperTitleEn) {
-          // New format: read from the class-named h1 rendered by frontmatter
-          cnTitle = paperTitleZh ? (paperTitleZh.textContent || '').trim() : '';
-          enTitle = paperTitleEn ? (paperTitleEn.textContent || '').trim() : '';
+        if (paperTitleAlt || paperTitlePrimary) {
+          altTitle = paperTitleAlt ? (paperTitleAlt.textContent || '').trim() : '';
+          primaryTitle = paperTitlePrimary ? (paperTitlePrimary.textContent || '').trim() : '';
         } else {
-          // Legacy format: if there are two h1s, the first is English and the second is Chinese;
-          // if there is only one h1, treat it as a single title placed on the left (cn area)
-          enTitle = (h1s[0].textContent || '').trim();
-          cnTitle = (h1s[1] ? (h1s[1].textContent || '').trim() : '').trim();
+          // Legacy format: if there are two h1s, treat the first as primary and the second as alternate
+          // if there is only one h1, treat it as a single title placed on the left
+          primaryTitle = (h1s[0].textContent || '').trim();
+          altTitle = (h1s[1] ? (h1s[1].textContent || '').trim() : '').trim();
           if (h1s.length === 1) {
-            cnTitle = enTitle;
-            enTitle = '';
+            altTitle = primaryTitle;
+            primaryTitle = '';
           }
         }
 
-        // Fallback: if only an English title exists (no title_zh), move the English to the left,
-        // to avoid a "no title" state after the dpr-title-single style hides the right-side English area.
-        if (!cnTitle && enTitle) {
-          cnTitle = enTitle;
-          enTitle = '';
+        // Fallback: if only a primary title exists, move it to the left slot
+        if (!altTitle && primaryTitle) {
+          altTitle = primaryTitle;
+          primaryTitle = '';
         }
 
         // Hide the original h1 but keep it in the DOM for copy/SEO/metadata-extraction fallback
@@ -3194,11 +3233,11 @@ window.$docsify = {
         const bar = document.createElement('div');
         bar.className = 'dpr-title-bar';
         bar.innerHTML = `
-          <div class="dpr-title-cn">${escapeHtml(cnTitle || '')}</div>
+          <div class="dpr-title-alt">${escapeHtml(altTitle || '')}</div>
           <div class="dpr-title-sep" aria-hidden="true"></div>
-          <div class="dpr-title-en">${escapeHtml(enTitle || '')}</div>
+          <div class="dpr-title-primary">${escapeHtml(primaryTitle || '')}</div>
         `;
-        if (!cnTitle) {
+        if (!altTitle) {
           bar.classList.add('dpr-title-single');
         }
 
@@ -3206,10 +3245,10 @@ window.$docsify = {
 
         // Adaptive font sizing: keep the title bar height stable; long titles shrink automatically
         requestAnimationFrame(() => {
-          const cnEl = bar.querySelector('.dpr-title-cn');
-          const enEl = bar.querySelector('.dpr-title-en');
-          if (cnEl && cnTitle) fitTextToBox(cnEl, 14, 22);
-          if (enEl && enTitle) fitTextToBox(enEl, 13, 20);
+          const altEl = bar.querySelector('.dpr-title-alt');
+          const primaryEl = bar.querySelector('.dpr-title-primary');
+          if (altEl && altTitle) fitTextToBox(altEl, 14, 22);
+          if (primaryEl && primaryTitle) fitTextToBox(primaryEl, 13, 20);
         });
       };
 
@@ -4628,11 +4667,12 @@ window.$docsify = {
 
         // Title area
         lines.push('<div class="paper-title-row">');
-        if (meta.title_zh) {
-          lines.push(`<h1 class="paper-title-zh">${escapeHtml(meta.title_zh)}</h1>`);
+        const titleAlt = readTitleAlt(meta);
+        if (titleAlt) {
+          lines.push(`<h1 class="paper-title-alt">${escapeHtml(titleAlt)}</h1>`);
         }
         if (meta.title) {
-          lines.push(`<h1 class="paper-title-en">${escapeHtml(meta.title)}</h1>`);
+          lines.push(`<h1 class="paper-title-primary">${escapeHtml(meta.title)}</h1>`);
         }
         lines.push('</div>');
         lines.push('');
