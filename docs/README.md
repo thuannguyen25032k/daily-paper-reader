@@ -16,7 +16,7 @@
 
 ### Today's Brief (AI)
 > No new recommendations today; the system produced no papers to display.
-- Details: [/202603/06/README](/202603/06/README)
+- Details: [/2026/03/06/README](/2026/03/06/README)
 
 ### Deep Read — paper tags
 - No deep-read recommendations this run.
