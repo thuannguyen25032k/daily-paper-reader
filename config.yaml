@@ -25,3 +25,61 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
+  intent_profiles:
+  - tag: robotics
+    description: Robotics foundation models, generalist robot policies, vision-language-action models, large-scale robot learning, robot manipulation, navigation, and sim-to-real evaluation.
+    enabled: true
+    paper_sources:
+    - arxiv
+    keywords:
+    - keyword: robot foundation model
+      note: ''
+      query: robot foundation model for generalist robotics
+    - keyword: vision language action model
+      note: ''
+      query: vision language action model for robot control
+    - keyword: large scale robot learning
+      note: ''
+      query: large scale robot learning with diverse data
+    - keyword: robot manipulation
+      note: ''
+      query: robot manipulation with dexterous hands
+    - keyword: imitation learning robot
+      note: ''
+      query: imitation learning from human demonstrations for robots
+    - keyword: reinforcement learning robot
+      note: ''
+      query: reinforcement learning for robot control
+    intent_queries:
+    - query: How can vision language action models be used for generalist robot manipulation?
+      note: ''
+      enabled: true
+      source: manual
+    - query: What are current challenges in sim to real transfer for robot navigation?
+      note: ''
+      enabled: true
+      source: manual
+    - query: Large scale robot learning techniques for robotic manipulation tasks
+      note: ''
+      enabled: true
+      source: manual
+    - query: Evaluation of foundation models for robot control policies
+      note: ''
+      enabled: true
+      source: manual
+    updated_at: '2026-06-26T01:46:50.136Z'
+source_backends:
+  arxiv:
+    papers_table: arxiv_papers
+    use_vector_rpc: true
+    vector_rpc: match_arxiv_papers
+    vector_rpc_exact: match_arxiv_papers_exact
+    use_bm25_rpc: true
+    bm25_rpc: match_arxiv_papers_bm25
+    sync_table: arxiv_sync_status
+    sync_success_value: success
+    schema: public
+    kind: supabase
+    enabled: true
+    url: https://lyucdwgefyfbmaiopjbk.supabase.co
+    anon_key: sb_publishable_lX-oi64Uxyd7SIVv3_w2Uw_MTOojeKq

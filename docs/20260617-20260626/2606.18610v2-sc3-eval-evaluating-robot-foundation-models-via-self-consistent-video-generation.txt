@@ -1,0 +1,345 @@
+Title: SC3-Eval: Evaluating Robot Foundation Models via Self-Consistent Video Generation
+
+URL Source: https://arxiv.org/pdf/2606.18610v2
+
+Published Time: Wed, 24 Jun 2026 00:21:35 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# SC3-Eval: Evaluating Robot Foundation Models via Self-Consistent Video Generation 
+
+Wei-Cheng Tseng 1,2,3 Gashon Hussein 4 Yuzhu Dong 3 Allen Z. Ren 4
+
+Lucy X. Shi 4,5 XuDong Wang 4 Sergey Levine 4,6 Zhaoshuo Li 3 Jinwei Gu 3
+
+Florian Shkurti 1,2,7 Ming-Yu Liu 3 Quan Vuong 41University of Toronto 2Vector Institute 3NVIDIA 4Physical Intelligence 
+
+> 5
+
+Stanford University 6UC Berkeley 7Allen Institute for AI 
+
+Abstract: Evaluating generalist robot manipulation policies in the real world is expensive, slow, and difficult to scale. Action-conditioned video world models offer a scalable alternative by simulating policy rollouts. Autoregressive rollouts accumulate compounding errors, observations across multiple camera views must remain mutually consistent, and the evaluator must generalize to policies whose behaviors lie outside the training distribution. We address these challenges with SC3-Eval, a self-consistent video generation recipe that adapts a pre-trained video foundation model into an accurate policy evaluator by enforcing three comple-mentary forms of consistency. First, forward-inverse dynamics consistency jointly trains the model to predict frames from actions and to recover actions from frames, anchoring generated rollouts to a physically plausible action manifold and coun-teracting the drift a forward-only model cannot penalize. Second, cross-view consistency trains the model to inpaint each camera view from the other, keep-ing the multi-camera observation coherent over long rollouts without any explicit memory mechanism. Third, test-time consistency reuses the inverse dynamics mode at inference as a per-action-chunk uncertainty signal that terminates roll-outs whose generated frames drift away from the requested actions. We also demonstrate SC3-Eval rollouts reproduce the failure modes that policies exhibit in real-world rollouts, supporting fine-grained diagnostic comparison rather than aggregate ranking alone. Across seven real-world vision-language-action policies, SC3-Eval attains a closed-loop Pearson correlation of 0.929 and MMRV of 0.119 ,outperforming three strong prior video-model-based baselines, and generalizes to new tasks. 
+
+Keywords: Policy Evaluation, Video World Model 
+
+# 1 Introduction 
+
+Evaluating generalist robot manipulation policies in the real world is expensive, slow, and difficult to scale [1, 2]. Each evaluation requires physical robot time, careful environment resets, and hu-man supervision. These costs compound quickly when assessing generalist policies across diverse tasks and environments, motivating scalable alternatives that can reliably predict real-world policy performance without exhaustive physical rollouts. Action-conditioned video world models have recently emerged as a promising substrate for this purpose [3, 4, 5, 6]. Conditioned on an initial multi-view observation and a sequence of actions, such a model simulates plausible future frames so that a policy can be rolled out and scored without touching a physical robot. However, applying this paradigm to real-world manipulation is difficult for three reasons. First, autoregressive rollouts accumulate drift as small errors compound over long 
+
+> arXiv:2606.18610v2 [cs.RO] 23 Jun 2026
+
+Figure 1: The three consistency axes of SC3-Eval. (a) forward-inverse dynamics consistency. 
+
+Under the same action sequence, Ours closely tracks GT , while a forward-only baseline drifts. (b) 
+
+multi-view consistency. The model predicts the wrist view from a third-person view, with good 
+
+versus bad example predictions. (c) test-time consistency. Disagreement between commanded and inverse-mode-recovered actions terminates the rollout once it drifts off-manifold. horizons. Second, multi-camera observations must remain mutually consistent, or the policy may be misled by a visually incoherent scene. Third, the evaluator must generalize to policies whose behavior differs from its training distribution. We address these challenges with SC3-Eval, a self-consistent video generation recipe that adapts a pre-trained video foundation model into a faithful closed-loop policy evaluator by enforcing three complementary forms of consistency (Fig. 1). Forward-inverse dynamics consistency jointly trains the model to predict frames from actions and to recover actions from frames, anchoring gener-ated rollouts to a physically plausible action manifold and counteracting the drift a forward-only model lacks the signal to penalize. Cross-view consistency trains the model to inpaint each held-out camera view from the remaining one, keeping the multi-camera observation coherent over long autoregressive rollouts without any explicit memory mechanism. Test-time consistency reuses the inverse dynamics mode at inference as a per-action-chunk uncertainty signal that terminates rollouts whose generated frames drift away from the requested actions, and additionally supplies context for automatic vision-language-model annotation. We instantiate this recipe on top of the pre-trained video backbone with a unified dynamics model [7, 8] and train it on a 381 -hour real-world table bussing manipulation dataset. To com-prehensively evaluate the faithfulness of the policy evaluation pipeline, we focus on table bussing, which involves interactions between the robot and 12 distinct objects spanning utensils and trash items. In experiments on seven vision-language-action (VLA) policy checkpoints, SC3-Eval attains a closed-loop Pearson correlation of 0.929 and MMRV of 0.119 , outperforming three strong existing video-model-based baselines including Ctrl-World [6], IRASim [3], and Cosmos-Predict 2.5 [9]. It generalizes to a held-out task variant absent from the training data, and beyond predicting aggregate success rates, it reproduces the specific failure modes that policies exhibit in real-world rollouts. Qualitative rollout videos are available on the project website 1.
+
+Contributions. First, we propose SC3-Eval, a self-consistent video generation recipe whose three consistency objectives together adapt a pre-trained video foundation model into an accurate closed-loop policy evaluator. Second, we introduce an uncertainty-driven early-termination criterion de-rived without modification to the training procedure from the inverse dynamics mode, which im-proves closed-loop reliability without additional supervision. Third, in real-world experiments on seven VLA policy checkpoints, SC3-Eval achieves state-of-the-art policy evaluation performance, generalizes to an out-of-distribution task semantic, and reproduces per-trajectory failure modes rather than only aggregate success rates. 
+
+> 1https://weichengtseng.github.io/sc3-eval/
+
+22 Related Work 
+
+Real-world policy evaluation. Real-world rollouts are the gold standard for evaluating general-ist robot policies but are expensive and slow [10]. Scalable alternatives fall into three families. Physics-based simulators such as SIMPLER [11] and RoboLab [1] require hand-engineered assets and dynamics tuning, leaving residual sim-to-real gaps. Real-to-sim approaches such as PolaRiS [2] reconstruct real scenes via Gaussian splatting but require per-scene reconstruction. Video-model-based evaluators [5, 6, 12, 13, 14] forgo asset construction and physics tuning by simulating policy rollouts inside an action-conditioned video model, and this is the family we extend. 
+
+Action-conditioned video world models. Action-conditioned video models have been studied as world simulators [3, 4]. The unified forward-inverse architecture we adopt is from UVA [7, 8], origi-nally proposed as a unified policy and world model for action generation. Concurrent work explores video models as zero-shot policies for visuomotor control and planning [15, 16] and exploits the forward-inverse asymmetry to self-verify world-model predictions [17], complementing our focus on the policy evaluation use case. Our work is among the first to systematically study the unified dynamics model for policy evaluation and to identify the inverse dynamics objective as an implicit grounding mechanism that mitigates autoregressive drift. Prior multi-view video models [6, 12] con-catenate views and rely on spatial self-attention for cross-view consistency, whereas our multi-view consistency scheme provides explicit supervision by training the model to inpaint missing views from the remaining view. 
+
+Distribution shift and uncertainty in model-based RL. Distribution shift between training data and the rollouts a learned dynamics model is queried at is a long-standing challenge in model-based reinforcement learning (RL), where small errors compound autoregressively. Classical responses estimate the model’s predictive uncertainty, often through ensemble disagreement [18], or, in recent video world models, through calibrated generative uncertainty that flags unreliable frames [19], and then act conservatively when uncertainty is high. MOReL [20] converts the uncertainty signal into a pessimistic MDP that terminates rollouts once a threshold is crossed, and MOPO [21] folds it into the reward as a soft penalty during offline policy optimization. Our uncertainty-driven early termination shares the off-manifold detection motivation but differs in two ways. First, the signal is derived from forward-inverse consistency within a single unified world model (Sec. 3.3) rather than from an ensemble, removing the extra training cost. Second, it is applied during policy evaluation so that an unreliable rollout is terminated before further drift contaminates its score, rather than during offline RL training, where uncertainty must be folded into rewards or used to construct a pessimistic MDP. 
+
+# 3 SC3-Eval 
+
+SC3-Eval is a self-consistent video generation recipe that adapts a pre-trained video foundation model into a faithful closed-loop policy evaluator. We first set up the problem and recall the uni-fied dynamics model backbone (Sec. 3.1). We then describe how training enforces two comple-mentary forms of consistency, forward-inverse dynamics and cross-view (Sec. 3.2), and how infer-ence enforces the third, test-time consistency, via an uncertainty-driven early-termination criterion (Sec. 3.3). Implementation details, including the pre-trained weight initialization, training-time aug-mentations (multi-FPS sampling and pseudo-action augmentation), and optimizer setup, are deferred to App. B. 
+
+3.1 Preliminaries Problem formulation. Let Π = {π1, . . . , π N } be a set of robot manipulation policies, each with real-world performance Ri measured by the average success rate over a representative task suite under physical rollouts. Our goal is to construct a world simulator W such that the policy per-formances RW,i obtained by rolling out each πi inside W correlate strongly with the real-world performances Ri. We quantify faithfulness with two complementary measures. The Pearson cor-relation coefficient r(R, R W ) captures linear agreement between predicted and real-world success 3Figure 2: Self-consistency training for SC3-Eval. Three joint-training modes over a shared backbone, distinguished only by which tokens are clean (conditioning) versus noisy (denoising tar-gets). Forward Dynamics denoises future video given action and first frames, Cross-View Inpaint-ing denoises held-out views from the remaining view and action, and Inverse Dynamics denoises the action chunk given the full video. All three modes share parameters and a single flow match-ing objective. Algorithm 1: Closed-loop policy rollout inside SC3-Eval 
+
+Require: Policy π, world model with forward mode Wf d and inverse mode Wid , initial frame v0, threshold τ , execution horizon l,world-model prediction horizon l′ > l  
+
+> 1:
+
+V ← { v0} 
+
+> 2:
+
+for t = 0 , l, 2l, . . . do  
+
+> 3:
+
+at:t+l′ ← π(V) 
+
+> 4:
+
+vt:t+l′ ← W f d (V, a t:t+l′ ) 
+
+> 5:
+
+ˆat:t+l ← W id (vt:t+l) 
+
+> 6:
+
+Uchunk (t) ← 1
+
+> l
+
+Pt+l−1 
+
+> i=t
+
+∥ai − ˆai∥2 
+
+> 7:
+
+if Uchunk (t) > τ then  
+
+> 8:
+
+break  
+
+> 9:
+
+end if  
+
+> 10:
+
+V ← V ∪ { vt:t+l} 
+
+> 11:
+
+end for  
+
+> 12:
+
+return scored imagined rollout rates and measures the absolute calibration of the evaluator. The Mean Maximum Rank Violation (MMRV) [11] captures the consistency of pairwise policy rankings, the relative ordering property most directly relevant to checkpoint selection in practice. 
+
+Unified dynamics model. SC3-Eval builds on the unified dynamics model architecture, such as UVA [7, 8], a single transformer that operates jointly on video and action tokens. Conventional action-conditioned video models [3, 9] learn a single forward map Wf d (vt+1 | v1: t, a 1: t), whereas UVA represents video and action in a shared token space and randomly masks subsets of tokens dur-ing training. The same network can therefore act as a forward dynamics model that predicts frames from actions, an inverse dynamics model that predicts actions from frames, or a video generator that fills in unobserved frames, depending on which tokens are exposed at inference. We adopt this architecture unchanged and treat it as a black box from here on, with Wf d and Wid denoting its forward and inverse modes. 
+
+3.2 Self-Consistent Training 
+
+We adapt the unified dynamics model backbone to multi-view robot manipulation with three jointly trained objectives that enforce two complementary forms of consistency during training, illustrated in Fig. 2. The third axis, test-time consistency , is realized at inference and described in Sec. 3.3. 
+
+Forward-inverse dynamics consistency. A forward-only video model lacks a direct mechanism to penalize physically implausible frames, because every frame can be explained as a low-probability rollout under its own distribution. We exploit the model’s shared token space and jointly train a forward dynamics mode that reconstructs noised video tokens from the action stream, and an inverse dynamics mode that reconstructs noised action tokens from the video. Because both modes share parameters, the forward mode is implicitly regularized to render frames from which the inverse mode can recover the commanded actions, anchoring generation to a physically plausible action manifold. This forward-inverse parameter sharing acts as an implicit anti-drift regularizer that a separately trained forward-only training mechanism does not provide. 
+
+Cross-view consistency. Real-world manipulation policies act on multiple synchronized cameras, in our setting two third-person cameras and one wrist camera. Without an explicit mechanism, the model tends to drift across views over long autoregressive rollouts, since each view is generated independently from the others. We add a cross-view inpainting mode that randomly selects one 4view and asks the model to inpaint the other views, so that each view is supervised to stay consistent with the rest. This implements multi-view consistency without any explicit memory mechanism. 
+
+Training procedure. We initialize from the pre-trained weights of Cosmos3-Nano [22] and train the three objectives jointly by random mode assignment, in the same spirit as prior works [7, 8]. At each gradient step, every training instance is independently sampled to act as one of the three modes (multi-view forward dynamics, cross-view consistency, or inverse dynamics) with a fixed mixture probability, and the corresponding noised and clean token pattern is applied over the video and action tokens before the transformer is run. Each instance therefore contributes a gradient to a single term of the total objective, and the mode coefficients are realized as the relative sampling frequencies of the three modes rather than as an explicit weighted sum at every step. Because all three modes share the same transformer parameters, the network is supervised to perform forward dynamics, cross-view inpainting, and inverse dynamics within one set of weights. Within each sampled mode, the per-instance loss is a flow matching objective [23, 24] on the noised tokens, inheriting the rectified-flow formulation of the Cosmos3 backbone. 
+
+3.3 Inference with Test-Time Consistency Closed-loop rollout schedule. We follow the policy’s own receding-horizon schedule. At each step, the policy π proposes an action chunk of length l′ from the current observation V, the forward mode Wf d renders the corresponding frames, and only the first l frames are appended to V before re-planning. 
+
+Prediction-execution horizon decoupling. A literal closed-loop simulation would have the world model predict exactly l frames per step [5, 4], but this short training horizon is sub-optimal for two distinct reasons. First, pre-training-prior preservation . The backbone was pre-trained on substan-tially longer video clips, so training at a horizon as short as l shifts the training distribution far from that prior and degrades generation quality. Second, per-chunk supervision richness . A short l-frame chunk exposes the model to too little object behavior per training example to fit the dynamics well, since most short windows contain little inter-frame motion. We address both by training at a longer horizon l′ > l and retaining only the first l frames at inference as the next observation context. The extra l′ − l frames are discarded at deployment but pay for themselves during training. Alg. 1 summarizes the procedure. 
+
+Uncertainty-driven early termination. The same forward-inverse parameter sharing that anchors generated frames during training additionally yields a per-chunk reliability signal at inference. At step t, the forward mode Wf d renders frames vt:t+l from the action chunk at:t+l, and the in-verse mode Wid recovers an estimate ˆat:t+l from those frames. The per-chunk consistency error 
+
+Uchunk (t) = 1
+
+> l
+
+Pt+l−1 
+
+> i=t
+
+∥ai − ˆai∥2 measures how well the generated frames remain consistent with the commanded actions. We terminate the rollout once Uchunk (t) > τ , since the forward mode and the action stream have decohered and continuing only compounds the drift. The threshold τ
+
+is chosen on a held-out subset. We read Uchunk as an empirical reliability indicator rather than a calibrated error probability, since the inverse mode sees ground-truth frames during training and generated frames at deployment. 
+
+# 4 Experiments 
+
+4.1 Experimental Setup Dataset and evaluated policies. We train the SC3-Eval model on a 381 -hour real-world table bussing dataset collected by us, and run policy evaluation on this task. To further evaluate the generalization capability of the evaluator, we also run policy evaluation on the reverse table bussing 
+
+task, which is not included in the training dataset. The workspace and the two task variants are shown in Fig. 3(a). The two tasks share visual appearance and motion primitives but differ in the object-to-destination mapping, so reverse bussing serves as a controlled out-of-distribution task which is not included in the training dataset. In the following, we refer to the table bussing task as the 
+
+in-distribution task and the reverse table bussing task as the out-of-distribution task. Seven VLA 5Figure 3: Real-world experiment setup. (a) Workspace, with orange arrows for forward table bussing and green arrows for the destination-swapped reverse variant. (b) The three synchronized camera views observed by the policy and the world model. (c) Example trajectories scored under the three success criteria.  
+
+> (a) Offline evaluation (open-loop) (b) Online evaluation (closed-loop)
+
+Figure 4: Correlation between predicted and real-world policy performance. Each point is a (checkpoint, success-criterion) pair. Within each of (a) and (b), the left and right panels show the in-distribution (table bussing) and out-of-distribution (reverse table bussing) splits. policy checkpoints with the π0.5 [25] architecture are evaluated in our experiments. More details are in App. A. 
+
+Evaluation protocol. For each policy we collect three matched sets of trajectories under identi-cal initial conditions, real-world rollouts from the physical robot, offline (open-loop) rollouts that condition the world model on the real-world action sequence (isolating video fidelity from policy interaction), and online (closed-loop) rollouts in which the policy acts on the generated frames. Each rollout is observed through three synchronized camera views (Fig. 3(b)) and scored by trained human annotators, blinded to trajectory source, on three independent binary criteria, language fol-lowing, object lifting, and object placing (Fig. 3(c)). We report Pearson correlation r and Mean Maximum Rank Violation (MMRV) [11]. We compare against three video-model-based evaluators re-run under the same protocol, Ctrl-World [6], IRASim [3], and Cosmos-Predict 2.5 [9]. All three support only forward dynamics generation and so cannot enforce the consistency objectives our method does. 
+
+4.2 Evaluating the Policy under SC3-Eval 
+
+Tab. 1 reports the policy evaluation result, decomposed into in-distribution and out-of-distribution cases, each under offline (open-loop) and online (closed-loop) evaluation. The corresponding cor-relation plot is shown in Fig. 4. Our evaluator attains the best MMRV in all four offline/online and in-distribution/out-of-distribution settings, preserving the ranking of policy checkpoints more accu-rately than every baseline regardless of evaluation mode or task split. It also attains the best Pearson 
+
+r in three of the four settings. Evaluators generally degrade from the in-distribution to the out-6Table 1: Policy evaluation results. Results are split into in-distribution and out-of-distribution, each evaluated in offline and online mode. Each r and MMRV is computed over the (policy, success criterion) success-rate pairs within a split.                                                 
+
+> In-distribution Out-of-distribution Offline Online Offline Online Method r↑MMRV ↓r↑MMRV ↓r↑MMRV ↓r↑MMRV ↓
+> Ctrl-World [6] 0.878 0.185 0.871 0.191 0.821 0.191 0.832 0.179 IRASim [3] 0.773 0.176 0.730 0.188 0.700 0.188 0.663 0.364 Cosmos-Predict 2.5 [9] 0.807 0.148 0.897 0.090 0.808 0.145 0.871 0.195
+> SC3-Eval (Ours) 0.959 0.018 0.984 0.022 0.962 0.022 0.870 0.171
+
+■ initial observation ■ real-world rollout ■ online generated rollout 
+
+Figure 5: Qualitative rollouts for online generation. Each example shows the shared initial ob-servation, followed by the real-world rollout and the online rollout generated by our evaluator under the same policy. of-distribution split, most sharply in online mode, reflecting the genuine difficulty of generalizing across a task-semantic shift. 
+
+Offline versus online. One might expect online evaluation to be less faithful than offline eval-uation, since the policy must interact with imperfect generated frames. We find that this is not necessarily so. In offline mode the world model is driven by a fixed real-world action sequence, so any generation drift accumulates over the rollout with no corrective feedback. In online mode the closed-loop interaction instead lets the policy react to the generated frames and adjust its com-mands, partially compensating for drift. Consistent with this, our online faithfulness matches offline on the in-distribution split, with online Pearson r (0.984 ) even exceeding offline ( 0.959 ). The degra-dation that does appear is concentrated on the out-of-distribution split, where the world model is itself off-distribution and closed-loop correction cannot fully recover. These findings argue for on-line evaluation as the primary protocol, with the residual gap reflecting out-of-distribution difficulty rather than a closed-loop pathology. 
+
+4.3 Reproducing Policy Failure Modes Language 
+
+> Lifting
+> Placing
+> No failure
+> Average
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Reproduction rate  Ctrl-World
+> IRASim
+> Cosmos-Predict 2.5
+> SC3-Eval (Ours)
+
+Figure 6: Per-category out-come reproduction rate under online evaluation. Each bar shows the fraction of trajectories whose evaluator rollout matches the real-world outcome category. A policy evaluator that reproduces aggregate success rates is use-ful for checkpoint selection, but a stronger criterion is whether the policy evaluator reproduces the same kinds of failures a pol-icy exhibits in the real world. Two evaluators may agree on the success rate yet disagree on which trajectories fail and why. An evaluator that faithfully reproduces behaviors that leads to tra-jectory failure is far more reliable for diagnostic use, such as distinguishing a grasping issue from a perception issue. Following the three success criteria of Sec. 4.1, we assign each trajectory to one of four outcome categories : no failure , or a language-following , object-lifting , or object-placing failure, named by the first criterion it violates. We then ask whether each rollout falls in the same outcome category as its matched 7real-world trajectory, i.e., whether the evaluator reproduces not just that a trajectory fails but the specific failure mode. Fig. 6 reports the fraction of real-world trajectories whose matched online (closed-loop) rollouts fall in the same outcome category. Our evaluator attains the highest average reproduction rate and leads in all four categories. Under closed-loop conditioning, small inconsistencies cascade, so an evaluator that renders plausible but inconsistent frames tends to drifts to a different outcome category than the real-world rollout. The fact that baselines drop sharply under this protocol while our method holds up motivates the closed-loop setting as the more demanding test of evaluator faithfulness. 
+
+4.4 Ablation Study 
+
+We isolate the contribution of the key design choices of our evaluator. Each ablation varies a single factor while holding all other hyperparameters at the values used by the full model. Tab. 2 consoli-dates the ablations under the same closed-loop policy-level metrics. More results and visualizations are deferred to App. C. Table 2: Ablation study. Online closed-loop Pearson and MMRV across all pol-icy checkpoints. The first row is our full model; each subsequent row removes (w/o ) one design choice from Sec. 3.               
+
+> Variant Pearson ↑MMRV ↓
+> Full model 0.929 0.119
+> w/o inverse dynamics 0.842 0.175 w/o cross-view inpainting 0.802 0.199 w/o early termination 0.871 0.151 w/o horizon decoupling 0.807 0.177
+
+Joint-training modes. Sec. 3.2 introduces two grounding training modes, inverse dynamics and cross-view inpainting. Removing either degrades both closed-loop metrics (Tab. 2), confirming that the two mechanisms are complementary rather than redundant. The inverse dynamics ablation degrades most visibly on the out-of-distribution split in offline visual qual-ity, where policy commands push rollouts further off the training manifold and the corrective action signal from inverse dynamics matters most. The cross-view ablation primarily hurts wrist-view scene re-entry con-sistency, indicating that cross-view supervision implic-itly preserves scene structure under occlusion, without any explicit memory bank as used by prior work [6, 26]. More analysis is deferred to App. C. 
+
+Uncertainty-driven early termination. The per-chunk consistency error Uchunk and the early-termination criterion Uchunk > τ are defined in Sec. 3.3. Disabling early termination (i.e., letting all rollouts run to completion regardless of consistency error) degrades the closed-loop metrics (Tab. 2), with the largest drop concentrated on the out-of-distribution split where rollout drift is most preva-lent. We also find that the same per-chunk signal additionally serves as context for VLM-based automatic annotation, with details in appendix. 
+
+Prediction-execution horizon decoupling. The full model is trained at a longer prediction hori-zon than the policy’s execution horizon, decoupling the two (Sec. 3.3). Removing this decoupling, i.e., training at the execution horizon directly, degrades the closed-loop metrics (Tab. 2). Training at such a short horizon shifts the training distribution far from the backbone’s much longer video pre-training prior, and each short chunk also exposes the model to too little object behavior to fit the dynamics well. 
+
+# 5 Limitations 
+
+Closed-loop online evaluation runs at 2.3 seconds per chunk on a single GB200 GPU (App. B.2), several orders slower than physics-based simulators [11, 1] that run faster than real time, limiting routine checkpoint selection during policy development. Diffusion-sampler acceleration and caching intermediate representations across receding-horizon chunks are natural follow-ups. Our evaluator is also trained and validated on short-horizon manipulation, with a single table-bussing episode lasting roughly 20 seconds. At substantially longer horizons we expect two failure modes, accumulated drift from a corrective signal that is only local, and visual degradation past the temporal coherence prior of the pre-trained backbone. Extending the evaluator via longer training trajectories or hierarchical sub-goal supervision is a natural next step. 86 Conclusion 
+
+We present SC3-Eval, a real-world policy evaluator built by repurposing a pre-trained unified dynamics model. Its joint forward and inverse dynamics, originally designed for action generation, provide much of the structure a faithful evaluator needs. The inverse dynamics objective anchors rollouts to a physically plausible action manifold and counteracts autoregressive drift, while the same mode doubles, at no extra training cost, as a per-chunk uncertainty signal for early termination. Across seven real-world VLA policies, SC3-Eval achieves a closed-loop Pearson correlation of 0.929 and MMRV of 0.119 , outperforming three strong prior video-model-based baselines, generalizing to a held-out task semantic, and reproducing per-trajectory failure modes rather than only aggregate success rates. 9References 
+
+[1] X. Yang, R. Dagli, A. Zook, H. Hadfield, A. Goyal, S. Birchfield, F. Ramos, and J. Tremblay. Robolab: A high-fidelity simulation benchmark for analysis of task generalist policies, 2026. URL https://arxiv.org/abs/2604.09860 .[2] A. Jain, M. Zhang, K. Arora, W. Chen, M. Torne, M. Z. Irshad, S. Zakharov, Y. Wang, S. Levine, C. Finn, W.-C. Ma, D. Shah, A. Gupta, and K. Pertsch. Polaris: Scalable real-to-sim evaluations for generalist robot policies, 2025. URL https://arxiv.org/abs/2512. 16881 .[3] F. Zhu, H. Wu, S. Guo, Y. Liu, C. Cheang, and T. Kong. Irasim: A fine-grained world model for robot manipulation. In ICCV , 2025. arXiv:2406.14540. [4] J. Quevedo, A. K. Sharma, Y. Sun, V. Suryavanshi, P. Liang, and S. Yang. Worldgym: World model as an environment for policy evaluation. arXiv preprint arXiv:2506.00613 , 2025. doi: 10.48550/arXiv.2506.00613. URL https://arxiv.org/abs/2506.00613 .[5] W.-C. Tseng, J. Gu, Q. Zhang, H. Mao, M.-Y. Liu, F. Shkurti, and Y.-C. Lin. Scalable policy evaluation with video world models. arXiv preprint arXiv:2511.11520 , 2025. URL https: //arxiv.org/abs/2511.11520 .[6] Y. Guo, L. X. Shi, J. Chen, and C. Finn. Ctrl-world: A controllable generative world model for robot manipulation. arXiv preprint arXiv:2510.10125 , 2025. URL https://arxiv.org/ abs/2510.10125 .[7] S. Li, Y. Gao, D. Sadigh, and S. Song. Unified video action model. arXiv preprint arXiv:2503.00200 , 2025. URL https://arxiv.org/abs/2503.00200 .[8] C. Zhu, R. Yu, S. Feng, B. Burchfiel, P. Shah, and A. Gupta. Unified world models: Cou-pling video and action diffusion for pretraining on large robotic datasets. arXiv preprint arXiv:2504.02792 , 2025. URL https://arxiv.org/abs/2504.02792 .[9] NVIDIA, A. Ali, J. Bai, M. Bala, Y. Balaji, A. Blakeman, T. Cai, J. Cao, T. Cao, E. Cha, Y.-W. Chao, P. Chattopadhyay, M. Chen, Y. Chen, Y. Chen, S. Cheng, Y. Cui, J. Diamond, Y. Ding, J. Fan, L. Fan, L. Feng, F. Ferroni, S. Fidler, X. Fu, R. Gao, Y. Ge, J. Gu, A. Gupta, S. Gururani, I. El Hanafi, A. Hassani, Z. Hao, J. Huffman, J. Jang, P. Jannaty, J. Kautz, G. Lam, X. Li, Z. Li, M. Liao, C.-H. Lin, T.-Y. Lin, Y.-C. Lin, H. Ling, M.-Y. Liu, X. Liu, Y. Lu, A. Luo, Q. Ma, H. Mao, K. Mo, S. Nah, Y. Narang, A. Panaskar, L. Pavao, T. Pham, M. Ramezanali, F. Reda, S. Reed, X. Ren, H. Shao, Y. Shen, S. Shi, S. Song, B. Stefaniak, S. Sun, S. Tang, S. Tasmeen, L. Tchapmi, W.-C. Tseng, J. Varghese, A. Z. Wang, H. Wang, H. Wang, H. Wang, T.-C. Wang, F. Wei, J. Xu, D. Yang, X. Yang, H. Ye, S. Ye, X. Zeng, J. Zhang, Q. Zhang, K. Zheng, A. Zhu, and Y. Zhu. World simulation with video foundation models for physical ai. arXiv preprint arXiv:2511.00062 , 2025. [10] P. Atreya, K. Pertsch, T. Lee, M. J. Kim, A. Jain, A. Kuramshin, C. Eppner, C. Neary, E. Hu, F. Ramos, et al. Roboarena: Distributed real-world evaluation of generalist robot policies. In 
+
+Proceedings of the Conference on Robot Learning (CoRL 2025) , 2025. [11] X. Li, K. Hsu, J. Gu, K. Pertsch, O. Mees, H. R. Walke, C. Fu, I. Lunawat, I. Sieh, S. Kir-mani, S. Levine, J. Wu, C. Finn, H. Su, Q. Vuong, and T. Xiao. Evaluating real-world robot manipulation policies in simulation. arXiv preprint arXiv:2405.05941 , 2024. [12] Gemini Robotics Team. Evaluating gemini robotics policies in a veo world simulator. arXiv preprint arXiv:2512.10675 , 2025. URL https://arxiv.org/abs/2512.10675 .[13] Y. Li, Z. Zhou, Y. Chen, Y. Xue, and Y. Zhu. dworldeval: Scalable robotic policy evaluation via discrete diffusion world model. arXiv preprint arXiv:2604.22152 , 2026. URL https: //arxiv.org/abs/2604.22152 .10 [14] Y. Wang, R. Syed, F. Wu, M. Zhang, A. Onol, J. Barreiros, H. Nayyeri, T. Dear, H. Zhang, and Y. Li. Interactive world simulator for robot policy training and evaluation. arXiv preprint arXiv:2603.08546 , 2026. URL https://arxiv.org/abs/2603.08546 .[15] M. J. Kim, Y. Gao, T.-Y. Lin, Y.-C. Lin, Y. Ge, G. Lam, P. Liang, S. Song, M.-Y. Liu, C. Finn, and J. Gu. Cosmos policy: Fine-tuning video models for visuomotor control and planning. In 
+
+The Fourteenth International Conference on Learning Representations , 2026. URL https: //openreview.net/forum?id=wPEIStHxYH .[16] S. Ye, Y. Ge, K. Zheng, S. Gao, S. Yu, G. Kurian, S. Indupuru, Y. L. Tan, C. Zhu, J. Xi-ang, A. Malik, K. Lee, W. Liang, N. Ranawaka, J. Gu, Y. Xu, G. Wang, F. Hu, A. Narayan, J. Bjorck, J. Wang, G. Kim, D. Niu, R. Zheng, Y. Xie, J. Wu, Q. Wang, R. Julian, D. Xu, Y. Du, Y. Chebotar, S. Reed, J. Kautz, Y. Zhu, L. J. Fan, and J. Jang. World action models are zero-shot policies, 2026. URL https://arxiv.org/abs/2602.15922 .[17] Y. Liu, F. Feng, L. Kong, W. Lu, J. Tang, K. Zhang, K. Murphy, C. Finn, and Y. Du. World action verifier: Self-improving world models via forward-inverse asymmetry. arXiv preprint arXiv:2604.01985 , 2026. URL https://arxiv.org/abs/2604.01985 .[18] K. Chua, R. Calandra, R. McAllister, and S. Levine. Deep reinforcement learning in a handful of trials using probabilistic dynamics models. In Advances in Neural Information Processing Systems (NeurIPS) , 2018. URL https://arxiv.org/abs/1805.12114 .[19] Z. Mei, T. Yin, M. Baker, O. Shorinwa, and A. Majumdar. World models that know when they don’t know: Controllable video generation with calibrated uncertainty. arXiv preprint arXiv:2512.05927 , 2025. URL https://arxiv.org/abs/2512.05927 .[20] R. Kidambi, A. Rajeswaran, P. Netrapalli, and T. Joachims. MOReL: Model-based offline reinforcement learning. In Advances in Neural Information Processing Systems (NeurIPS) ,2020. URL https://arxiv.org/abs/2005.05951 .[21] T. Yu, G. Thomas, L. Yu, S. Ermon, J. Zou, S. Levine, C. Finn, and T. Ma. MOPO: Model-based offline policy optimization. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. URL https://arxiv.org/abs/2005.13239 .[22] NVIDIA et al. Cosmos 3: Omnimodal world models for physical ai. arXiv preprint arXiv:2606.02800 , 2026. URL https://arxiv.org/abs/2606.02800 .[23] Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel, and M. Le. Flow matching for generative modeling. In International Conference on Learning Representations (ICLR) , 2023. URL 
+
+https://arxiv.org/abs/2210.02747 .[24] X. Liu, C. Gong, and Q. Liu. Flow straight and fast: Learning to generate and transfer data with rectified flow. In International Conference on Learning Representations (ICLR) , 2023. URL https://arxiv.org/abs/2209.03003 .[25] Physical Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, M. Y. Galliker, D. Ghosh, L. Groom, K. Hausman, B. Ichter, S. Jakubczak, T. Jones, L. Ke, D. LeBlanc, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, A. Z. Ren, L. X. Shi, L. Smith, J. T. Springenberg, K. Stachowicz, J. Tanner, Q. Vuong, H. Walke, A. Walling, H. Wang, L. Yu, and U. Zhilinsky. π0.5: A vision-language-action model with open-world generalization. arXiv preprint arXiv:2504.16054 , 2025. URL 
+
+https://arxiv.org/abs/2504.16054 .[26] Z. Xiao, Y. Lan, Y. Zhou, W. Ouyang, S. Yang, Y. Zeng, and X. Pan. Worldmem: Long-term consistent world simulation with memory. arXiv preprint arXiv:2504.12369 , 2025. 11 A Dataset and Evaluation Details 
+
+The following appendices give the dataset, training, and ablation details that complement Sec. 4 of the main paper. Full rollout videos and additional qualitative comparisons are hosted on the project website. 2
+
+A.1 Training Dataset 
+
+We train SC3-Eval on the real-world table bussing dataset introduced in Sec. 4.1, which spans 381 
+
+hours of robot trajectories collected in a single physical scene with 12 object categories. Each trajectory provides synchronized streams from three camera views, two third-person cameras and one wrist-mounted camera, recorded at 20 Hz with native resolution 480 × 640 . We additionally subsample each stream to 10 Hz to form the multi-FPS training mix described in App. B.4. The 12 object categories cover yellow cup, orange cup, blue bowl, white bowl, orange plate, chop-stick, spoon, chip bag, plastic lid, plastic container, foil tray, and bottle. Trajectories cover the table bussing task family (utensils to the utensil bin, trash items to the trash can) and do not include re-verse table bussing, which swaps the two destinations and forms the out-of-distribution split used in our evaluation. Each action is recorded as a delta end-effector pose (delta-EE) and represented as a 7-dimensional vector with three components for translation, three for axis-angle rotation, and one for gripper width. We normalize each dimension to unit variance using statistics computed over the full training corpus. 
+
+A.2 Evaluation Setup 
+
+Our real-world evaluation covers seven π0.5 [25] policy checkpoints, four on the in-distribution table bussing task and three on the out-of-distribution reverse table bussing task. Reverse bussing keeps the same workspace, object set, and language template as table bussing and only swaps the object-to-destination mapping. This isolates the evaluator’s generalization to new task semantics from generalization to new pixels or motions. For each checkpoint we collect 36 to 37 matched initial conditions, each rolled out both on the physical robot and inside our world-model evaluator from the same starting state for direct comparison. All rollouts, whether physical, offline (open-loop), or online (closed-loop), run for at most 20 seconds, so that every mode shares the same temporal budget. 
+
+Policy checkpoints. Tab. 3 reports the seven checkpoints with their task family and the per-criterion real-world success rates measured in the physical-robot rollouts. The first four checkpoints (IDs 1-4) are in-distribution table bussing policies, and the last three (IDs 5-7) are out-of-distribution 
+
+reverse table bussing policies. Each checkpoint predicts 25 actions at 10 Hz, and only the first 16 
+
+actions are executed under a receding-horizon strategy before the next replan. Table 3: Policy checkpoints used for evaluation. Each row reports the real-world success rate per success criterion.                                 
+
+> Real-world success rate ID Task family Language following Object lifting Object placing
+> 1Table bussing (InD) 0.946 0.610 0.126 2Table bussing (InD) 0.876 0.688 0.306 3Table bussing (InD) 0.959 0.720 0.350 4Table bussing (InD) 0.446 0.154 0.008 5Reverse table bussing (OOD) 0.745 0.444 0.286 6Reverse table bussing (OOD) 0.675 0.105 0.057 7Reverse table bussing (OOD) 0.926 0.785 0.449
+> 2https://weichengtseng.github.io/sc3-eval/
+
+12 A.3 Success Criteria and Annotation Protocol 
+
+This subsection details the criteria used to score each rollout and the protocol followed by human annotators. 
+
+Success criteria. Each rollout is scored on three independent binary criteria described in Sec. 4.1 of the main paper, language following , object lifting , and object placing , with each criterion scored separately for every object involved in the rollout. For each checkpoint we compute one success rate per criterion, as the mean of the criterion’s per-object binary scores aggregated over all objects across the 36 to 37 trajectories. Each (checkpoint, criterion) pair then serves as a single data point in the policy-level correlation metrics, giving 7 × 3 = 21 data points per evaluation mode. 
+
+Policy-level and frame-level metrics. At the policy level we report Pearson correlation r,which captures linear agreement and absolute calibration, and Mean Maximum Rank Violation (MMRV) [11], which captures pairwise rank consistency and is the metric most relevant to check-point selection. In offline (open-loop) mode the world model is driven by the real-world action sequence, so frame-level fidelity is also meaningful, and we additionally report rollout PSNR aver-aged over all generated frames. Online (closed-loop) rollouts depart from the real-world frames by construction, so a frame-level reference metric is not meaningful. 
+
+Blinding. Trajectories from the three sources (real-world, offline open-loop, online closed-loop) are rendered at a uniform 480 × 640 resolution and presented to annotators in randomized order. Source labels are stripped from filenames and metadata, and annotators are not told the proportion of trajectories drawn from each source. 
+
+Failure-mode taxonomy. For each failed trajectory, annotators additionally assign exactly one of the three failure modes used in Sec. 4.3 of the main paper, language-following failure , object-lifting failure , or object-placing failure . The taxonomy mirrors the three success criteria, and each failed trajectory is assigned to the first criterion it violates (in the order language → lifting → placing). 
+
+# B Training Details 
+
+B.1 Network Architecture 
+
+To leverage prior knowledge from vision foundation models, we initialize the network from the pre-trained weights of Cosmos3-Nano, the smallest variant of the Cosmos3 family [22]. Raw delta-EE actions are first normalized per-dimension as described in App. A.1, then projected through an MLP into action embeddings. The resulting embeddings are injected as additive to-kens into the time-embedding pathway of each Diffusion Transformer block, and the same action-conditioning pathway is shared between the forward and inverse dynamics objectives. 
+
+B.2 Hardware and Compute 
+
+We train SC3-Eval on 32 NVIDIA GB200 GPUs ( 8 nodes with 4 GPUs per node) for approximately 
+
+2.2 wall-clock days. Inference for closed-loop evaluation runs at 2.3 seconds per 24 -frame chunk on a single GB200 GPU. 
+
+B.3 Optimization Optimizer and schedule. We use the AdamW optimizer with learning rate 0.0001 , weight decay 
+
+0.05 , β1 = 0 .9, β2 = 0 .99 , and a 2,000 -step linear warmup followed by cosine decay. The effective batch size is 512 trajectories per step ( 16 per-GPU minibatch across 8 nodes with 4 GB200 GPUs per node), and we train for 24 ,000 total steps with the rectified-flow loss inherited from Cosmos3. 13 Mode mixture. At each gradient step, every training instance is independently sampled into one of the three training modes from Sec. 3.2 with fixed probabilities, pFD = 0 .8 for multi-view forward dynamics, pCVI = 0 .1 for cross-view inpainting, and pID = 0 .1 for inverse dynamics. The chosen mode determines the clean/noisy partition over video and action tokens before the forward pass, so each instance contributes a gradient to a single mode, and the relative mode weights are realized as these sampling frequencies rather than as an explicit weighted sum at every step. 
+
+B.4 Training Augmentations Pseudo-action augmentation. With probability ppseudo = 0 .5, the policy command for a mini-batch sample is replaced by a pseudo-action computed from consecutive real-world end-effector poses. The pseudo-action and policy-command distributions occupy slightly different action mani-folds, and exposing the model to both during training provides marginal robustness gains. 
+
+Multi-FPS training. We jointly train at 10 and 20 FPS by sampling the temporal stride uniformly per minibatch. The two FPS settings correspond to effective action horizons of 2.4 and 1.2 seconds for the 24 -step chunks used during training. They expose the model to complementary temporal statistics within a fixed chunk budget. The 20 FPS stream provides fine-grained inter-frame infor-mation that is useful for short-range physics and contact, while the 10 FPS stream covers twice the temporal span and exposes the model to more global movement per chunk. Since the trans-former does not directly observe the frame rate through its positional encoding, this is best read as a data-augmentation effect that broadens the visual statistics each chunk represents, rather than as an explicit timescale-conditioning signal. 
+
+B.5 Inference Procedure Prediction-execution horizon decoupling. Following the notation of Sec. 3.3 of the main paper, the world model is trained at a prediction horizon of l′ = 24 frames, of which only the first l = 16 
+
+frames are retained at inference, matching the policy’s 16 -step receding-horizon execution. Training directly at l = 16 frames degrades generation quality, since this horizon is far shorter than the 400 -frame video clips on which Cosmos3 was pre-trained. At each closed-loop step the policy proposes a 25 -action chunk, of which we feed the first l′ = 24 actions to the world model. The world model generates l′ future frames in each of the three camera views, and we keep the first l frames per view as the observation context for the next chunk. 
+
+Early-termination threshold. For the uncertainty-driven early-termination criterion used in Sec. 4.4, we tune the per-chunk threshold to τ = 0 .02 on a held-out subset of 30 trajectories. This threshold terminates approximately 4.88% of rollouts. Performance is stable for τ ∈ [0 .02 , 0.05] 
+
+and degrades under more aggressive termination at τ = 0 .01 (App. C.3). 
+
+# C Additional Ablation Study 
+
+The main paper evaluates each design choice via closed-loop policy-level correlation metrics in Tab. 2. This appendix complements that analysis by examining how each design factor affects the visual quality of offline (open-loop) generation. Tab. 4 reports rollout PSNR against the real-world frames per method and per ablation variant. Online (closed-loop) rollouts depart from the real-world frames by construction, so PSNR is meaningful only in offline mode. Subsequent subsections analyze each design factor in turn, and App. C.3 additionally provides a finer InD/OOD breakdown of the closed-loop metrics for the early-termination ablation. 
+
+C.1 Training Modes 
+
+SC3-Eval introduces two grounding training modes alongside multi-view forward dynamics (Sec. 3.2), inverse dynamics and cross-view inpainting. We ablate each in turn below. 14 Table 4: Offline rollout PSNR per method and per ablation variant. Results are split into in-distribution (table bussing) and out-of-distribution (reverse table bussing). Higher is better.                      
+
+> Method In-distribution PSNR ↑Out-of-distribution PSNR ↑
+> Ctrl-World [6] 14.80 14.61 IRASim [3] 13.99 13.12 Cosmos-Predict 2.5 [9] 14.83 14.81 w/o inverse dynamics 14.97 14.07 w/o cross-view inpainting 15.11 15.01 w/o horizon decoupling 14.87 14.76
+> SC3-Eval (Ours) 15.44 15.12
+> ■Ground truth ■w/ inverse dynamics ■w/o inverse dynamics
+
+Figure 7: Qualitative effect of inverse dynamics grounding on offline rollouts. Each row shows the same offline (open-loop) rollout under a different training configuration, sampled at five timesteps from a single bussing trajectory. The variant trained without inverse dynamics matches the ground truth for the first second, then drifts onto a different scene and never recovers, while the variant with inverse dynamics tracks the ground-truth bottle pick-and-place motion through the end of the rollout. 
+
+Inverse dynamics. Removing the inverse dynamics grounding objective degrades offline visual quality on both splits (Tab. 4, w/o inverse dynamics row), and the OOD drop ( 1.05 PSNR) is more than twice the InD drop ( 0.47 PSNR). The corrective signal from inverse dynamics becomes most valuable when policy commands drive the rollout off the training-data manifold, where the rollout otherwise drifts without correction. Fig. 7 illustrates this qualitatively on a single offline trajectory, where the variant without inverse dynamics tracks the ground truth for the first second and then diverges onto a different scene, while the variant with inverse dynamics follows the bottle pick-and-place motion through the end of the rollout. 
+
+Cross-view inpainting. The cross-view inpainting ablation has a particularly striking qualita-tive effect on wrist-view scene re-entry. When the wrist camera temporarily turns away from the workspace and later returns, the variant trained without cross-view inpainting hallucinates the workspace and never recovers once it becomes visible again, while the variant trained with cross-view inpainting restores the correct workspace state. We identify re-entry segments automatically as rollout windows in which the wrist camera workspace visibility transitions from below threshold to above threshold. Fig. 8 compares both variants over the same re-entry segment at four timesteps, with the zoomed wrist view on top and the two third-person views below for each panel. 15 ■ w/ cross-view inpainting ■ w/o cross-view inpainting 
+
+Figure 8: Qualitative effect of cross-view inpainting on wrist-view scene re-entry. Each row shows the same offline (open-loop) rollout under a different training configuration, sampled at four timesteps spanning a re-entry segment in which the wrist camera turns away from the workspace and then returns. Each panel shows a zoomed wrist view on top and the two third-person views below. The variant trained without cross-view inpainting hallucinates the wrist content and never resolves once the workspace becomes visible again, while the variant trained with cross-view inpainting recovers the correct workspace state under occlusion. 
+
+Figure 9: Uncertainty-driven early termination on an example rollout. Top, four frames sampled from the imagined rollout. Bottom, the per-chunk consistency error Uchunk over the 14 rollout chunks. The rollout is terminated at the first chunk whose Uchunk exceeds the threshold τ = 0 .02 
+
+(chunk 10 here), before the visible drift compounds. 
+
+C.2 Prediction-Execution Horizon Decoupling 
+
+The prediction-execution horizon decoupling result in Tab. 2 of the main paper carries over to the offline (open-loop) mode, with the w/o horizon decoupling row of Tab. 4 showing a consistent PSNR drop. Setting l′ = l (no decoupling) shortens the per-chunk video horizon below the world model’s pre-training prior, and degrades both closed-loop policy-level correlation and offline visual quality. 16 Table 5: Uncertainty-driven early termination ablation. Results are decomposed by InD/OOD and shown across threshold settings.                                  
+
+> In-distribution Out-of-distribution Threshold τTermination rate r↑MMRV ↓r↑MMRV ↓∞(no termination) 0% 0.956 0.093 0.853 0.197
+> τ1= 0 .05 2.21% 0.974 0.027 0.881 0.170
+> τ2= 0 .02 4.88% 0.984 0.022 0.870 0.171
+> τ3= 0 .01 10 .22% 0.941 0.101 0.902 0.159
+
+Table 6: Outcome reproduction rate per category, reported as offline / online . Each cell shows the fraction of real-world trajectories whose matched offline (open-loop) and online (closed-loop) rollouts have the same outcome category as the real-world rollout. Higher is better in both modes.                                                     
+
+> Per-category reproduction rate (offline / online) Method Language Lifting Placing No failure Average ↑
+> Ctrl-World [6] 0.25 / 0.47 0.90 / 0.71 0.81 /0.25 0.25 / 0.35 0.55 / 0.45 IRASim [3] 0.03 / 0.56 0.92 /0.64 0.80 / 0.11 0.05 / 0.12 0.45 / 0.36 Cosmos-Predict 2.5 [9] 0.91 /0.57 0.77 / 0.53 0.15 / 0.22 0.02 / 0.20 0.46 / 0.38
+> Ours 0.91 /0.61 0.72 / 0.80 0.47 / 0.31 0.38 /0.53 0.62 /0.56
+
+C.3 Uncertainty-Driven Early Termination 
+
+Tab. 5 reports the uncertainty-driven early-termination ablation split by InD and OOD, together with the termination rate (fraction of rollouts terminated by the criterion) at several threshold settings. 
+
+Asymmetry between InD and OOD. Early termination yields consistent gains on the OOD split, with every threshold setting improving over the no-termination baseline and OOD r rising from 0.853 at the no-termination baseline to 0.902 at the most aggressive setting τ3 = 0 .01 , and OOD MMRV trending downward over the same sweep ( 0.197 → 0.159 ). On the InD split the gains saturate earlier: both metrics are best at τ2 = 0 .02 and degrade under more aggressive termination. This asymmetry is consistent with the interpretation that the inverse-dynamics consistency error 
+
+Uchunk most often flags rollouts that have drifted away from the training manifold, and such drift is more frequent on OOD prompts that push the policy off the manifold to begin with. 
+
+Sweet spot at τ2 = 0 .02 . The InD result is non-monotonic in τ . Tightening the threshold from 
+
+τ2 = 0 .02 to τ3 = 0 .01 raises the termination rate from 4.88% to 10 .22% but degrades InD r
+
+from 0.984 to 0.941 and InD MMRV from 0.022 to 0.101 . The drop is sharp enough to indicate that the additional rollouts terminated at τ3 are predominantly rollouts the world model would have continued correctly, so truncating them turns would-be successes into scored failures faster than it improves per-rollout fidelity. We therefore adopt τ2 = 0 .02 as our operating point, which captures part of the OOD gain ( 0.870 versus the 0.902 ceiling) while sitting at the InD optimum. 
+
+Uchunk for VLM annotation. Beyond early termination, the per-chunk consistency error Uchunk is also useful as side information for automatic rollout scoring. While our main results rely on human annotators, we additionally evaluate whether a vision-language model (VLM, specifically Gemini 3.1-pro) can substitute for human raters when given Uchunk as additional context. Without Uchunk ,the VLM-derived policy-level success rate is 0.712 . Supplying Uchunk values alongside the rendered frames raises it to 0.761 , closer to the human-annotated number used in the main paper. 
+
+C.4 Per-Category Outcome Reproduction 
+
+Fig. 6 of the main paper visualizes the per-category outcome reproduction rates as a bar plot. Tab. 6 reports the same numbers in tabular form for reference, including the offline (open-loop) column alongside the online (closed-loop) column shown in the main paper. 17 The offline column is relatively easy for every method, since each rollout is conditioned on the real-world action sequence and therefore largely retraces the same trajectory. The online column is the harder and more informative test, where the policy acts on generated frames and small inconsis-tencies compound. Under this protocol, baselines drop sharply across categories, while SC3-Eval retains the highest reproduction rate on every category. 18

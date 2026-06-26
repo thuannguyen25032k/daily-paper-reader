@@ -1,0 +1,485 @@
+Title: FlowDPG: Deterministic Policy Gradient on Flow Matching Policies for Real-World Manipulation
+
+URL Source: https://arxiv.org/pdf/2606.22303v1
+
+Published Time: Tue, 23 Jun 2026 02:18:55 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# FlowDPG: Deterministic Policy Gradient on Flow Matching Policies for Real-World Manipulation 
+
+Kexin Shi 1,2 Junyao Shi 1,3 Poorvi Hebbar 1 Zhuolun Zhao 1
+
+Tarun Amarnath 1 Yifan Su 1 Shikhar Bahl 1† Deepak Pathak 1,2 †
+
+> 1
+
+Skild AI 2Carnegie Mellon University 3University of Pennsylvania (1) Grasp Case  (2) Open Case  (3) Grasp R Pod  (4) Insert R Pod    
+
+> (5) Grasp L Pod (6) Insert L Pod (7) Close Case (8) Place Case
+
+Figure 1: The long-horizon, contact-rich, dual-arm AirPods assembly task used throughout this paper. The task decomposes into 8 sequential sub-stages, alternating between the two arms to grasp, open, insert, close, and place, and demands millimeter-level precision and bimanual dexterity at the insertion stage. The case and pods are initialized at randomized poses within the workspace, and a single policy must execute all 8 stages end-to-end from raw observations, without stage-level resets or hand-engineered switching. 
+
+Abstract: Real-world reinforcement learning for robotic manipulation remains challenging, and this difficulty is amplified for flow matching policies: applying policy gradient methods to these policies is fundamentally limited by the need to backpropagate through time (BPTT) along the multi-step ODE that maps noise to actions, which is computationally prohibitive and numerically fragile. We pro-pose FlowDPG , a DDPG-style method specifically designed for flow matching policies that distills the critic gradient into the velocity field at training time, bypassing BPTT entirely. Intuitively, FlowDPG combines two complementary vectors: the demonstration-driven velocity that keeps the action feasible, and the critic-driven correction that steers it toward higher value. Our contributions are threefold: (1) a BPTT-free distillation framework that enables stable DDPG-style policy improvement on flow matching policies, (2) a formal connection be-tween the FlowDPG update direction and vanilla Deterministic Policy Gradient via three explicit approximations, and (3) real-world validation on a long-horizon, multi-stage, dual-arm AirPods assembly task, where FlowDPG attains a 92% end-to-end success rate, substantially outperforming recent RL methods span-ning value-conditioning, auxiliary-module adaptation, and adjoint-based critic-gradient approaches. Videos and more results are provided on the project page 
+
+https://flowdpg.github.io .
+
+Keywords: Offline-to-Online RL, Real-World Manipulation 
+
+> †
+
+Equal advising. 
+
+> arXiv:2606.22303v1 [cs.RO] 21 Jun 2026
+
+# 1 Introduction 
+
+Despite the successes of large-scale supervised models in robotics, there is a clear shortcoming: imitation learning alone is insufficient for long-horizon, contact-rich tasks. Obtaining or collecting robotic datasets at the same scale and signal-to-noise ratio as datasets used to train large language models is prohibitively expensive. Even if one were able to get such a scale of high-quality tele-operated demonstrations, a supervised policy inherits its demonstration distribution and degrades sharply once it is deployed in unseen settings that are not covered by the data. On a long-horizon task, even rare failures at each stage can compound into a catastrophic performance. This naturally motivates the need for the robot to learn from its own actions, in a rather unsupervised fashion. A potential candidate is to employ real-world reinforcement learning, which has led to massive success in post-training LLMs, as it can push the policy beyond the original data manifold. Recent state-of-the-art manipulation policies have converged on complex generative approaches such as flow matching [1] and diffusion [2] action heads, which produce expressive multi-modal action chunks through a multi-step denoising ODE. For these policies, the standard off-policy actor-critic update [3] propagating the critic gradient ∇aQ back through the actor requires backpropa-gation through the entire denoising ODE. This is computationally prohibitive, since the cost grows linearly with the number of solver steps. It is also numerically fragile because the chain of Jacobians compounds gradient explosion and vanishing pathologies, particularly severe when the velocity field is not yet well-trained. As a result, expressive flow policies and value-driven RL have been hard to combine without either discarding the critic gradient or biasing the policy via coarse one-step ap-proximations. We propose FlowDPG , an off-policy actor-critic method designed for flow matching policies that obtains a stable critic-gradient update without backpropagating through the denoising ODE. The key insight is that clean action x1 can be estimated from any intermediate noisy action xt by a single forward pass of the velocity predictor, a unique property of flow-matching parameterization. We evaluate the critic gradient at this projected clean action, combine it with the demonstration-driven velocity to form a value-improved target, and distill the result back into the velocity field via L2 regression. Intuitively, FlowDPG composes two complementary vectors: the demonstration-driven velocity that keeps the action feasible, and the critic-driven correction that steers it toward higher value. Inference is unchanged from standard flow matching, a pure ODE solve with no deployment-time critic queries. A core property of FlowDPG is that its update direction can be derived from the vanilla DPG gradient on a flow policy under three explicit, controllable approximations, on which we expand on later in Section 3.2. This places the method on a transparent theoretical footing relative to the classical DDPG literature, in contrast to recent critic-gradient approaches that rely on more abstract stochastic-control formulations [4]. We validate FlowDPG on a long-horizon, contact-rich, dual-arm AirPods assembly task with millimeter-level insertion tolerance, where a single policy must execute eight sequential biman-ual stages end-to-end from raw observations. FlowDPG reaches 92% end-to-end success, a 28% improvement over the BC base and a 12% margin over the strongest prior RL baseline. Mechanism-level ablations isolate the role of each design choice through diagnostic curves on projection error, Q-value discrepancy, and training-loss stability, and the online phase produces large gains on out-of-distribution disturbances that the offline policy alone cannot recover from. In summary, our contributions are (1) a BPTT-free distillation framework that enables stable DDPG-style policy im-provement on flow matching policies, (2) a formal connection between FlowDPG and vanilla DPG via three explicit approximations, and (3) real-world validation on long-horizon dual-arm assembly, with mechanism-level ablations supporting each design choice. 
+
+# 2 Related Work 
+
+Generalist manipulation policies and generative action heads. Large-scale robot demonstration datasets [5, 6, 7, 8] have enabled a wave of generalist manipulation policies that map perception, language, and proprioception directly to robot actions. Early systems used transformer policies trained on multi-task demonstrations [9, 10, 11, 12]. More recent vision-language-action models 2Reward       
+
+> Feature Backbone
+> FlowDPG
+> a*=a+∇aQ(s,a)
+> Update Actor
+> Critic Actor
+
+aQ(s, a)rt 
+
+> Online Stage (Async Loop)
+> States
+> Demos
+> Rollouts
+> Images
+> Offl ine Stage
+> Update Critic
+> Deploy
+> Buffer
+> Deploy
+> Update Actor
+> via FlowDPG
+
+Figure 2: Offline-to-online pipeline of FlowDPG. Offline stage (left): a shared visual backbone feeds a frozen reward predictor, a critic, and a flow matching actor; the FlowDPG block combines the actor output a with the critic gradient ∇aQ(s, a ) into a value-improved target a∗ that is distilled back into the actor. Online stage (right): the actor is rolled out on the real-world dual-arm setup, and the critic and actor are asynchronously updated from a replay buffer mixing demonstrations with fresh rollouts. 
+
+[13, 14, 15, 16, 17] inherit representational strength from large vision-language models [18, 19, 20, 21, 22] and demonstrate broad task coverage. At the action level, many recent robot policies have moved from deterministic or Gaussian action heads to expressive generative action heads. Action-chunking transformers [23] predict temporally extended action sequences, diffusion policies [2, 24, 25] generate action chunks through iterative denoising, and flow matching [1, 14, 17] provides an ODE-based parameterization for transporting noise to actions. Our work focuses on flow matching policies as the underlying actor class. 
+
+RL fine-tuning of expressive manipulation policies. Recent work has explored several ways to improve imitation-trained manipulation policies with reward signals. One family discards the critic’s action gradient and uses only scalar value or advantage information: RA-BC [26] reweights the behavior-cloning objective by progress estimates, AWR [27] fits the policy to advantage-weighted demonstrations, and RECAP [28] conditions the policy on advantage as an additional input. Asecond family keeps the base policy frozen and learns a separate adaptation module: DSRL [29] performs RL in the latent noise space of the denoiser, PLD [30] learns a single-step residual and distills it back through supervised fine-tuning, and RLT [31] attaches a lightweight actor-critic head to a compact token extracted from the frozen base policy. The closest family exploits the critic’s action gradient directly: Q-score matching [32] relates the score of an optimal policy to gradients of the Q-function, while QAM [4, 33] converts ∇aQ into step-wise supervision through an auxiliary adjoint flow. FlowDPG also uses first-order critic information, but distills a local critic-gradient correction directly into the flow velocity field using a simple DDPG-style objective, with an explicit derivation as an approximation of vanilla DPG. For value estimation, we use IQL [34] with twin critics [35] and a stage-aware reward predictor [26] as the dense reward source. 
+
+# 3 FlowDPG 
+
+Our method has two coupled components on top of a flow matching policy (Figures 2, 3): a twin-critic IQL value estimator (Sec. 3.1), and FlowDPG , which distills the deterministic policy gradient (DPG) [36, 3] into the flow matching velocity field at training time (Sec. 3.2). 
+
+## 3.1 Value Estimation with Twin-Critic IQL 
+
+We adopt Implicit Q-Learning (IQL) [34] with twin critics in the style of TD3 [35]. IQL replaces the max a Q(s, a ) bootstrap target, which queries the critic on potentially out-of-distribution actions, 3with a value function Vψ (s) that estimates a high-quantile in-distribution action-value at s, elim-inating extrapolation error during value learning. Twin critics Qϕ1 , Q ϕ2 further mitigate Q-value overestimation from OOD actions and TD-bootstrap noise; we take their minimum wherever a sin-gle Q-estimate is needed, and pair each critic with an EMA target network used in the value loss. 
+
+Vψ is trained by expectile regression of the twin-critic minimum on dataset actions, 
+
+LV (ψ) = ED
+
+ρτ
+
+  min  
+
+> i=1 ,2
+
+Q ¯ϕi (s, a) − Vψ (s) , ρτ (u) = |τ − ⊮[u < 0] | · u2, (1) with expectile τ > 0.5 pulling Vψ (s) toward the upper tail of the action-value distribution. The critics are then bootstrapped from Vψ :
+
+yQ = rt + γH Vψ (st+H ), LQ(ϕi) = ED
+
+  Qϕi (st, at) − yQ
+
+2, (2) again avoiding extrapolation to unseen actions. Chunk-level rewards rt come from SARM [26], a frozen stage-aware reward predictor that outputs a stage label z(ot) and a within-episode progress 
+
+ϕ(ot) ∈ [0 , 1] , combined into a composite chunk reward of three terms: 
+
+rt = ϕ(ot+H ) − ϕ(ot)
+
+| {z }
+
+> progress
+
++ βstage · ⊮z(ot+H ) > z (ot)| {z }
+
+> stage transition
+
++ rterm 
+
+> t
+
+|{z} 
+
+> terminal
+
+. (3) The progress term provides dense per-step shaping, the indicator term issues a fixed bonus βstage at each predicted stage advance, and the terminal term encodes whole-episode success; we visualize an example reward and value curve in Appendix C. 
+
+## 3.2 Policy Extraction via FlowDPG LFM = vθ − (a − ϵ) 2               
+
+> noise ε
+> a
+> LFlowDPG=v′θ−(a*−ϵ)2
+> vθ
+> a*=a+∇aQ(s,a)
+> ∇aQ(s,a)
+> v′θ
+> Classical Flow Matching
+> FlowDPG
+> noise ε
+> a
+> vθ
+
+Figure 3: Top: classical flow matching transports noise to a demonstration-feasible action a via vθ . Bottom: FlowDPG adds a critic-driven correction along ∇aQ(s, a ) to reach a value-improved target a∗, then dis-tills the resulting velocity v′ 
+
+> θ
+
+back into the flow field. 
+
+A flow matching policy transports noise x0 to a fea-sible action x1 within the demonstration support, but the resulting action is not necessarily optimal under the critic. FlowDPG combines two vectors (Figure 3): the demonstration-driven velocity for feasibility, and a critic-driven correction along ∇aQ in the spirit of DDPG [3, 36] for value improvement. The combined target is distilled back into vθ via a single L2 regression, avoiding the obvi-ous alternative of backpropagating ∇aQ through the full ODE, which is computationally prohibitive and numeri-cally fragile. FlowDPG costs only one extra forward pass and one critic-gradient evaluation per update, and leaves inference as a pure flow ODE solve. 
+
+Q-Gradient. The clean action x1 can be estimated from any intermediate xt by a single forward pass of vθ :
+
+ˆa := xt + (1 − t) · vθ (xt, t, s ). (4) This satisfies ˆa ≈ x1 when vθ predicts the velocity field accurately at (xt, t ), an approximation enforced by the consistency regularizer below. We compute ˆa under 
+
+no grad and evaluate the critic gradient there: 
+
+g = ∇ˆa[min i=1 ,2 Qϕi (s, ˆa)] , (5) with stop-grad on the critic parameters. 
+
+Adaptive shift. The magnitude of g varies considerably across states and training steps, destabiliz-ing updates if used as-is. We normalize the step to the local velocity scale: 
+
+∆ = α · ∥ut∥∥g∥ + ε · g, (6) with α > 0 a base guidance scale and ε guarding against vanishing gradients. 4Distilled flow target. Summing ˆa and ∆ gives the Q-improved clean action, and subtracting noise gives the velocity target: 
+
+a∗ = ˆ a + ∆ , u∗ 
+
+> t
+
+= a∗ − x0. (7) The policy is regressed against u∗ 
+
+> t
+
+alongside a behavior-cloning anchor: 
+
+LFlowDPG (θ) = λ · ∥ vθ (xt, t, s ) − u∗ 
+
+> t
+
+∥2
+
+| {z }
+
+> Ldistill
+
++(1 − λ) · ∥ vθ (xt, t, s ) − ut∥2
+
+| {z }
+
+> LBC
+
+, (8) with λ warming up linearly from 0 over Nwarmup steps so that the unreliable early critic does not dominate. 
+
+Consistency regularizer. The reliability of ˆa is critical: a projection off the clean-action manifold leaves the critic queried OOD and g unreliable. Since the standard flow loss only supervises local velocity, we add 
+
+Lcons (θ) = E ∥ˆa − x1∥2 . (9) Substituting xt = (1 − t)x0 + tx 1 into Eq. 4 gives ˆa − x1 = (1 − t)( vθ − ut), so Lcons reduces to a velocity-error penalty weighted by (1 − t)2, emphasizing small-t samples where the projection error is most amplified. 
+
+Relationship to vanilla DPG. A vanilla DPG [36, 3] update on a flow matching policy treats the ODE terminus x1 as a deterministic actor and, by the chain rule (Appendix A), yields 
+
+∇θ LDPG = −∇ aQ(s, x 1) · ∇ θ x1 = −
+
+Z 10
+
+g⊤Φ(1 , t ) · ∇ θ vθ (xt, t, s ) dt, (10) where Φ(1 , t ) := ∂x 1/∂x t is the ODE sensitivity matrix. Computing Φ requires backpropagating through all T ODE steps with O(T ) memory and well-known gradient explosion/vanishing patholo-gies, particularly severe when vθ is not yet well-trained. The FlowDPG gradient, by contrast, comes from differentiating LFlowDPG : after warmup, the only g-dependent term is the distillation loss, so treating g as a detached constant gives 
+
+∇θ LFlowDPG = −2λα ∥ut∥ · ˆg(ˆ a) · ∇ θ vθ (xt, t, s ), (11) with ˆg(ˆ a) := g/ ∥g∥. This recovers Eq. 10 under three explicit approximations: (i) the critic gradient is evaluated at ˆa rather than x1, collapsing Φ(1 , t ) to the identity and eliminating ODE backprop-agation, with Lcons keeping this faithful by directly minimizing ∥ˆa − x1∥; (ii) the trajectory-wide integral is replaced by a Monte Carlo estimate at a single t ∼ Uniform(0 , 1) , the same estimator flow matching uses for training; and (iii) the un-normalized step size ∥g∥ is replaced by the adaptive scaling 2λα ∥ut∥ of Eq. 6, removing a known source of instability in DDPG-family methods [3, 35]. 
+
+## 3.3 Offline-to-Online Pipeline 
+
+The two components above slot into the pipeline of Figure 2, detailed in Algorithm 1. In the offline phase , the backbone, action head, and value head are jointly trained on demonstrations Doff with the FlowDPG objective, producing a base policy that initializes online deployment. In the online phase ,the policy is deployed to collect real-world rollouts that are asynchronously appended to Don ; the learner samples mini-batches at ∼1:1 ratio from Doff ∪ D on to balance demonstration quality and fresh experience. Backbone and reward predictor are frozen in this phase to preserve pretrained representations and reduce per-step compute; updated actor/critic checkpoints synchronize back to deployment periodically. 
+
+# 4 Experiments 
+
+Task and protocol. We evaluate on a long-horizon, dual-arm AirPods assembly task (Figure 1) spanning 8 sequential sub-stages with randomized case and pod poses. The setup uses two Franka arms with demonstrations collected via GELLO [37] teleoperation. Each policy is evaluated on 25 cases (50 pod manipulations); failures within a stage do not terminate the episode and retries are allowed. We report per-stage success rate (with retries), the unweighted mean across stages ( Avg ), and end-to-end episode success ( Overall ), which requires all pods correctly inserted. 5Algorithm 1 FlowDPG: Offline-to-Online Training 
+
+Require: Offline buffer Doff ; online buffer Don (initially empty); guidance scale α; consistency weight μcons ;max guidance weight λmax ; warmup Nwarmup ; EMA rate ρ; expectile τ .1: Pretrain SARM on the annotated subset 2: Initialize backbone, action head vθ , value head (Vψ , Q ϕ1 , Q ϕ2 ); EMA targets Q ¯ϕi ← Qϕi
+
+Offline phase 
+
+3: for k = 1 , . . . , N off do 
+
+4: Sample mini-batch from Doff ; compute rt from the reward predictor 5: Sample x0 ∼ N (0 , I ), t ∼ Uniform(0 , 1) ; form xt, u t
+
+6: Compute vt = vθ (xt, t, s ) and ˆa via Eq. 4 7: Lcons ← ∥ ˆa − x1∥2
+
+8: g ← ∇ ˆa min i Qϕi (s, ˆa) with stop-grad on critic 9: ∆ ← α · ∥ ut∥/(∥g∥ + ε) · g
+
+10: a∗ ← ˆa + ∆ ; u∗ 
+
+> t
+
+← a∗ − x0
+
+11: λ ← λmax · min( k/N warmup , 1) 
+
+12: Update θ by minimizing LFlowDPG + μcons Lcons via Eqs. 8, 9 13: Update ψ, ϕ 1, ϕ 2 via Eqs. 1–2 14: EMA targets: ¯ϕi ← ρ ¯ϕi + (1 − ρ)ϕi
+
+15: end for Online phase 
+
+16: Deploy πθ for autonomous rollout collection 17: for k = 1 , . . . , N on do 
+
+18: Asynchronously append rollouts to Don with rewards from the reward predictor 19: Sample mini-batch from Doff ∪ D on at ∼ 1:1 ratio 20: Update θ, ψ, ϕ 1, ϕ 2 as in the offline phase, with backbone and SARM frozen 21: if k mod Nsync = 0 then 
+
+22: Synchronize πθ to deployment 23: end if 
+
+24: end for 
+
+25: return vθ
+
+Baselines. We compare against three families of RL methods for adapting a base flow policy. Value-conditioning methods use only scalar value/advantage signals: RA-BC [26] reweights the BC ob-jective by SARM progress, AWR [27] performs advantage-exponentially-weighted regression, and RECAP [28] conditions the policy on advantage. Auxiliary-module methods keep the base policy frozen and train a separate adapter: DSRL [29] performs RL in the noise space of the denoiser, PLD [30] learns a single-step residual, and RLT [31] attaches an actor-critic head to a compact RL token. The critic-gradient category contains the concurrent QAM [4], which converts ∇aQ into step-wise supervision via adjoint matching. All baselines share the same backbone, action chunk horizon, reward, value head, and offline-online data split as FlowDPG. 
+
+## 4.1 Main Results 
+
+Three patterns in Table 1 connect each method’s algorithmic mechanism to its empirical ceiling. 
+
+Value-conditioning is bounded by the demonstration support. Reweighting or conditioning over existing demonstrations cannot synthesize an action outside their distribution. These methods im-prove where the bottleneck is selecting the better mode from existing data (Open/Close case) but remain near the BC base on contact-rich stages (Insert R/L pod) requiring action refinement beyond what demonstrations cover. 
+
+Auxiliary-module methods leave the base policy untouched. DSRL optimizes in noise space, an indirect channel separated from the final action by the entire ODE. PLD’s single-step residual can nudge the trajectory endpoint but cannot reshape the multi-step denoising itself. RLT is the strongest here because its actor-critic head is easier to optimize, but the MLP actor discards the flow policy’s multi-modal expressivity. In all three cases, improvement headroom is capped by the adapter rather than the base policy. 
+
+Critic-gradient methods directly update the base policy. FlowDPG uses ∇aQ to update the velocity field itself, removing both ceilings: actions are no longer confined to the demonstration support, and the full capacity of the flow policy participates in the improvement. The concurrent QAM [4] pursues the same direction through adjoint matching, but requires an auxiliary adjoint flow 6Table 1: Per-stage, overall and avg success rates on the AirPods assembly task.                                                                                                        
+
+> Method Grasp case Open case Grasp R pod Insert R pod Grasp L pod Insert L pod Close case Place case Overall Avg
+> BC (base) 100% 78.32% 72.44% 68.54% 78.56% 66.23% 92% 96% 64% 81.51%
+> Value-conditioning
+> RA-BC 100% 86.15% 80.52% 64.52% 82.49% 68.46% 96% 96% 76% 84.27% AWR 100% 80.65% 78.43% 72.45% 78.77% 70.65% 100% 100% 76% 85.12% RECAP 100% 89.29% 80.62% 69.69% 76.54% 64.52% 96% 100% 72% 84.58%
+> Auxiliary-module adaptation
+> DSRL 100% 79.85% 75.47% 70.59% 78.13% 67.94% 92% 92% 68% 82.00% PLD 100% 85.27% 80.13% 79.82% 80.43% 79.59% 96% 96% 76% 87.16% RLT 100% 86.93% 82.41% 77.92% 84.14% 80.18% 96% 100% 80% 88.45%
+> Critic-gradient
+> QAM 100% 88% 83.33% 70.58% 73.52% 80% 100% 100% 80% 86.93% FlowDPG (offline) 100% 89.29% 90.63% 84.38% 96.43% 83.33% 100% 100% 88% 93.01%
+> FlowDPG (+online) 100% 89.29% 92.31% 86.21% 96.67% 88.89% 100% 100% 92% 94.17%
+
+Table 2: Recovery rates under three disturbance families.                
+
+> Disturbance Offline +Online ∆
+> Re-grasp (object replaced in tray) 78% 92% +14% Re-open/close (case state inverted) 82% 94% +12% Re-insert (pod dislodged) 86% 92% +6% Adapt grasp (tray reshuffled mid-execution) 70% 88% +18%
+
+at training time and step-wise supervision at every flow timestep, making it sensitive to critic noise across the trajectory. FlowDPG distills a single critic-gradient evaluation via one L2 regression, a simpler mechanism with an explicit derivation as an approximation of vanilla DPG (Sec. 3.2). 
+
+## 4.2 Online RL Improves Robustness to Unseen Disturbances 
+
+Online deployment lifts FlowDPG from 88% to 92% (Table 1), with gains concentrated on the contact-rich stages (Grasp/Insert R/L pod) where deployment-time data exposes under-represented corner cases. To probe generalization beyond the demonstration distribution, we apply three families of disturbances after the policy reaches the relevant stage: (i) stage undo —returning a grasped case/pod to the tray or inverting the open/close state of the case; (ii) in-place adjustment —dislodging a successfully inserted pod; (iii) scene perturbation —reshuffling tray contents while the policy is reaching. Each disturbance is evaluated on 50 trials. The offline policy handles undo disturbances reasonably (Table 2): the post-undo observation resem-bles the demonstration starting state of the corresponding stage, and visual conditioning re-triggers the appropriate behavior. The weak point is scene perturbation, a mid-execution visual transition absent from demonstrations. Online RL improves all four cases, with the largest gain on the scene perturbation and the smallest where demonstration coverage was already strong. Deployment-time failures expose the policy to dynamic perturbations and partial-success states, and the critic-guided update teaches the velocity field to steer such states back toward valid trajectories. 
+
+## 4.3 Ablation: Consistency Regularizer and Adaptive Shift 
+
+We ablate each design choice and report both end-to-end success and mechanism-level metrics (Fig-ure 4). Removing the consistency regularizer lets the projection error ∥ˆa − x1∥ plateau an order of magnitude higher (Fig. 4(a)), amplifying the Q-value discrepancy |Q(s, ˆa) − Q(s, x 1)| (Fig. 4(b)). The critic gradient is then evaluated at an out-of-distribution action and points in the wrong direc-tion, dropping Overall from 92% to 80%. Removing the adaptive shift reduces the update to a raw 
+
+αg , whose unbounded magnitude makes the training loss oscillate rather than decrease smoothly (Fig. 4(c)) and produces the largest single-component drop (92% to 76%). The two components mitigate the same root cause, a misdirected critic-gradient signal, through complementary means, so removing both adds only a marginal further degradation (72%). 7(b) Q-value Discrepancy                 
+
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Training steps (k)
+> 0246810
+> (a) Projec Oon Error
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.1
+> Training steps (k)
+> 0246810
+> w/ consistency w/o consistency
+> (c) Training Loss
+> 0.03
+> 0.06
+> 0.09
+> 0.12
+> 0.15
+> Training steps (k)
+> 0246810
+> w/o adaptive shift w/ adaptive shift
+> 0
+> 0
+> 1
+> 1
+> 10.92 0.8 0.76 0.72
+> (d) Success Rate
+> w/o consistency
+> w/o adap ?ve shi B
+> w/o both
+> Full FlowDPG
+
+Figure 4: Ablation on consistency regularizer and adaptive shift. 
+
+Figure 5: Stage coverage under reward ablation. 
+
+## 4.4 Ablation: Reward Components 
+
+We compare the full composite reward in Eq. 3 against three variants; Figure 5 reports cumulative stage coverage with a distinct failure signature per variant. Removing the progress term causes 
+
+Q(s, a ) to collapse toward a near-constant baseline within each stage, weakening ∇aQ and produc-ing a gradual erosion across the entire sequence (80%). Removing the stage-transition term keeps the dense progress shaping but eliminates the discrete bonus at sub-task completion, so ∇aQ does not strongly favor closing out a sub-task over hovering near its end (76%). Removing both leaves only the terminal bonus: two visually similar states, the gripper holding a closed case before opening and again after the case is re-closed, become indistinguishable under reward. The policy frequently bypasses the entire pod-handling sequence to place the case directly, dropping sharply at Open case (96% → 80% ) and ending at 60%, below even the BC base. The progress and stage-transition terms are thus not redundant: when shaping is this sparse, the critic-gradient signal FlowDPG distills carries more noise than information and actively degrades the policy. 
+
+# 5 Conclusion and Limitations 
+
+We presented FlowDPG , a DDPG-style method for flow matching policies that distills the critic gra-dient into the velocity field via a single-step projection and L2 regression, avoiding backpropagation through the denoising ODE. The update recovers vanilla DPG under three explicit approximations, and on a long-horizon dual-arm AirPods assembly task FlowDPG attains 92% end-to-end success with mechanism-level ablations supporting each design choice. 
+
+Limitations. The consistency regularizer minimizes projection error on average, leaving a few states with unreliable critic gradients that we do not detect or down-weight. The reward formulation requires stage-level annotations and does not apply to tasks lacking a clean sub-stage decomposi-tion. Finally, we evaluate on a single bimanual platform and one task family; generalization to larger VLA policies and very different contact dynamics is left for future work. 8References 
+
+[1] Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel, and M. Le. Flow matching for generative modeling. In International Conference on Learning Representations (ICLR) , 2023. [2] C. Chi, S. Feng, Y. Du, Z. Xu, E. Cousineau, B. Burchfiel, R. Tedrake, and S. Song. Diffusion policy: Visuomotor policy learning via action diffusion. In Robotics: Science and Systems (RSS) , 2023. [3] T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver, and D. Wierstra. Continuous control with deep reinforcement learning. In International Conference on Learning Representations (ICLR) , 2016. [4] Q. Li and S. Levine. Q-learning with adjoint matching. arXiv preprint arXiv:2601.14234 ,2026. [5] Open X-Embodiment Collaboration, A. O’Neill, A. Rehman, A. Gupta, A. Maddukuri, A. Gupta, A. Padalkar, A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain, A. Tung, A. Be-wley, A. Herzog, A. Irpan, A. Khazatsky, A. Rai, A. Gupta, A. Wang, A. Kolobov, A. Singh, A. Garg, A. Kembhavi, A. Xie, A. Brohan, A. Raffin, A. Sharma, A. Yavary, A. Jain, A. Bal-akrishna, A. Wahid, B. Burgess-Limerick, B. Kim, B. Sch¨ olkopf, B. Wulfe, B. Ichter, C. Lu, C. Xu, C. Le, C. Finn, C. Wang, C. Xu, C. Chi, C. Huang, C. Chan, C. Agia, C. Pan, C. Fu, C. Devin, D. Xu, D. Morton, D. Driess, D. Chen, D. Pathak, D. Shah, D. B¨ uchler, D. Ja-yaraman, D. Kalashnikov, D. Sadigh, E. Johns, E. Foster, F. Liu, F. Ceola, F. Xia, F. Zhao, F. Vieira Frujeri, F. Stulp, G. Zhou, G. S. Sukhatme, G. Salhotra, G. Yan, G. Feng, G. Schiavi, G. Berseth, G. Kahn, G. Yang, G. Wang, H. Su, H.-S. Fang, H. Shi, H. Bao, H. Ben Amor, H. I. Christensen, H. Furuta, H. Bharadhwaj, H. Walke, H. Fang, H. Ha, I. Mordatch, I. Ra-dosavovic, I. Leal, J. Liang, J. Abou-Chakra, J. Kim, J. Drake, J. Peters, J. Schneider, J. Hsu, J. Vakil, J. Bohg, J. Bingham, J. Wu, J. Gao, J. Hu, J. Wu, J. Wu, J. Sun, J. Luo, J. Gu, J. Tan, J. Oh, J. Wu, J. Lu, J. Yang, J. Malik, J. Silv´ erio, J. Hejna, J. Booher, J. Tompson, J. Yang, J. Salvador, J. J. Lim, J. Han, K. Wang, K. Rao, K. Pertsch, K. Hausman, K. Go, K. Gopalakr-ishnan, K. Goldberg, K. Byrne, K. Oslund, K. Kawaharazuka, K. Black, K. Lin, K. Zhang, K. Ehsani, K. Lekkala, K. Ellis, K. Rana, K. Srinivasan, K. Fang, K. Pratap Singh, K.-H. Zeng, K. Hatch, K. Hsu, L. Itti, L. Yunliang Chen, L. Pinto, L. Fei-Fei, L. Tan, L. ”Jim” Fan, L. Ott, L. Lee, L. Weihs, M. Chen, M. Lepert, M. Memmel, M. Tomizuka, M. Itkina, M. Guaman Castro, M. Spero, M. Du, M. Ahn, M. C. Yip, M. Zhang, M. Ding, M. Heo, M. K. Srirama, M. Sharma, M. J. Kim, M. Zubair Irshad, N. Kanazawa, N. Hansen, N. Heess, N. J. Joshi, N. Suenderhauf, N. Liu, N. Di Palo, N. M. Mahi Shafiullah, O. Mees, O. Kroemer, O. Bastani, P. R. Sanketi, P. ”Tree” Miller, P. Yin, P. Wohlhart, P. Xu, P. D. Fagan, P. Mitrano, P. Sermanet, P. Abbeel, P. Sundaresan, Q. Chen, Q. Vuong, R. Rafailov, R. Tian, R. Doshi, and R. Mart´ ın-Mart´ ın. Open X-Embodiment: Robotic Learning Datasets and RT-X Models. arXiv preprint arXiv:2310.08864 , 2023. [6] F. Ebert, Y. Yang, K. Schmeckpeper, B. Bucher, G. Georgakis, K. Daniilidis, C. Finn, and S. Levine. Bridge Data: Boosting Generalization of Robotic Skills with Cross-Domain Datasets. arXiv preprint arXiv:2109.13396 , 2021. [7] S. Dasari, F. Ebert, S. Tian, S. Nair, B. Bucher, K. Schmeckpeper, S. Singh, S. Levine, and C. Finn. Robonet: Large-scale multi-robot learning. arXiv preprint arXiv:1910.11215 , 2019. [8] A. Khazatsky, K. Pertsch, S. Nair, A. Balakrishna, S. Dasari, S. Karamcheti, S. Nasiriany, M. K. Srirama, L. Y. Chen, K. Ellis, P. D. Fagan, J. Hejna, M. Itkina, M. Lepert, Y. J. Ma, P. T. Miller, J. Wu, S. Belkhale, S. Dass, H. Ha, A. Jain, A. Lee, Y. Lee, M. Memmel, S. Park, I. Radosavovic, K. Wang, A. Zhan, K. Black, C. Chi, K. B. Hatch, S. Lin, J. Lu, J. Mer-cat, A. Rehman, P. R. Sanketi, A. Sharma, C. Simpson, Q. Vuong, H. R. Walke, B. Wulfe, T. Xiao, J. H. Yang, A. Yavary, T. Z. Zhao, C. Agia, R. Baijal, M. G. Castro, D. Chen, Q. Chen, T. Chung, J. Drake, E. P. Foster, J. Gao, D. A. Herrera, M. Heo, K. Hsu, J. Hu, D. Jackson, 9C. Le, Y. Li, K. Lin, R. Lin, Z. Ma, A. Maddukuri, S. Mirchandani, D. Morton, T. Nguyen, A. O’Neill, R. Scalise, D. Seale, V. Son, S. Tian, E. Tran, A. E. Wang, Y. Wu, A. Xie, J. Yang, P. Yin, Y. Zhang, O. Bastani, G. Berseth, J. Bohg, K. Goldberg, A. Gupta, A. Gupta, D. Ja-yaraman, J. J. Lim, J. Malik, R. Mart´ ın-Mart´ ın, S. Ramamoorthy, D. Sadigh, S. Song, J. Wu, M. C. Yip, Y. Zhu, T. Kollar, S. Levine, and C. Finn. DROID: A Large-Scale In-The-Wild Robot Manipulation Dataset, March 2024. URL http://arxiv.org/abs/2403.12945 .arXiv:2403.12945 [cs]. [9] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn, K. Gopalakrishnan, K. Haus-man, A. Herzog, J. Hsu, et al. RT-1: Robotics transformer for real-world control at scale. In 
+
+Robotics: Science and Systems (RSS) , 2023. [10] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, X. Chen, K. Choromanski, T. Ding, D. Driess, A. Dubey, C. Finn, et al. RT-2: Vision-language-action models transfer web knowledge to robotic control. In Conference on Robot Learning (CoRL) , 2023. [11] S. Dasari and A. Gupta. Transformers for one-shot visual imitation. In Conference on Robot Learning , pages 2071–2084. PMLR, 2021. [12] L. Chen, K. Lu, A. Rajeswaran, K. Lee, A. Grover, M. Laskin, P. Abbeel, A. Srinivas, and I. Mordatch. Decision transformer: Reinforcement learning via sequence modeling. Advances in neural information processing systems , 34, 2021. [13] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, et al. OpenVLA: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 , 2024. [14] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter, et al. π0: A vision-language-action flow model for general robot control. arXiv preprint arXiv:2410.24164 , 2024. [15] Physical Intelligence, K. Black, N. Brown, et al. π0.5: a vision-language-action model with open-world generalization. arXiv preprint arXiv:2504.16054 , 2025. [16] Octo Model Team, D. Ghosh, H. Walke, K. Pertsch, K. Black, O. Mees, S. Dasari, J. Hejna, T. Kreiman, C. Xu, et al. Octo: An open-source generalist robot policy. arXiv preprint arXiv:2405.12213 , 2024. [17] NVIDIA, J. Bjorck, F. Casta˜ neda, N. Cherniadev, X. Da, R. Ding, L. ”Jim” Fan, Y. Fang, D. Fox, F. Hu, S. Huang, J. Jang, Z. Jiang, J. Kautz, K. Kundalia, L. Lao, Z. Li, Z. Lin, K. Lin, G. Liu, E. Llontop, L. Magne, A. Mandlekar, A. Narayan, S. Nasiriany, S. Reed, Y. L. Tan, G. Wang, Z. Wang, J. Wang, Q. Wang, J. Xiang, Y. Xie, Y. Xu, Z. Xu, S. Ye, Z. Yu, A. Zhang, H. Zhang, Y. Zhao, R. Zheng, and Y. Zhu. GR00T N1: An Open Foundation Model for Generalist Humanoid Robots. arXiv preprint arXiv:2503.14734 , 2025. [18] H. Touvron, L. Martin, K. Stone, P. Albert, A. Almahairi, Y. Babaei, N. Bashlykov, S. Ba-tra, P. Bhargava, S. Bhosale, D. Bikel, L. Blecher, C. Canton Ferrer, M. Chen, G. Cucurull, D. Esiobu, J. Fernandes, J. Fu, W. Fu, B. Fuller, C. Gao, V. Goswami, N. Goyal, A. Hartshorn, S. Hosseini, R. Hou, H. Inan, M. Kardas, V. Kerkez, M. Khabsa, I. Kloumann, A. Korenev, P. Singh Koura, M.-A. Lachaux, T. Lavril, J. Lee, D. Liskovich, Y. Lu, Y. Mao, X. Martinet, T. Mihaylov, P. Mishra, I. Molybog, Y. Nie, A. Poulton, J. Reizenstein, R. Rungta, K. Saladi, A. Schelten, R. Silva, E. M. Smith, R. Subramanian, X. E. Tan, B. Tang, R. Taylor, A. Williams, J. X. Kuan, P. Xu, Z. Yan, I. Zarov, Y. Zhang, A. Fan, M. Kambadur, S. Narang, A. Rodriguez, R. Stojnic, S. Edunov, and T. Scialom. Llama 2: Open Foundation and Fine-Tuned Chat Models. arXiv preprint arXiv:2307.09288 , 2023. [19] X. Chen, J. Djolonga, P. Padlewski, B. Mustafa, S. Changpinyo, J. Wu, C. R. Ruiz, S. Good-man, X. Wang, Y. Tay, et al. PaLI-X: On Scaling Up a Multilingual Vision and Language Model. arXiv preprint arXiv:2305.18565 , 2023. 10 [20] D. Driess, F. Xia, M. S. M. Sajjadi, C. Lynch, A. Chowdhery, B. Ichter, A. Wahid, J. Tompson, Q. Vuong, T. Yu, W. Huang, Y. Chebotar, P. Sermanet, D. Duckworth, S. Levine, V. Vanhoucke, K. Hausman, M. Toussaint, K. Greff, A. Zeng, I. Mordatch, and P. Florence. PaLM-E: An Embodied Multimodal Language Model. arXiv preprint arXiv:2303.03378 , 2023. [21] S. Karamcheti, S. Nair, A. Balakrishna, P. Liang, T. Kollar, and D. Sadigh. Prismatic VLMs: Investigating the Design Space of Visually-Conditioned Language Models. In International Conference on Machine Learning , 2024. [22] L. Beyer, A. Steiner, A. Susano Pinto, A. Kolesnikov, X. Wang, D. Salz, M. Neumann, I. Alabdulmohsin, M. Tschannen, E. Bugliarello, T. Unterthiner, D. Keysers, S. Koppula, F. Liu, A. Grycner, A. Gritsenko, N. Houlsby, M. Kumar, K. Rong, J. Eisenschlos, R. Kabra, M. Bauer, M. Boˇ snjak, X. Chen, M. Minderer, P. Voigtlaender, I. Bica, I. Balazevic, J. Puigcerver, P. Papalampidi, O. Henaff, X. Xiong, R. Soricut, J. Harmsen, and X. Zhai. PaliGemma: A versatile 3B VLM for transfer. arXiv preprint arXiv:2407.07726 , 2024. [23] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn. Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware. In Robotics: Science and Systems , 2023. [24] M. Reuss, M. Li, X. Jia, and R. Lioutikov. Goal-conditioned imitation learning using score-based diffusion policies. In Robotics: Science and Systems (RSS) , 2023. [25] J. Barreiros, A. Beaulieu, A. Bhat, R. Cory, E. Cousineau, H. Dai, C.-H. Fang, K. Hashimoto, M. Z. Irshad, M. Itkina, et al. A careful examination of large behavior models for multitask dexterous manipulation. Science Robotics , 11(113):eadp6201, 2026. [26] Q. Chen, J. Yu, M. Schwager, P. Abbeel, Y. Shentu, and P. Wu. SARM: Stage-aware reward modeling for long horizon robot manipulation. In International Conference on Learning Rep-resentations (ICLR) , 2026. URL https://arxiv.org/abs/2509.25358 .[27] X. B. Peng, A. Kumar, G. Zhang, and S. Levine. Advantage-weighted regression: Simple and scalable off-policy reinforcement learning. arXiv preprint arXiv:1910.00177 , 2019. [28] Physical Intelligence, A. Amin, R. Aniceto, A. Balakrishna, K. Black, et al. π∗
+
+> 0.6
+
+: A VLA that learns from experience. arXiv preprint arXiv:2511.14759 , 2025. [29] A. Wagenmaker, M. Nakamoto, Y. Zhang, S. Park, W. Yagoub, A. Nagabandi, A. Gupta, and S. Levine. Steering your diffusion policy with latent space reinforcement learning. In Confer-ence on Robot Learning (CoRL) , 2025. [30] W. Xiao, H. Lin, A. Peng, H. Xue, T. He, Y. Xie, F. Hu, J. Wu, Z. Luo, L. Fan, G. Shi, and Y. Zhu. Self-improving vision-language-action models with data generation via residual RL. 
+
+arXiv preprint arXiv:2511.00091 , 2025. [31] C. Xu, J. T. Springenberg, M. Equi, A. Amin, A. Esmail, S. Levine, and L. Ke. RL token: Boot-strapping online RL with vision-language-action models. arXiv preprint arXiv:2604.23073 ,2026. [32] M. Psenka, A. Escontrela, P. Abbeel, and Y. Ma. Learning a diffusion model policy from rewards via Q-score matching. In International Conference on Machine Learning (ICML) ,2024. [33] Y. Wang, X. Li, P. Xie, P. Yang, B. Nie, Y. Cai, Q. Zhang, C. Qu, J. Wu, J. Song, X. Ren, J. Huang, M. Pan, S. Feng, Z. Chen, and J. Luo. Learning while deploying: Fleet-scale rein-forcement learning for generalist robot policies. arXiv preprint arXiv:2605.00416 , 2026. [34] I. Kostrikov, A. Nair, and S. Levine. Offline reinforcement learning with implicit q-learning. In 
+
+International Conference on Learning Representations (ICLR) , 2022. URL https://arxiv. org/abs/2110.06169 .11 [35] S. Fujimoto, H. van Hoof, and D. Meger. Addressing function approximation error in actor-critic methods. In International Conference on Machine Learning (ICML) , pages 1587–1596. PMLR, 2018. URL https://arxiv.org/abs/1802.09477 .[36] D. Silver, G. Lever, N. Heess, T. Degris, D. Wierstra, and M. Riedmiller. Deterministic policy gradient algorithms. In International Conference on Machine Learning (ICML) , pages 387– 395. PMLR, 2014. [37] P. Wu, Y. Shentu, Z. Yi, X. Lin, and P. Abbeel. GELLO: A general, low-cost, and intuitive teleoperation framework for robot manipulators. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024. [38] M. Oquab, T. Darcet, T. Moutakanni, H. Vo, M. Szafraniec, V. Khalidov, P. Fernandez, D. Haz-iza, F. Massa, A. El-Nouby, M. Assran, N. Ballas, W. Galuba, R. Howes, P.-Y. Huang, S.-W. Li, I. Misra, M. Rabbat, V. Sharma, G. Synnaeve, H. Xu, H. Jegou, J. Mairal, P. Labatut, A. Joulin, and P. Bojanowski. Dinov2: Learning robust visual features without supervision, 2024. URL 
+
+https://arxiv.org/abs/2304.07193 .[39] W. Peebles and S. Xie. Scalable diffusion models with transformers. In ICCV , 2023. 12 A Derivation of the Vanilla DPG Gradient on a Flow Matching Policy 
+
+We provide the full derivation of Eq. 10 for completeness. The deterministic actor is the ODE terminus x1 = x0 + R 10 vθ (xt, t, s ) dt , with x0 ∼ N (0 , I ) independent of θ. The DDPG actor loss is LDPG = −Q(s, x 1), so by the chain rule 
+
+∇θ LDPG = −∇ aQ(s, x 1) · ∇ θ x1 = −g⊤ · ∇ θ x1, (12) where g := ∇aQ(s, a )|a=x1 ∈ R|a| is the critic gradient at the action terminus, treated throughout as a column vector. It remains to derive ∇θ x1 for the ODE actor. 
+
+Forward sensitivity equation. Define the sensitivity matrix M (t) := ∂x t/∂θ ∈ R|a|×| θ|, with initial condition M (0) = 0 since x0 is parameter-free. Differentiating the ODE dx t 
+
+> dt
+
+= vθ (xt, t, s )
+
+with respect to θ and applying the chain rule on the right-hand side, 
+
+dM (t)
+
+dt = ∇xvθ (xt, t, s ) · M (t) + ∇θ vθ (xt, t, s ). (13) This is a linear non-homogeneous ODE in M (t). By variation of parameters, its solution at t=1 is 
+
+M (1) = 
+
+Z 10
+
+Φ(1 , t ) · ∇ θ vθ (xt, t, s ) dt, (14) where Φ( σ, t ) is the state-transition matrix associated with the homogeneous part of Eq. 13, defined as the solution to 
+
+∂Φ( σ, t )
+
+∂σ = ∇xvθ (xσ , σ, s ) · Φ( σ, t ), Φ( t, t ) = I. (15) 
+
+Φ(1 , t ) describes how a perturbation of xt propagates to a perturbation of x1 — i.e., the Jacobian 
+
+∂x 1/∂x t.
+
+Final form. Substituting Eq. 14 into Eq. 12 gives the vanilla DPG gradient quoted in the main text: 
+
+∇θ LDPG = −
+
+Z 10
+
+g⊤Φ(1 , t ) · ∇ θ vθ (xt, t, s ) dt. (16) 
+
+Discrete-time form. Under Euler discretization xti+1 = xti + ∆ t · vθ (xti , t i, s ) with T steps and 
+
+∆t = 1 /T , the chain-rule recursion gives 
+
+∇θ x1 = ∆ t · 
+
+> T−1
+
+X
+
+> i=0
+
+ T −1Y
+
+> j=i+1
+
+Jj
+
+
+
+· ∇ θ vθ (xti , t i, s ), Jj := I + ∆ t · ∇ xvθ (xtj , t j , s ), (17) with the convention QT −1 
+
+> j=T
+
+(·) = I, so that the term i = T −1 contributes only ∇θ vθ (xtT −1 , ·).The matrix product QT −1 
+
+> j=i+1
+
+Jj is the discrete analogue of Φ(1 , t i). In practice this recursion is what an autograd implementation would compute when backpropagating through the ODE solver. The product structure is precisely the source of the gradient explosion/vanishing pathology: small deviations in the spectral radius of Jj from unity compound multiplicatively across the T steps, making the update numerically fragile when vθ is not yet well-trained. 
+
+Adjoint form. Equivalently, define the adjoint state λ(t) := Φ(1 , t )⊤g ∈ R|a|, which propagates the terminal gradient g backward in time. It satisfies the linear backward ODE 
+
+dλ (t)
+
+dt = −∇ xvθ (xt, t, s )⊤ · λ(t), λ(1) = g, (18) integrated from t = 1 to t = 0 . The DPG gradient can then be written as 
+
+∇θ LDPG = −
+
+Z 10
+
+λ(t)⊤ · ∇ θ vθ (xt, t, s ) dt. (19) This is the form that adjoint methods solve directly, computing λ(t) by backward integration and ac-cumulating ∇θ contributions at each t. FlowDPG bypasses both the forward sensitivity matrix Φ and the adjoint state λ entirely, instead distilling a single critic gradient evaluated at the in-distribution projected clean action ˆa.13 B Implementation Details 
+
+## B.1 Model Architecture 
+
+A DINOv2 [38] visual encoder fuses multi-view RGB images with proprioceptive states into a shared state embedding s. The flow matching velocity predictor vθ (xt, t, s ) is a Diffusion Trans-former [39] that produces an H-step action chunk in a single forward pass. On top of s, three MLPs of matched capacity form the value head: Vψ (s) and two Q-networks Qϕ1,2 (s, a) that additionally take the flattened action chunk, each paired with an EMA target Q ¯ϕi used in the value loss (Sec. 3.1). The reward head is the frozen SARM module sharing the same backbone. 
+
+## B.2 Hyper-parameters 
+
+Table 3 lists the hyper-parameters used in our experiments. Unless otherwise noted, all baselines share the same backbone, action head, value head, reward, and offline/online data split, and only their policy-extraction objective differs. Table 3: Hyper-parameters for FlowDPG. Symbols match the notation in the main text where appli-cable. 
+
+Hyper-parameter Symbol Value 
+
+Flow matching policy 
+
+Action chunk horizon H 30 Number of ODE solver steps (inference) T 12 Flow timestep sampling t Uniform(0 , 1) 
+
+Noise distribution x0 N (0 , I )
+
+Policy network — DiT, 14 layers, 16 heads, dim 1024 
+
+Value estimation (Sec. 3.1) 
+
+IQL expectile τ 0.7 Discount factor γ 0.99 EMA rate for target critic ρ 0.005 Value network ( Vψ ) — MLP, 3 layers, dim 512 Twin critic networks ( Qϕi ) — MLP, 3 layers, dim 512 
+
+FlowDPG (Sec. 3.2) 
+
+Guidance scale α 0.5 Numerical stabilizer ε 1e −6
+
+Distillation weight (max) λmax 0.5 Warmup steps for λ Nwarmup 2,000 
+
+Consistency regularizer weight μcons 1.0 
+
+Reward (Eq. 3) 
+
+Stage-transition bonus βstage 1.0 Terminal success bonus rterm success 5.0 Terminal failure penalty rterm fail −1.0
+
+Optimizer and training pipeline 
+
+Optimizer — AdamW Learning rate (actor) — 1e −4
+
+Learning rate (critic) — 1e −4
+
+Weight decay — 1e −4
+
+Gradient clip norm — 1.0 Mini-batch size — 256 Offline training steps Noff 10 ,000 
+
+Online training steps Non 6,000 
+
+Online/offline mini-batch ratio — 1:1 
+
+Checkpoint sync interval (online) Nsync 2,000 
+
+Perception backbone 
+
+Visual encoder — DINOv2 ViT-B/14 Camera views — 4 (front, top, left wrist, right wrist) Image resolution — 640 × 480 
+
+State embedding dimension |s| 1024 
+
+14 C SARM Signals and Value Estimates Along a Rollout 
+
+Figure 6: SARM signals and value estimates along a successful AirPods assembly rollout. Top: 
+
+keyframes at SARM stage transitions. Middle: predicted within-stage progress ϕ(ot) (blue) and stage label z(ot) (yellow step). Bottom: learned value Vψ (st) (blue) and twin-critic minimum 
+
+min i Qϕi (st, a t) (orange) over the same rollout. Figure 6 visualizes how the SARM signals and the learned value/Q-estimates evolve along a suc-cessful real-world execution. The progress curve ϕ(ot) provides a meaningful per-step signal even within a single stage, supplying the dense shaping that FlowDPG distills via the critic, and stage-label jumps align with the keyframes in the top strip, illustrating when the stage-transition bonus in Eq. 3 fires. The value and Q-curves track each other closely throughout the rollout ( Vψ ≈ min i Qϕi ), confirming that twin-critic IQL produces a well-calibrated value estimate suitable as a steering signal in FlowDPG. The value rises monotonically over the long horizon, with transient dips at contact-rich stages that reflect short-term recovery from minor failures before the next successful transition restores it. 15

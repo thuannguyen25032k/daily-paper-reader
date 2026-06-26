@@ -1,0 +1,417 @@
+Title: Does VLA Even Know the Basics? Measuring Commonsense and World Knowledge Retention in Vision-Language-Action Models
+
+URL Source: https://arxiv.org/pdf/2606.19297v1
+
+Published Time: Thu, 18 Jun 2026 01:21:12 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Does VLA Even Know the Basics? Measuring Commonsense and World Knowledge Retention in Vision–Language–Action Models 
+
+Nikita Kachaev *,1 Andrey Moskalenko *,2,3,4,5 Matvey Skripkin 2,6 Nikita Kurlaev 7
+
+Daria Pugacheva 7,8 Albina Burlova 7,9 Mikhail Kolosov 10 Denis Shepelev 2,5 
+
+Andrey Kuznetsov 2 Elena Tutubalina 7,11 Aleksandr I. Panov 1,10 
+
+Alexey K. Kovalev 1,10 Vlad Shakhuro 2,4,5         
+
+> 1CogAI Lab 2FusionBrain Lab 3IAI MSU 4Lomonosov MSU 5NUST MISIS
+> 6Applied AI Institute 7HSE University 8Generalizable AI Systems 9ISP RAS
+> 10 MIRAI 11 Domain-specific NLP Group
+> *Equal contribution
+
+Abstract 
+
+Embodied Vision–Language–Action (VLA) models are typically obtained by fine-tuning powerful pretrained VLMs on robotics data, yet it is unclear how much commonsense and factual knowledge they retain after adaptation. Failures on knowledge-sensitive tasks are am-biguous, conflating missing knowledge with poor generalization of low-level control. We introduce Act2Answer, a lightweight proto-col that adapts VLM knowledge benchmarks to VLA evaluation by requiring agents to an-swer through action. Each question becomes a short tabletop episode where the agent per-forms a single object-placement action to select among candidate answers, yielding an action-grounded success rate with reduced control con-founds. We curate a test suite of such environ-ments across diverse commonsense and world-knowledge categories and introduce layerwise intent probing to localize answer-relevant infor-mation across the VLM backbone and action head. In a large-scale study of 7 VLA models and 9 VLM baselines, we systematically rank models across categories, finding that VLAs show solid performance on simple concepts while exhibiting larger gaps on richer seman-tic categories relative to their source VLMs, that VQA co-training is associated with better knowledge retention, and that answer-relevant signals peak in middle VLA layers but attenu-ate in upper layers. A CT 2A NSWER is available at tttonyalpha.github.io/act2answer. 
+
+1 Introduction 
+
+Embodied agents are increasingly studied as candi-dates for deployment in everyday environments, such as households (Shukla et al., 2024; Mees et al., 2022; Liu et al., 2023) and retail (Soshin et al., 2025; Liu et al., 2025) settings. To oper-ate effectively in such contexts, their actions must be grounded in a rich semantic understanding of 
+
+Figure 1: Knowledge evaluation results for seven state-of-the-art VLA models across diverse knowledge do-mains on the Act2Answer Task Suite. The bottom panel shows model performance averaged across all environ-ments on both Act2Answer and LIBERO (Liu et al., 2023) (averaging details are provided in Appendix D). 
+
+the world - what objects are, how they are typi-cally used, and which behaviors are appropriate in a given situation - tightly linking low-level mo-tor control with commonsense, world-level rea-soning. Vision–Language–Action (VLA) models are widely proposed as the foundation for such agents and are often advertised as open-world-generalizable (Black et al., 2024; Kim et al., 2024; Yang et al., 2025; Qu et al., 2025; Patratskiy et al., 2025), so we naturally expect them to handle pre-viously unseen environments and objects with at 1
+
+> arXiv:2606.19297v1 [cs.LG] 17 Jun 2026
+
+least a basic level of appropriate generalization. Yet, the rapidly expanding VLA literature has largely centered on manipulation-centric success. Current benchmarks (Liu et al., 2023; Mees et al., 2022; Shukla et al., 2024; Soshin et al., 2025; Li et al., 2024a; Zhang et al., 2024) ask whether agents can complete complex tasks under pertur-bations, domain shifts, or new layouts, but they rarely ask whether agents remain able to act on even basic commonsense distinctions about objects, scenes, and goals after robotics training. Many VLA models are obtained by fine-tuning strong Vision-Language-Models (VLM) backbones on control tasks, and it is often implicitly assumed that the underlying world knowledge is preserved, even though we lack systematic ways to measure how much commonsense and factual knowledge is kept or catastrophically forgotten. In contrast, the VLM community has developed a rich ecosystem of benchmarks that explicitly probe world knowl-edge and commonsense. VLA evaluation, however, remains almost entirely task-success–centric: once a VLM backbone is fine-tuned into a policy that outputs actions, performance is usually reduced to success rates in manipulation or navigation do-mains, with little attention to whether the original knowledge is still present and accessible. As a re-sult, we currently lack a principled way to test what a VLA model still knows after robotics fine-tuning. 
+
+We introduce A CT 2A NSWER , an embodied eval-uation protocol that adapts VLM knowledge bench-marks to VLA models by requiring action-based answer selection instead of text generation. Each question becomes a short simulated episode with a simple selection action, reducing confounds from long-horizon planning and low-level control. Prior action-based semantic evaluations (Zitkovich et al., 2023; Kim et al., 2024) are limited in scope; in contrast, A CT 2A NSWER enables systematic bench-mark adaptation across diverse commonsense and world-knowledge categories and supports layer-wise analyses that localize answer-relevant infor-mation within VLA models. Specifically, our key contributions are as follows: 1. We propose A CT 2A NSWER , an embodied evaluation benchmark suite that adapts VLM knowledge tasks into action-based simulated episodes, providing a controlled protocol for probing knowledge-sensitive behavior in VLAs through action rather than assessing VLAs text decoding on standard VLM QA benchmarks. 2. By adapting existing VLM benchmarks, we curate a diverse embodied benchmark suite for systematically evaluating commonsense and world knowledge in VLA models. In total, we collect 1,720 unique binary questions across 12 categories, including attribute, state, color, symmetry, shape, emotion, celebrity, living world, counting, time, traffic, public info. 3. We present a large-scale empirical study of 7 modern VLA systems and 9 strong VLM base-lines, systematically ranking models across knowledge categories (Figure 1). We find that current VLA models perform strongly on sim-ple perceptual categories but exhibit substan-tially larger gaps on richer semantic categories relative to their source VLMs, and that VQA co-training is associated with stronger perfor-mance on knowledge-sensitive tasks. 4. We introduce layerwise intent probing: linear classifiers trained on per-layer representations to predict the correct answer for each episode, to quantify how answer-relevant information is distributed across model depth. We show that relevant information can remain internally represented even when the model fails to trans-late it into the correct action. 
+
+2 Related Work 
+
+2.1 Evaluation of VLA Models 
+
+Current VLA benchmarks primarily evaluate ma-nipulation success, emphasizing control general-ization across tasks, scenes, embodiments, and lan-guage variations rather than explicit knowledge assessment. Benchmarks such as LIBERO (Liu et al., 2023), CALVIN (Mees et al., 2022), VLABench (Zhang et al., 2024), RoboBench-Mart (Soshin et al., 2025), and BEHAVIOR-1K (Li et al., 2024a) measure whether agents can com-plete language-conditioned tasks, while MIKASA-Robo (Cherepanov et al., 2025), (Pugacheva et al., 2025), and VL-Think (Kachaev et al., 2025) probe memory, robustness, and transfer. However, across these settings, evaluation remains largely grounded in manipulation success and mostly tests only shal-low semantics or primitive concepts, leaving com-monsense and world knowledge largely unmea-sured. 2Recent works have increasingly considered knowledge transfer from VLMs to VLA models. A common evaluation strategy, used in works such as (Cai et al., 2026a) and (Chen et al., 2025), is to test the VLM component on VQA-style benchmarks by decoding textual answers. This approach remains indirect: it measures whether the VLM component can still produce the correct textual answer, but not whether the VLA can use that knowledge when choosing an action. Consistent with this, Zhang et al. (2026) show that strong VQA performance of VLM models does not necessarily translate into stronger VLA embodied behavior. In contrast, our Act2Answer protocol brings knowledge-sensitive evaluation into an embodied action setting, making failures more directly informative about missing task-relevant knowledge or the model’s inability to use it for correct action selection in context, rather than merely indicating whether the same informa-tion can still be verbalized by the underlying VLM: instead of answering in text, the agent must express its choice through action. 
+
+2.2 Knowledge and Commonsense in VLM 
+
+The VLM community has developed a broad set of benchmarks for evaluating multimodal understanding. Examples include GQA (Hud-son and Manning, 2019) for compositional vi-sual reasoning, TextVQA (Singh et al., 2019) and DocVQA (Mathew et al., 2021) for question answering that requires reading text in images, AI2D (Kembhavi et al., 2016) for diagram under-standing, ScienceQA (Lu et al., 2022) for multi-modal science questions and MMMU (Yue et al., 2024) for large-scale, multidisciplinary multimodal evaluation. These benchmarks have become stan-dard tools for assessing the knowledge and reason-ing capabilities of VLMs. It is therefore essential to use such established benchmarks when evaluat-ing knowledge in VLA systems. Our Act2Answer protocol enables this by converting suitable items into an embodied binary-decision format, making it possible to test/probe knowledge-sensitive behav-ior in an action-based setting while retaining the benchmark grounding provided by existing VLM evaluations. 
+
+3 Methodology 
+
+3.1 Decomposing Embodied Task Success 
+
+Task success in embodied settings is not a single ability, but the outcome of several interacting fac-tors. An agent must perceive the scene correctly, know which action is appropriate, execute that ac-tion reliably, and operate under the constraints of a particular environment. We use these four com-ponents: perception, knowledge, control, and envi-ronment - as a coarse conceptual decomposition of embodied task success. This decomposition mat-ters because the same observed success rate may arise from very different underlying causes: strong knowledge but weak control, weak knowledge but strong motor routines, or even shortcut exploitation and favorable dynamics. As a result, end-to-end task success is often not diagnostic of what a VLA actually knows. Current benchmarks typically col-lapse these factors into a single outcome, making it difficult to tell whether failure reflects missing knowledge, perceptual error, motor difficulty, or environmental complexity. If the goal is to study knowledge in embodied agents, evaluation must therefore move beyond undifferentiated task suc-cess and more carefully isolate the contribution of knowledge from other sources of performance. 
+
+3.2 Commonsense Knowledge 
+
+What matters for embodied agents is not knowledge in the abstract, the question is what kinds of knowl-edge should actually be evaluated in embodied agents. Prior work such as Cosmos-Reason1 (Az-zolini et al., 2025) has highlighted the importance of physically grounded reasoning over space, time, and causal constraints. However, real-world deci-sion making often depends on a broader range of knowledge, including social roles, norms, quanti-ties, biological constraints, and cultural context. In this work, we use the term commonsense knowledge to refer to knowledge of this kind that can affect which action is appropriate in a given situation. Our goal is not to propose a universal tax-onomy of embodied knowledge, but to introduce a practical set of knowledge categories that helps structure benchmark design and analysis. These categories are used to guide task selection, improve coverage across different types of commonsense knowledge, and support finer-grained error analy-sis. Because many embodied decisions are com-positional, individual tasks may involve multiple factors at once. The proposed categories are there-fore intended as a practical framework for orga-nizing evaluation, rather than as a strict partition of embodied knowledge. Following this principle, we group the knowledge categories covered by our benchmark into seven broad domains: 3Figure 2: Act2Answer episodes examples for testing VLA models, built on top of VLM benchmark questions. In each episode, the embodied agent must interpret a natural-language instruction and control the robot arm to move the cube onto the correct answer plate. 
+
+Physical world knowledge covers properties of objects and materials, object states and state changes, object identity under occlusion or motion, spatial relations, affordances, intuitive mechanics, visibility and optics, thermodynamic processes, and physical causality or plausibility. These categories capture whether an agent can understand what ob-jects are, what can be done with them, and what physical outcomes are possible. 
+
+Temporal knowledge covers action semantics, event segmentation, temporal order, duration, de-layed effects, goal–subgoal structure, and short-horizon prediction or planning. These categories capture whether an agent can interpret what is hap-pening over time and choose an action that is ap-propriate not only for the current frame, but for the unfolding event. 
+
+Quantitative knowledge covers counting, mag-nitude comparison, measurement, rates or propor-tions, and basic resource accounting such as avail-able space, remaining time, or sufficient quantity. Many embodied decisions are not purely seman-tic: they depend on whether there is enough room, enough material, or the right relative amount to make an action succeed safely and correctly. 
+
+Biological knowledge covers distinctions be-tween living and non-living entities, bodily vulner-ability, injury risk, food safety, allergy or toxicity, animal and plant needs, and age- or development-dependent constraints. Such knowledge is often necessary for acting appropriately around humans, animals, and biologically meaningful objects. 
+
+Social knowledge covers agent roles, emotions, intentions, beliefs, relationships, communication, joint attention, cooperation, and conflict. In embod-ied settings, correct action often depends not only on physical state, but also on who the agents are, what they know, what they want, and how they are interacting. 
+
+Normative knowledge covers moral and con-ventional norms, safety rules, institutional rules, role-based obligations, contextual appropriateness, customs, symbols, and culture-dependent interpre-tation. These categories matter whenever multiple physically possible actions exist, but only some of them are socially acceptable, safe, or contextually appropriate. 
+
+Cultural knowledge covers shared cultural ref-erences and identities, such as well-known public figures, symbols, and conventions whose interpre-tation depends on broadly shared world knowledge rather than on the immediate physical or social scene. Such knowledge is what lets an agent rec-ognize culturally salient entities and reason about them appropriately. 4Figure 3: Overview of the data curation pipeline used to construct the Act2Answer task suite from VLM benchmarks, including selection, filtering and normalization, and conversion 
+
+4 Act2Answer: Embodied Evaluation of Knowledge 
+
+The problem of knowledge evaluation in VLA mod-els calls for a more direct way to assess action-relevant world knowledge. Current benchmarks often entangle knowledge with perception, control, and environmental complexity, while text-based evaluation of the VLM part does not reveal whether that knowledge can still guide action. The key un-resolved issue is whether a model can not only possess relevant knowledge, but also act on it. To address this, we introduce A CT 2A NSWER , a simple embodied evaluation protocol designed to evaluate whether an agent not only retains relevant world knowledge, but can also use it when selecting an ac-tion in a physically grounded setting. A useful par-allel comes from cognitive science, where knowl-edge in nonverbal agents is often evaluated through knowledge-conditioned actions rather than verbal reports. Inspired by this paradigm, A CT 2A NSWER 
+
+replaces textual answering with a minimal action that reveals the model’s choice. 
+
+4.1 Evaluation Protocol 
+
+The protocol is intentionally simple. Each episode is built from a VLM-style question together with one or more candidate images, such as a pair or a small grid, corresponding to possible answers (Figure 2 shows representative episodes). These       
+
+> VLM Benchmark Domain
+> MLLM-CompBench Emotion, Attribute, State IconQA Time, Shape, Symmetry, Counting MMBench Celebrity OK-VQA Living World VL-Think Public Info, Traffic, Color
+> Table 1: VLM benchmarks and knowledge domains used for adaptation to the Act2Answer protocol.
+
+images are placed at known positions in the scene, and the textual instruction is provided to the agent in the standard way. The agent must indicate its answer through a minimal embodied response by moving its end-effector and placing a cube on the selected image. The prediction is scored as correct if the chosen image matches the correct answer. The protocol is designed to reduce the extent to which success is dominated by control difficulty or incidental environmental variation, and thereby make the outcome more directly informative about knowledge. A CT 2A NSWER is constructed so that success depends primarily on whether the agent can perceive, interpret the instruction, and use the required knowledge to select the correct answer, while minimizing the contribution of motor com-plexity and other low-level execution challenges. To this end, we deliberately reduce motor complex-ity: the required action is short-horizon, physically simple, and does not depend on difficult grasping or specialized manipulation skills. The resulting evaluation therefore does not fully isolate knowl-edge, but is intended to make the observed outcome more directly informative about whether the rele-vant knowledge remains available for action, rather than whether the agent can solve a difficult control problem. 
+
+4.2 Tasks Description 
+
+To evaluate VLA performance on the proposed knowledge-sensitive categories, we construct the ACT 2A NSWER task suite by adapting existing, community-established VLM benchmarks to an embodied setting rather than creating new question sets from scratch. This choice allows us to ground evaluation in widely used and already validated benchmark sources, while probing whether related knowledge-sensitive distinctions remain available for action after adaptation from VLM to VLA. For 5each broad knowledge category, we select a rep-resentative subcategory, Table 1 summarizes the correspondence between the source VLM bench-marks and the knowledge categories used in our evaluation. Each benchmark item is then converted into a standardized A CT 2A NSWER episode: the original question is reformulated as an instruction to the agent, and the candidate answers are instan-tiated as visual options placed in the scene. The agent must answer by performing the same minimal action defined in our protocol, namely selecting the correct option through object placement. 
+
+4.3 Data Curation 
+
+Starting from a diverse pool of existing VLM benchmarks, we first select tasks that match the selected knowledge categories. Because current VLA models remain limited in long-context in-struction following, we further filter the selected items by instruction length. We also apply image-level filtering: since many VLA models operate on relatively low visual resolution, human annota-tors remove examples in which the relevant objects are too small or visually ambiguous to be reliably perceived. After this selection stage, we unify the remaining tasks into a common embodied format. The original benchmark items may appear as open-ended questions or multiple-choice problems, so we convert them into binary decision tasks that are more suitable for action-based evaluation. To do so, we use an LLM to rewrite each example into a standardized two-option question while preserv-ing its underlying knowledge requirement. Finally, these curated tasks are wrapped into an embodied environment built on the Simpler (Li et al., 2024b), where each instance can be executed under the ACT 2A NSWER protocol. The result is a standard-ized task suite for evaluating whether VLA models retain and use Commonsense knowledge. In total, the suite covers 12 categories and contains 1,720 unique binary-choice items, corresponding to 3,440 evaluation episodes after including both original and swapped left/right configurations. Figure 3 illustrates the data curation pipeline. For more de-tails see Appendix B 
+
+4.4 Soft Success Rate 
+
+To support consistent interpretation of VLA per-formance in A CT 2A NSWER , we define a simple interpretation methodology based on Soft Success Rate (SR). An episode is counted as successful if the agent places the cube on the correct answer tile within a tolerance region ϵ around it (Figure 3). To formally define this, let p ∈ R2 be the final 2D position of the cube at the end of an episode. We define a tolerance radius ϵ around the target image center p+ and the incorrect option image center p− to partition the workspace W into target (Z+), incorrect ( Z−), and out-of-bounds (OOB) (Z∅) regions as follows: 
+
+Z+ = {p ∈ W : ∥p − p+∥ ≤ ϵ}, (1) 
+
+Z− = {p ∈ W : ∥p − p−∥ ≤ ϵ}, (2) 
+
+Z∅ = W \ (Z+ ∪ Z −). (3) Then the Soft Success Rate (SR) over N binary-choice tasks is the empirical estimate of the proba-bility of landing in the target region: 
+
+SR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+I
+
+
+
+p(i) ∈ Z +
+
+. (4) Based on the probability mass distribution among these regions, performance can be inter-preted in terms of three regimes defined around the random-guessing baseline of 0.5. A score is treated as statistically distinguishable from chance only if it lies outside a chance-level interval of half-width 
+
+∆, defined from binomial sampling fluctuations for the corresponding category. Details and category-specific values of ∆ are given in Appendix E. 1. Instruction or perceptual failure ( SR <
+
+0.5 − ∆): The model fails to ground the vi-sual options or the instruction. This mani-fests either as a dominant probability of out-of-bounds placement that dwarfs the valid regions (P(p ∈ Z∅) ≫ max {P(p ∈Z+), P(p ∈ Z −)}), or as a systematic seman-tic misunderstanding where the model con-sistently favors the incorrect option ( P(p ∈Z−) ≫ P(p ∈ Z +)). In both cases, the prob-ability mass in the target zone drops signifi-cantly below random chance. 2. No reliable usable knowledge ( |SR − 0.5| ≤ 
+
+∆): The model correctly grounds the action-able regions ( P(p ∈ Z ∅) ≈ 0) but lacks the specific knowledge required to select the cor-rect option. This results in a near-uniform random guess or a severe positional bias be-tween the two candidate regions, yielding 
+
+P(p ∈ Z +) ≈ P(p ∈ Z −) ≈ 0.5 when evalu-ated across swapped spatial configurations. 6Table 2: Results across knowledge-sensitive categories. VLAs (bottom) answer by embodied action selection under ACT 2A NSWER , VLM baselines (top) use the action-free text probe (RQ3).                                                                                                                                                                                                                               
+
+> Model Social Physical Quantitative Temporal Normative Cultural Biological Emotion Attribute State Color Shape Symmetry Counting Time Public Info Traffic Celebrity Living World
+> InternVL3.5-8B 95% 68% 64% 100% 89% 69% 52% 99% 85% 75% 99% 91%
+> InternVL3.5-38B 99% 73% 68% 100% 96% 83% 59% 100% 94% 81% 100% 96%
+> Ovis2.5-9B 89% 69% 69% 100% 98% 83% 59% 99% 88% 85% 100% 97%
+> Qwen2.5-7B 89% 64% 68% 100% 90% 78% 62% 99% 80% 86% 100% 94%
+> Qwen2.5-32B 99% 69% 69% 100% 93% 83% 61% 99% 85% 86% 100% 96%
+> Qwen3-8B 86% 68% 67% 100% 97% 81% 65% 98% 83% 93% 100% 95%
+> Qwen3-32B 92% 67% 66% 100% 98% 83% 59% 100% 87% 90% 100% 86% Prismatic-VLM-7B 82% 59% 61% 96% 85% 67% 52% 96% 75% 76% 99% 82% Paligemma-3B 53% 50% 52% 47% 48% 49% 49% 51% 48% 49% 48% 49% OpenVLA 48% 51% 49% 89% 64% 45% 48% 49% 49% 46% 50% 52% OpenVLA (SFT) 41% 45% 44% 82% 53% 38% 46% 37% 47% 46% 42% 45% OpenVLA (RL) 46% 50% 47% 88% 61% 44% 50% 48% 46% 48% 47% 52% SpatialVLA 47% 48% 50% 87% 83% 45% 52% 46% 51% 57% 55% 49%
+> π051% 50% 48% 86% 49% 46% 50% 48% 46% 48% 38% 45% Magma 72% 63% 59% 89% 81% 37% 51% 77% 88% 80% 94% 77%
+> Xiaomi-Robotics-R0 63% 52% 50% 91% 82% 58% 48% 52% 64% 57% 68% 56% InternVLA-M1 53% 49% 53% 90% 66% 43% 48% 49% 54% 53% 52% 58%
+
+3. Evidence of usable knowledge ( SR > 0.5 + ∆): The model successfully grounds the ac-tionable regions and correctly leverages its internal semantic knowledge to skew the ac-tion distribution toward the target zone, such that P(p ∈ Z +) > P(p ∈ Z −).Finally, to reduce positional bias, we evaluate each example in both its original and swapped left/right versions and report the average score across the two. This makes the metric more robust to systematic side preferences. 
+
+4.5 Linear Intent Probing 
+
+Beyond task success, we measure whether answer-relevant information is linearly recoverable from a model’s internal representations using layerwise intent probing . For each episode, we define a label 
+
+y ∈ { 0, 1} indicating the correct answer option, i.e., the option region corresponding to the ground-truth answer rather than the model’s own selection. For a given VLA model, we extract hidden states from all tokens of every transformer layer, includ-ing both the VLM and Action Expert parts. Since the Action Expert can be iterative (for example, 10 steps of flow-matching), we extract activations from every iteration. For each VLA, we then train a linear probe independently on the activations of each layer to predict y and report probe accuracy as a function of layer number. For Action Expert layers, we perform this procedure independently for all iterations. Rather than focusing on the ab-solute probe accuracies of the VLM and Action Expert parts in isolation, we focus on their relative relationship, which serves as an implicit indicator of how much answer-relevant information becomes attenuated along the path to action selection. Formally, let sbb  
+
+> n
+
+denote probe accuracy at back-bone layer n, and let sexp  
+
+> n
+
+denote probe accuracy at Action Expert layer n. Since our main interest is in above-chance recoverable signal, we summarize this relationship using chance-normalized quan-tities. First, we define the Chance-Normalized Retention as 
+
+Retention = max n(sexp  
+
+> n
+
+− c)max n(sbb  
+
+> n
+
+− c) + ε ,
+
+where c is the chance-level accuracy and ε is a small constant for numerical stability. This met-ric compares the strongest above-chance probing signal in the Action Expert to the strongest above-chance probing signal in the backbone. 
+
+4.6 Evaluation and Results 
+
+Our goal is not to establish a new leaderboard, but to obtain an initial picture of current VLA per-formance on knowledge-sensitive categories un-der a controlled Act2Answer protocol. We eval-uate several popular VLAs, including π0 (Black et al., 2024), OpenVLA (Kim et al., 2024), Magma (Yang et al., 2025), Xiaomi-Robotics-R0 (Cai et al., 2026b), InternVLA-M1 (Chen et al., 2025), SmolVLA (Shukor et al., 2025) and Spa-tialVLA (Qu et al., 2025), and compare them to strong VLM baselines such as Qwen2.5-VL, Ovis, PaliGemma, and InternVL (Table 2). Unless noted otherwise, we evaluate all VLA models using their original released checkpoints, without additional task-specific fine-tuning, the only exception is a separate set of supplementary ablations for Open-VLA. We then analyze the results to answer a set of research questions about what kinds of knowledge current VLAs preserve, lose, and remain able to use in action. 7RQ1: How well do current VLA models handle simple primitives? We begin by testing whether VLA models can solve tasks built around basic perceptual concepts such as C OLOR and S HAPE .These categories serve as a useful lower bound: if models fail here, it would suggest a broad inability to use even simple visual distinctions in action. In practice (Table 2), nearly all evaluated models perform strongly on such tasks, with high success rates across primitive categories, although π0 is a notable exception on S HAPE , where its success rate is close to chance. This indicates that simple basic physical and perceptual knowledge remains behaviorally accessible in current VLA systems. 
+
+RQ2: Can VLA models handle more complex semantic concepts? We next turn to categories that place greater demands on abstract seman-tic interpretation than primitive visual matching. Across the full set of non-primitive categories, cur-rent VLAs mostly remain at or near the random threshold, suggesting that once correct behavior depends on richer semantic, quantitative, tempo-ral, normative, cultural, or biological distinctions, performance becomes highly unstable (Table 2). On E MOTION , A TTRIBUTE , and S TATE , T IME ,nearly all models are near chance, with Magma as the only clear exception. Particularly strikingly, no evaluated VLA reaches above-random perfor-mance on S YMMETRY or C OUNTING , suggesting that these categories remain uniformly challenging for all tested VLA models. Normative, cultural, and biological categories show the same overall pattern. Most models remain close to chance on PUBLIC INFO , T RAFFIC , C ELEBRITY , and L IV - 
+
+> ING
+
+WORLD , whereas Magma again stands out with a large margin above threshold on all of them. Outside of Magma, gains are sparse and category-specific, such as SpatialVLA on T RAFFIC (57%) and C ELEBRITY (55%), or InternVLA-M1 on L IV - 
+
+> ING
+
+WORLD (58%). Overall, these results suggest that current VLAs struggle once correct action de-pends on more than shallow perceptual cues, and that richer semantic information is often not reli-ably available for action selection in the evaluated models. 
+
+RQ3: How large is the VLM-VLA gap? To obtain an upper-bound estimate of how much per-formance on knowledge-sensitive tasks may remain available after the transition from VLM to VLA, we compare each VLA to its original VLM check-point in an action-free probing setup. Given the     
+
+> Figure 4: Probing results for internal representations of VLA models on four tasks from the Act2Answer task suite. In the legend, Prefix labels indicate representa-tions from the VLM component, whereas Action labels indicate representations from the Action component.
+
+first frame, we ask the VLM: “Do you see the <board_name>? Answer yes or no. If yes, spec-ify where: left, center, or right.” A prediction is counted as correct only if both the board identity and its position match the ground truth, yielding a rough estimate of semantic grounding that can be related to Act2Answer performance. The results (Table 2) reveal a substantial gap: across most do-mains, the original VLMs exceed their VLA coun-terparts by roughly 20-40 points. This provides evidence consistent with a marked drop in perfor-mance on knowledge-sensitive tasks after adapta-tion from vision-language pretraining to embodied policy learning. 
+
+RQ4: Where does the knowledge go? A natural follow-up is whether answer-relevant information is truly erased or whether it remains somewhere in the hidden representations but is no longer acces-sible for action. To study this, we perform linear probing over all layers of VLA models on cate-gories such as A TTRIBUTE , S TATE , E MOTION , and COUNTING . The results in Figure 4 reveal a con-sistent pattern: intermediate layers of the VLM backbone are often above chance, suggesting that task-relevant information is still present, but per-formance declines toward the final layers used for action prediction, often approaching random guess-ing. This suggests a bottleneck between semantic representation and action generation: the model may retain answer-relevant information in interme-diate representations, but fail to reliably translate it into the correct action. 8Table 3: Averaged probing-based retention metrics by model. VLM and Action report the maximum probing accuracies over backbone and Action Part layers, re-spectively.                      
+
+> Model Probing Accuracy Prefix Action Retention
+> Magma 75.23 72.60 0.8702
+> Xiaomi-Robotics-R0 68.04 64.98 0.8159 SpatialVLA 65.70 62.60 0.7808 OpenVLA 68.71 64.61 0.7697 SmolVLA 63.18 57.73 0.5809
+> π064.99 55.40 0.3620
+
+RQ5: Does vision-language supervision im-prove knowledge-sensitive performance? We also ask whether continued vision-language su-pervision during VLA training is associated with stronger performance on knowledge-sensitive cate-gories. To examine this, we explicitly include two groups of VLA baselines: models trained with joint vision-language and robotics supervision, such as Magma, Xiaomi-Robotics-R0, and InternVLA-M1, and models trained primarily or almost exclusively on robotics data, such as OpenVLA (Kim et al., 2024), SpatialVLA (Qu et al., 2025), and π0 (Black et al., 2024). The overall trend is positive: models in the first group perform better on average across most categories, especially on higher-level seman-tic, temporal, normative, cultural, and biological tasks, than models in the second group. While the gains are not uniform in every domain, this pattern suggests that continued vision-language supervi-sion is associated with stronger action-grounded performance on knowledge-sensitive tasks and may help maintain task-relevant semantic information during embodied training. 
+
+RQ6: How does downstream fine-tuning affect knowledge-sensitive performance? Finally, we study whether additional downstream fine-tuning improves or harms performance on knowledge-sensitive categories. Using OpenVLA as a case study, we fine-tune the model with both SFT and RL on a small pick-and-place dataset that is not di-rectly drawn from our benchmark, but does include visual and semantic perturbations. The results do not show consistent improvements. On the contrary, some categories, including S TATE and C OLOR , ex-hibit noticeable drops after SFT fine-tuning. This suggests that standard downstream adaptation may further bias the model toward task-specific action optimization, sometimes at the expense of more general knowledge-sensitive performance. 
+
+5 Conclusion 
+
+We introduced A CT 2A NSWER , a simple proto-col for evaluating knowledge-sensitive behavior in VLA models. In our setup, a VLA operates in a table-top environment with several candidate images and a natural-language prompt, and must answer by performing a minimal embodied action, such as placing a dummy object onto the image it believes to be correct. This design keeps inter-action embodied, but makes the choice itself as close as possible to the multiple-choice formats used in VLM benchmarks, so that failures are more directly informative about knowledge-sensitive be-havior than about low-level motor difficulty. Our investigation reveals a consistent gap be-tween strong performance on simple perceptual categories and substantially weaker performance on richer semantic categories in current VLA sys-tems. The transition from VLM to VLA tends to preserve low-level visual discrimination (e.g., color, shape, coarse object identity), yet perfor-mance drops markedly on higher-level categories. This pattern suggests that current training pipelines often preserve the ability to act on shallow percep-tual cues while weakening performance on tasks that require richer task-relevant semantic distinc-tions. A robot that can reliably grasp a cup but cannot distinguish a “dirty” cup from a “clean” one, or a “sad” human from a “neutral” one, is funda-mentally limited in its usefulness as an assistant in everyday environments. These results indicate that simply fine-tuning VLMs on action data is insuffi-cient: the next generation of embodied agents will require architectures and training objectives that better maintain and align the backbone’s action-relevant semantic understanding with its learned motor policies, rather than allowing stronger con-trol adaptation to come with weaker performance on broader knowledge-sensitive categories. 
+
+References  
+
+> Ali Amin, Raichelle Aniceto, Ashwin Balakrishna, Kevin Black, Ken Conley, Grace Connors, James Darpinian, Karan Dhabalia, Jared DiCarlo, Danny Driess, and 1 others. 2025. pi*0.6: a vla that learns from experience. arXiv preprint arXiv:2511.14759 .Alisson Azzolini, Junjie Bai, Hannah Brandon, Jiaxin Cao, Prithvijit Chattopadhyay, Huayu Chen, Jinju Chu, Yin Cui, Jenna Diamond, Yifan Ding, and 1
+
+9others. 2025. Cosmos-reason1: From physical com-mon sense to embodied reasoning. arXiv preprint arXiv:2503.15558 .Kevin Black, Noah Brown, Danny Driess, Adnan Es-mail, Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom, Karol Hausman, Brian Ichter, Szy-mon Jakubczak, Tim Jones, Liyiming Ke, Sergey Levine, Adrian Li-Bell, Mohith Mothukuri, Suraj Nair, Karl Pertsch, Lucy Xiaoyang Shi, and 5 others. 2024. π0: A vision-language-action flow model for general robot control. Preprint , arXiv:2410.24164. Rui Cai, Jun Guo, Xinze He, Piaopiao Jin, Jie Li, Bingx-uan Lin, Futeng Liu, Wei Liu, Fei Ma, Kun Ma, and 1 others. 2026a. Xiaomi-robotics-0: An open-sourced vision-language-action model with real-time execu-tion. arXiv preprint arXiv:2602.12684 .Rui Cai, Jun Guo, Xinze He, Piaopiao Jin, Jie Li, Bingx-uan Lin, Futeng Liu, Wei Liu, Fei Ma, Kun Ma, and 1 others. 2026b. Xiaomi-robotics-0: An open-sourced vision-language-action model with real-time execu-tion. arXiv preprint arXiv:2602.12684 .Xinyi Chen, Yilun Chen, Yanwei Fu, Ning Gao, Ji-aya Jia, Weiyang Jin, Hao Li, Yao Mu, Jiangmiao Pang, Yu Qiao, and 1 others. 2025. Internvla-m1: A spatially guided vision-language-action frame-work for generalist robot policy. arXiv preprint arXiv:2510.13778 .Egor Cherepanov, Nikita Kachaev, Alexey K. Kovalev, and Aleksandr I. Panov. 2025. Memory, bench-mark & robots: A benchmark for solving com-plex tasks with reinforcement learning. Preprint ,arXiv:2502.10550. Drew A Hudson and Christopher D Manning. 2019. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In Proceed-ings of the IEEE/CVF conference on computer vision and pattern recognition , pages 6700–6709. Anastasia Ivanova, Bakaeva Eva, Zoya Volovikova, Alexey Kovalev, and Aleksandr Panov. 2025. AmbiK: Dataset of ambiguous tasks in kitchen environment. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 33216–33241, Vienna, Austria. Association for Computational Linguistics. Nikita Kachaev, Mikhail Kolosov, Daniil Zelezetsky, Alexey K. Kovalev, and Aleksandr I. Panov. 2025. Don’t blind your vla: Aligning visual representations for ood generalization. Preprint , arXiv:2510.25616. Aniruddha Kembhavi, Mike Salvato, Eric Kolve, Min-joon Seo, Hannaneh Hajishirzi, and Ali Farhadi. 2016. A diagram is worth a dozen images. Preprint ,arXiv:1603.07396. Jihyung Kil, Zheda Mai, Justin Lee, Arpita Chowdhury, Zihe Wang, Kerrie Cheng, Lemeng Wang, Ye Liu, and Wei-Lun Chao. 2024. Mllm-compbench: A com-parative reasoning benchmark for multimodal llms. In Advances in Neural Information Processing Sys-tems , volume 37, pages 28798–28827. Curran Asso-ciates, Inc. Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted Xiao, Ashwin Balakrishna, Suraj Nair, Rafael Rafailov, Ethan Foster, Grace Lam, Pannag San-keti, Quan Vuong, Thomas Kollar, Benjamin Burch-fiel, Russ Tedrake, Dorsa Sadigh, Sergey Levine, Percy Liang, and Chelsea Finn. 2024. Openvla: An open-source vision-language-action model. Preprint ,arXiv:2406.09246. Chengshu Li, Ruohan Zhang, Josiah Wong, Cem Gok-men, Sanjana Srivastava, Roberto Martín-Martín, Chen Wang, Gabrael Levine, Wensi Ai, Benjamin Martinez, Hang Yin, Michael Lingelbach, Minjune Hwang, Ayano Hiranaka, Sujay Garlanka, Arman Ay-din, Sharon Lee, Jiankai Sun, Mona Anvari, and 16 others. 2024a. Behavior-1k: A human-centered, em-bodied ai benchmark with 1,000 everyday activities and realistic simulation. Preprint , arXiv:2403.09227. Xuanlin Li, Kyle Hsu, Jiayuan Gu, Karl Pertsch, Oier Mees, Homer Rich Walke, Chuyuan Fu, Ishikaa Lu-nawat, Isabel Sieh, Sean Kirmani, Sergey Levine, Jiajun Wu, Chelsea Finn, Hao Su, Quan Vuong, and Ted Xiao. 2024b. Evaluating real-world robot manipulation policies in simulation. Preprint ,arXiv:2405.05941. Bo Liu, Yifeng Zhu, Chongkai Gao, Yihao Feng, Qiang Liu, Yuke Zhu, and Peter Stone. 2023. Libero: Benchmarking knowledge transfer for lifelong robot learning. Preprint , arXiv:2306.03310. Weiheng Liu, Yuxuan Wan, Jilong Wang, Yuxuan Kuang, Xuesong Shi, Haoran Li, Dongbin Zhao, Zhizheng Zhang, and He Wang. 2025. Fetchbot: Object fetching in cluttered shelves via zero-shot sim2real. arXiv preprint arXiv:2502.17894 .Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He, Ziwei Liu, Kai Chen, and Dahua Lin. 2024. Mmbench: Is your multi-modal model an all-around player? In European Conference on Computer Vision .Pan Lu, Swaroop Mishra, Tony Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. 2022. Learn to explain: Multimodal reasoning via thought chains for science question answering. In The 36th Conference on Neu-ral Information Processing Systems (NeurIPS) .Pan Lu, Liang Qiu, Jiaqi Chen, Tony Xia, Yizhou Zhao, Wei Zhang, Zhou Yu, Xiaodan Liang, and Song-Chun Zhu. 2021. Iconqa: A new benchmark for abstract diagram understanding and visual language reason-ing. In Advances in Neural Information Processing Systems . Datasets and Benchmarks Track. Kenneth Marino, Mohammad Rastegari, Ali Farhadi, and Roozbeh Mottaghi. 2019. Ok-vqa: A visual ques-tion answering benchmark requiring external knowl-
+
+10 edge. In IEEE/CVF Conference on Computer Vision and Pattern Recognition .Minesh Mathew, Dimosthenis Karatzas, and CV Jawa-har. 2021. Docvqa: A dataset for vqa on document images. In Proceedings of the IEEE/CVF winter con-ference on applications of computer vision , pages 2200–2209. Oier Mees, Lukas Hermann, Erick Rosete-Beas, and Wolfram Burgard. 2022. Calvin: A bench-mark for language-conditioned policy learning for long-horizon robot manipulation tasks. Preprint ,arXiv:2112.03227. Maxim A Patratskiy, Alexey K Kovalev, and Aleksandr I Panov. 2025. Spatial traces: Enhancing vla models with spatial-temporal understanding. Optical Mem-ory and Neural Networks , 34(Suppl 1):S72–S82. Alisa Petrova and Alexey Kovalev. 2026. Steering large language models toward clarification through sparse autoencoders. In Agentic AI in the Wild: From Hallu-cinations to Reliable Autonomy .Daria Pugacheva, Andrey Moskalenko, Denis Shepelev, Andrey Kuznetsov, Vlad Shakhuro, and Elena Tu-tubalina. 2025. Bring the apple, not the sofa: Impact of irrelevant context in embodied ai commands on vla models. Preprint , arXiv:2510.07067. Delin Qu, Haoming Song, Qizhi Chen, Yuanqi Yao, Xinyi Ye, Yan Ding, Zhigang Wang, JiaYuan Gu, Bin Zhao, Dong Wang, and Xuelong Li. 2025. Spatialvla: Exploring spatial representations for visual-language-action model. Preprint , arXiv:2501.15830. Arth Shukla, Stone Tao, and Hao Su. 2024. Maniskill-hab: A benchmark for low-level manipulation in home rearrangement tasks. arXiv preprint arXiv:2412.13211 .Mustafa Shukor, Dana Aubakirova, Francesco Capuano, Pepijn Kooijmans, Steven Palma, Adil Zouitine, Michel Aractingi, Caroline Pascal, Martino Russi, Andres Marafioti, Simon Alibert, Matthieu Cord, Thomas Wolf, and Remi Cadene. 2025. Smolvla: A vision-language-action model for affordable and efficient robotics. Preprint , arXiv:2506.01844. Amanpreet Singh, Vivek Natarajan, Meet Shah, Yu Jiang, Xinlei Chen, Dhruv Batra, Devi Parikh, and Marcus Rohrbach. 2019. Towards vqa models that can read. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition ,pages 8317–8326. Konstantin Soshin, Alexander Krapukhin, Andrei Spiri-donov, Denis Shepelev, Gregorii Bukhtuev, Andrey Kuznetsov, and Vlad Shakhuro. 2025. Robobench-mart: Benchmarking robots in retail environment. 
+
+arXiv preprint arXiv:2511.10276 .Jianwei Yang, Reuben Tan, Qianhui Wu, Ruijie Zheng, Baolin Peng, Yongyuan Liang, Yu Gu, Mu Cai, Seonghyeon Ye, Joel Jang, Yuquan Deng, Lars Li-den, and Jianfeng Gao. 2025. Magma: A foun-dation model for multimodal ai agents. Preprint ,arXiv:2502.13130. Xiang Yue, Yuansheng Ni, Kai Zhang, Tianyu Zheng, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, and 1 others. 2024. Mmmu: A massive multi-discipline multimodal un-derstanding and reasoning benchmark for expert agi. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , pages 9556– 9567. Jianke Zhang, Xiaoyu Chen, Qiuyue Wang, Ming-sheng Li, Yanjiang Guo, Yucheng Hu, Jiajun Zhang, Shuai Bai, Junyang Lin, and Jianyu Chen. 2026. Vlm4vla: Revisiting vision-language-models in vision-language-action models. arXiv preprint arXiv:2601.03309 .Shiduo Zhang, Zhe Xu, Peiju Liu, Xiaopeng Yu, Yuan Li, Qinghui Gao, Zhaoye Fei, Zhangyue Yin, Zux-uan Wu, Yu-Gang Jiang, and Xipeng Qiu. 2024. Vlabench: A large-scale benchmark for language-conditioned robotics manipulation with long-horizon reasoning tasks. Preprint , arXiv:2412.18194. Brianna Zitkovich, Tianhe Yu, Sichun Xu, Peng Xu, Ted Xiao, Fei Xia, Jialin Wu, Paul Wohlhart, Stefan Welker, Ayzaan Wahid, and 1 others. 2023. Rt-2: Vision-language-action models transfer web knowl-edge to robotic control. In Conference on Robot Learning , pages 2165–2183. PMLR. 
+
+11 A Evaluation and Setup Ablations 
+
+This appendix reports ablations that test whether the main A CT 2A NSWER conclusions are sensi-tive to evaluation choices rather than knowledge-sensitive action selection. We consider two abla-tions for the VLM comparison, image resolution and prompt formulation, and three ablations for the embodied evaluation setup, texture rendering, answer-tile size, and lighting intensity. These ex-periments help verify that the central findings are not driven by a single prompt, image preprocessing choice, or simulator rendering condition. 
+
+A.1 Effect of Image Resolution 
+
+The VLM–VLA comparison in the main paper is intended as an action-free estimate of how much task-relevant information remains accessible to the VLM backbone. To check whether this comparison is dominated by image preprocessing, we evalu-ate VLM baselines under two image resolutions: 
+
+224 × 224 and 560 × 480 . As shown in Table 4, changing image resolution slightly affects some categories and models, especially fine-grained cat-egories such as A TTRIBUTE , S TATE , and S YM -
+
+> METRY
+
+. However, the qualitative interpretation remains unchanged: strong VLM baselines con-tinue to perform well on many categories where most VLA policies remain near chance, suggesting that the VLM–VLA gap is not solely an artifact of the chosen image resolution. 
+
+A.2 Influence of Prompt Formulation 
+
+We use a standardized prompt template to evaluate the vision-language model (VLM) in a constrained multiple-choice setting. The prompt consists of three components: (i) an image placeholder, (ii) a natural language question, and (iii) a set of answer options. 
+
+Perceptual Prompt (p1) 
+
+> <image> Do you see the {object}? If yes, specify where: “left” or “right”. A left B right Answer with the option’s letter from the given choices directly.
+
+Answer Format. The model is instructed to out-put only the corresponding option letter (e.g., “A” or “B”), which ensures consistent and easily com-parable predictions. We also evaluate an alternative prompt that is closer to the VLA instruction format: 
+
+Action-Style Prompt (p2) 
+
+> <image> Put cube on {object} A left B right Answer with the option’s letter from the given choices directly.
+
+As shown in Table 4, the action-style prompt slightly reduces VLM performance for some mod-els and categories. This effect is most visible for Qwen3-8B and Qwen2.5-7B, but the overall com-parison remains qualitatively similar across prompt styles. Nevertheless, VLM performance under the action-style prompt remains substantially above most VLA results in many knowledge-sensitive categories. 
+
+A.3 Robustness to Texture Rendering 
+
+We next evaluate whether the visual appearance of the simulated environment changes the main conclusions. In the Raw Sim setting, models are evaluated with the default simulator rendering, us-ing the original simulated textures, materials, and backgrounds. In the Visual Matching setting (Li et al., 2024b), we follow the general visual-gap re-duction strategy used in Simpler: simulated obser-vations are made closer to real-world robot scenes by combining real-background compositing with foreground texture tuning for salient assets. This includes matching or baking object textures from real images where possible and adjusting robot or scene textures that otherwise create a noticeable real-to-sim appearance gap. Table 5 shows that this change has only limited effect on the selected categories. The same category-level pattern is pre-served: COLOR and S HAPE remain easier than EMOTION and A TTRIBUTE , and Magma remains stronger than OpenVLA and π0 on the tested se-mantic categories. 
+
+A.4 Effect of Answer-Tile Size 
+
+We also test whether performance is sensitive to the physical size of the answer tiles. This ablation is important because tile size may act as an out-of-distribution shift for VLA models. As shown in Table 5, moderate changes preserve the main quali-tative trends. Increasing tile size can reduce perfor-mance for some models and categories, especially 12 Table 4: VLM ablations over image resolution and prompt formulation. Prompt p1 is the perceptual QA-style prompt, and p2 is the VLA-style action prompt. These ablations test whether the VLM–VLA comparison is sensitive to image preprocessing or prompt wording.                                                                                                                                                                     
+
+> Model Resolution Prompt Social Physical Quantitative Temporal Normative Cultural Biological Emotion Attribute State Color Shape Symmetry Counting Time Public Info Traffic Celebrity Living World
+> InternVL3.5-8B 224 ×224 p1
+> 95% 68% 64% 100% 89% 69% 52% 99% 85% 75% 99% 91%
+> Ovis2.5-9B 89% 69% 69% 100% 98% 83% 59% 99% 88% 85% 100% 97%
+> Qwen2.5-7B 89% 64% 68% 100% 90% 78% 62% 99% 80% 86% 100% 94%
+> Qwen3-8B 86% 68% 67% 100% 97% 81% 65% 98% 83% 93% 100% 95%
+> InternVL3.5-8B 560 ×480 p1
+> 97% 62% 57% 99% 89% 63% 55% 97% 80% 72% 99% 91%
+> Ovis2.5-9B 92% 65% 67% 96% 97% 82% 57% 98% 80% 88% 100% 93%
+> Qwen2.5-7B 72% 58% 60% 98% 92% 70% 57% 98% 73% 77% 99% 85% Qwen3-8B 78% 60% 54% 100% 97% 74% 57% 99% 82% 90% 99% 84% InternVL3.5-8B 224 ×224 p2 88% 69% 61% 100% 79% 73% 57% 100% 80% 70% 100% 90%
+> Ovis2.5-9B 73% 65% 67% 100% 97% 70% 57% 100% 87% 83% 100% 96%
+> Qwen2.5-7B 78% 57% 56% 94% 79% 63% 55% 85% 74% 67% 73% 88% Qwen3-8B 55% 62% 58% 100% 88% 50% 60% 98% 80% 80% 100% 95%
+
+Table 5: Environment setup ablations on representative categories. 
+
+Abl. Setting Model Emo. Attr. Color Shape 
+
+Texture Raw Sim OpenVLA 48% 52% 86% 62% 
+
+π0 50% 48% 86% 51% Magma 71% 63% 90% 79% Visual Matching OpenVLA 48% 51% 89% 64% 
+
+π0 51% 50% 86% 49% Magma 72% 63% 89% 81% Tile Size default OpenVLA 48% 51% 89% 64% 
+
+π0 51% 50% 86% 49% Magma 72% 63% 89% 81% +40% OpenVLA 51% 50% 71% 56% 
+
+π0 53% 48% 67% 52% Magma 70% 59% 92% 78% -20% OpenVLA 52% 49% 86% 65% 
+
+π0 52% 50% 85% 52% Magma 69% 60% 89% 77% Lighting default OpenVLA 48% 51% 89% 64% 
+
+π0 51% 50% 86% 49% Magma 72% 63% 89% 81% +30% OpenVLA 51% 48% 86% 59% 
+
+π0 47% 50% 78% 50% Magma 71% 60% 91% 81% -30% OpenVLA 49% 47% 90% 54% 
+
+π0 50% 49% 83% 50% Magma 64% 58% 89% 80% 
+
+OpenVLA and π0 on C OLOR , but the broader pat-tern remains stable: simple perceptual categories are still easier than the more semantic categories, and the relative ranking among the tested models is largely unchanged. 
+
+A.5 Effect of Lighting Intensity 
+
+Finally, we vary lighting intensity to test whether results are driven by a narrow rendering condition. Table 5 shows that lighting perturbations can cause localized changes, especially under darker lighting and in harder categories. However, the main con-clusions are preserved: E MOTION and A TTRIBUTE 
+
+remain difficult for OpenVLA and π0, C OLOR re-mains comparatively accessible, and Magma re-mains the strongest of the tested models on these categories. These results suggest that the evaluation setup is not tied to a single lighting condition, while also confirming that perceptual rendering choices can affect some categories and should be controlled in future evaluations. 
+
+B Benchmark Sources and Data Construction 
+
+Act2Answer is constructed from five source bench-marks: MLLM-CompBench (Kil et al., 2024), IconQA (Lu et al., 2021), MMBench (Liu et al., 2024), OK-VQA (Marino et al., 2019), and VL-Think (Kachaev et al., 2025). We selected these benchmarks because together they provide estab-lished and complementary coverage of the knowl-edge domains targeted by Act2Answer. Our goal was to map these heterogeneous source bench-marks into a single evaluation setup: a short action-compatible instruction, two visual answer options, and a common embodied binary action-selection protocol. The degree of adaptation therefore differs by source benchmark and is driven by source-format mismatch rather than arbitrary redesign. In practice, we prioritized source tasks that could be converted into embodied binary choice without substantially changing what the original task was meant to test. We further restricted the final pool to examples whose relevant visual evidence remains perceiv-able under the lower effective resolution typical of current VLA systems and whose answer can be expressed through a short action-conditioned instruction. Representative examples of the resulting embod-ied tasks are shown in Figures 5, 6, and 7. For readability, we group them into three panels: (i) so-13 Figure 5: Additional A CT 2A NSWER environment examples from the E MOTION , C ELEBRITY , and L IVING WORLD 
+
+categories. 
+
+Figure 6: Additional A CT 2A NSWER environment examples from the T IME , T RAFFIC , and P UBLIC INFO categories. 
+
+cial, biological, and culturally grounded categories, (ii) temporal and public-convention categories, and (iii) physical and quantitative categories. 14 Figure 7: Additional A CT 2A NSWER environment examples from the A TTRIBUTE , S TATE , C OLOR , S YMMETRY ,SHAPE , and C OUNTING categories. 
+
+B.1 Near Format-Preserving Adaptations 
+
+MLLM-CompBench. MLLM-CompBench was the cleanest source benchmark for Act2Answer. Its native format already consists of two candidate im-ages and a comparative question, making it closely aligned with our final embodied answer-selection setup. We therefore used it as the primary source for E MOTION , A TTRIBUTE , and S TATE . Adapta-tion in this case was near format-preserving: we retained the original image pair and converted the question into a short action-compatible instruction. Because almost no additional restructuring was re-quired, these categories provide one of the most direct comparisons between VLM and VLA behav-ior in our study. 
+
+VL-Think. VL-Think was also a natural fit for our protocol because its task structure is already close to an embodied semantic selection problem. We 15 Source benchmark Domain Native format Transfer type Initial pool Final eval                               
+
+> MLLM-CompBench Emotion image pair + comparative question near 5254 300 Attribute 5386 300 State 1066 300 IconQA Time multi-image choice moderate 508 300 Shape 12798 300 Symmetry 362 300 Counting 5001 300 MMBench Celebrity multiple choice moderate 316 140 OK-VQA Living World open-ended VQA heavy 2336 300 VL-Think Public Info embodied board selection near 14 concepts 300 Traffic 24 concepts 300 Color 11 concepts 300
+
+Table 6: Per-category curation statistics for the A CT 2A NSWER suite. ‘Final eval’ reports the total number of evaluation episodes after including both the original and swapped left/right configurations for each selected item. For VL-Think, the ‘Initial pool’ column reports the number of source concepts rather than the number of candidate image examples. 
+
+used it for P UBLIC INFO , T RAFFIC , and C OLOR ,where the relevant concepts are encoded in com-pact visual symbols or simple public conventions. Since the source benchmark already operates in a board-selection style setting, adaptation remained near format-preserving and mainly consisted of unifying the instruction style and episode format with the rest of the Act2Answer suite. Because VL-Think is specified in terms of small closed con-cept vocabularies rather than large candidate image pools, the corresponding ‘Initial pool’ entries in Table 6 report the number of source concepts rather than the number of raw image examples. 
+
+B.2 Moderately Adapted Benchmarks 
+
+IconQA. IconQA was used for T IME , S HAPE , S YM -
+
+> METRY
+
+, and C OUNTING . It required moderate adaptation because its native format is multi-option visual choice rather than binary embodied selec-tion. We therefore converted each item into bi-nary choice by pairing the correct answer with one distractor at a time while preserving the original semantic target. Because IconQA uses schematic icon diagrams rather than cluttered natural images, it remains relatively robust under the lower visual resolution typical of current VLA systems. We re-tained only those subsets that fit the Act2Answer protocol most naturally, including geometry-based subsets for S HAPE and S YMMETRY , and a visually grounded clock-style subset for T IME .
+
+MMBench. We used MMBench for the C ELEBRITY 
+
+category. This subset required moderate adapta-tion. We kept the same identity-recognition task, but re-curated the set of public figures to focus on more broadly recognizable identities. The aim was to better target shared world knowledge with-out changing the underlying recognition problem. The resulting subset is therefore better understood as a curated derivative of MMBench rather than a verbatim extraction. 
+
+B.3 Open-Ended to Binary Adaptation 
+
+OK-VQA. OK-VQA was used for the LIV - 
+
+> ING
+
+WORLD category, covering animal iden-tity, flora identity, and living-versus-nonliving dis-tinctions. This benchmark required the most benchmark-specific adaptation because its native format is single-image open-ended VQA, whereas Act2Answer evaluates knowledge through binary embodied selection. We first retained only exam-ples with short, visually grounded answers and stable annotator agreement. We then selected bi-ologically relevant cases through question-pattern and answer-level filtering. To convert these items into the common format, each source image was paired with a second image from the same category that did not contain the correct answer. This al-lowed the same biological knowledge to be tested through embodied binary choice. Ambiguous cases were removed, and the final embodied instruc-tions were edited accordingly. The resulting OK-VQA-derived subset should be understood as a benchmark-specific adaptation from open-ended VQA to embodied binary evaluation. 16 B.4 Instruction Rewriting and Binary Conversion 
+
+Our goal was to preserve the original knowledge requirement while changing the response modality from text to action. We therefore used an LLM as a first-pass rewriting tool to convert source bench-mark questions into short imperative instructions for VLA models, followed by human review and manual editing. This rewriting was limited to tem-plate normalization rather than semantic reformu-lation. For example, comparative prompts from MLLM-CompBench were converted into instruc-tions of the form “Put the cube on . . . ” while pre-serving the same comparison target and candidate images. Prompts followed a simple instruction style, e.g., “Put the cube on the more smiling per-son” (E MOTION ), “Put the cube on dryer grass” 
+
+(S TATE ), and “Put the cube on the picture of sheep” 
+
+(L IVING WORLD ). Throughout the suite, instruc-tions were kept short, visually grounded, and close to the original semantic target. 
+
+C Discussion 
+
+How to prevent the erosion of world knowledge? 
+
+Finally, it is not yet clear how to systematically 
+
+prevent the erosion of world knowledge during VLA training . Developing effective training pro-cedures that retain the backbone’s world knowl-edge while acquiring strong control policies re-mains an open challenge. Promising directions include multi-task and continual-learning schemes that interleave action prediction with general ques-tion answering (Zitkovich et al., 2023; Amin et al., 2025; Ivanova et al., 2025), regularization or dis-tillation techniques that explicitly preserve VLM representations, and architectural decoupling of knowledge and control components. Another com-plementary direction is inference-time intervention on interpretable internal features, such as SAE-based steering toward clarification behavior in am-biguous embodied-instruction settings (Petrova and Kovalev, 2026). To make this discussion more concrete, we also ran preliminary mitigation experiments on a small subset of representative A CT 2A NSWER 
+
+categories, shown in Table 7. These experiments are not intended as full mitigation methods, but as simple probes of two plausible directions. First, we test language-rephrasing augmentation during downstream fine-tuning, where instructions are                   
+
+> Table 7: Preliminary mitigation ablations on a subset of representative categories.
+> Model Emotion Attribute Color Shape
+> π051% 50% 86% 49%
+> π0+ paraphrases 47% 48% 89% 53%
+> π0+ distill 49% 50% 88% 56%
+
+varied through action-verb substitutions, spatial-expression variants, sentence-structure changes, de-scriptive noun replacements, and robot-directed commands. Second, we test a latent-distillation baseline that adds a representation-preservation loss between mid-layer VLA hidden states and final patch embeddings from a frozen vision foundation teacher. Both variants are obtained by fine-tuning 
+
+π0 on BridgeDataV2 pick-and-place data and do not use A CT 2A NSWER evaluation examples for training. The results suggest that these lightweight inter-ventions are useful but limited. Language rephras-ing slightly improves C OLOR and S HAPE , but does not improve the more semantic E MOTION and A T- 
+
+> TRIBUTE
+
+categories. Latent distillation shows a similar pattern: it improves S HAPE and preserves strong C OLOR performance, but still leaves E MO - 
+
+> TION
+
+and A TTRIBUTE near chance. This pattern is consistent with the main findings of the paper: sim-ple perceptual distinctions are easier to preserve or recover, whereas richer semantic distinctions require stronger mechanisms than shallow instruc-tion diversity or a single representation-matching objective. At the same time, the distillation result points to a promising direction for future work, es-pecially representation-preservation losses during VLA pretraining, better choices of teacher repre-sentations and distillation data, and comparisons between rehearsal, regularization, and parameter-efficient adaptation. However, large-scale multi-task or continual training that keeps many skills active can be prohibitively compute-intensive for real-world systems, especially when combined with high-resolution perception and long-horizon control. This makes it essential to explore more efficient paradigms and lightweight mechanisms to pre-vent forgetting - such as parameter-efficient fine-tuning, targeted regularization, selective rehearsal, or sparsely updated knowledge modules - so that VLAs can become more capable without repeatedly sacrificing the commonsense they started with. 17 Table 8: Left/right split results for selected VLA models with heatmap formatting.                                                                                                                                          
+
+> Model Social Physical Quantitative Temporal Normative Cultural Biological Emotion Attribute State Color Shape Symmetry Counting Time Public Info Traffic Celebrity Living World LRLRLRLRLRLRLRLRLRLRLRLR
+> SpatialVLA 36% 58% 55% 42% 52% 48% 80% 95% 82% 85% 90% 0% 50% 55% 47% 48% 68% 35% 61% 53% 66% 44% 67% 32% Magma 76% 68% 65% 61% 62% 56% 91% 87% 81% 86% 46% 28% 52% 52% 77% 78% 90% 86% 89% 71% 94% 94% 81% 73% Xiaomi-Robotics-R0 66% 60% 46% 58% 54% 46% 86% 95% 84% 79% 46% 70% 45% 50% 65% 39% 69% 59% 63% 51% 70% 65% 62% 51% InternVLA-M1 52% 54% 50% 49% 59% 47% 93% 88% 80% 52% 13% 74% 50% 47% 40% 58% 83% 26% 87% 20% 54% 50% 54% 63%
+
+D Details of Score Averaging 
+
+For LIBERO, all values for the compared VLA models were taken directly from the original papers. For Act2Answer, we used the results from Table 2. For each model, we first averaged accuracy across all environments, and then normalized this mean relative to random guessing (50%) using a linear rescaling: Normalized Score = Mean Accuracy − 50 50 ×100 .
+
+(5) 
+
+E Chance Margin ∆ and Significance Thresholds 
+
+The three interpretation regimes of the Soft Success Rate (Section 4.4) are defined relative to a chance margin ∆ around the random-guessing baseline of 
+
+0.5. This appendix defines ∆ and explains how its value is chosen. Each A CT 2A NSWER item is a binary forced choice, so under a knowledge-free policy the per-episode outcome is a Bernoulli trial with suc-cess probability p0 = 0 .5. For a category eval-uated over N episodes, the empirical SR is a sam-ple proportion whose standard error at chance is pp0(1 − p0)/N = p0.25 /N . We set ∆ to the corresponding two-sided Wald confidence half-width, 
+
+∆ = z1−α/ 2
+
+r p0(1 − p0)
+
+N = z1−α/ 2
+
+r 0.25 
+
+N ,
+
+(6) so that the band |SR − 0.5| ≤ ∆ contains ex-actly those scores that are not significantly differ-ent from chance at level α. We use α = 0 .05 
+
+(z1−α/ 2 = 1 .96 ) throughout. A category result is then counted as evidence of usable knowledge 
+
+when SR > 0.5 + ∆ , as instruction or perceptual failure when SR < 0.5 − ∆, and as no reliable usable knowledge otherwise. Because ∆ depends on the number of evaluated episodes, it is computed per category. Most cate-gories are evaluated over N = 300 episodes (150 items in both the original and swapped left/right configurations), which gives ∆ ≈ 0.057 (about 5.7
+
+percentage points). The smaller C ELEBRITY set uses N = 140 episodes, giving a wider band of 
+
+∆ ≈ 0.083 .The two swapped views of a single item are not fully independent, so treating each episode as an independent trial is mildly anticonservative. Using the number of unique items as the effec-tive sample size (e.g., N = 150 rather than 300 )yields a slightly wider, more conservative margin (∆ ≈ 0.08 ). Our qualitative conclusions are un-changed under either choice, since the gaps we report between primitive and richer semantic cate-gories are substantially larger than ∆.
+
+F Left/Right Swapped-Layout Analysis 
+
+Act2Answer uses a binary tabletop layout, so a model with a fixed spatial preference could obtain misleading scores if each question were evaluated in only one candidate arrangement. To control for this, each item is evaluated in two spatial configura-tions: the original left/right placement of the candi-date answer images and a swapped configuration in which the two candidates exchange positions. The main Act2Answer score averages over these two configurations, so systematic side preferences have less influence on the final category-level result. Table 8 reports the left/right breakdown for se-lected VLA models. The split is useful because it makes positional effects visible rather than hiding them inside a single averaged score. When a model does not have a reliable knowledge-conditioned signal for a category, performance can vary sub-stantially across the two layouts, indicating either a side preference, a layout-specific failure, or near-random action selection. For example, several mod-els show large left/right asymmetries on harder cat-egories such as S YMMETRY , P UBLIC INFO , T RAF -
+
+FIC , and L IVING WORLD . In contrast, categories where performance remains high in both configu-rations, such as C OLOR for most evaluated mod-els, provide stronger evidence that the model is responding to the intended visual-semantic content rather than simply exploiting position. 18 This analysis supports the role of swapped-layout evaluation as a built-in robustness control in Act2Answer. It does not by itself eliminate all spatial or perceptual confounds, since layout can still interact with model-specific perception and control behavior. However, it reduces the effect of fixed side preferences on the reported score and provides a diagnostic view of when apparent suc-cess or failure may be driven by position rather than by knowledge-sensitive action selection. 19

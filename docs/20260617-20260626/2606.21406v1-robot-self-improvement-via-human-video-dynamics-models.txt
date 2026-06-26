@@ -1,0 +1,521 @@
+Title: Robot Self-Improvement via Human-Video Dynamics Models
+
+URL Source: https://arxiv.org/pdf/2606.21406v1
+
+Published Time: Tue, 23 Jun 2026 01:03:37 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Robot Self-Improvement via Human-Video Dynamics Models 
+
+Hanzhi Chen ⋆, 1,2,4 Anran Zhang ⋆, 1,2,4 Simon Schaefer 1,2,4 Kejia Chen 2
+
+Shi Chen 1 Daniel Cremers 2,4 Oier Mees †,3,1 Stefan Leutenegger †,1
+
+> ⋆
+
+Equal Contribution †Equal Advising 
+
+> 1
+
+ETH Zurich 2Technical University of Munich 3Microsoft 4MCML 
+
+Abstract: A central question in robot learning is how to acquire skills from the kinds of data that humans learn from: passive observation, embodied practice, and the experience of failure. Human videos provide the first of these in abun-dance, and prior work has shown they can initialize useful policies. Far less clear is whether they can support the second and third: whether priors extracted from human videos can ground a robot’s own attempts well enough to evaluate them, correct them, and improve from them. In this work, we show that human videos can be used to learn embodiment-agnostic action, dynamics, and value representa-tions that transfer across robot embodiments, providing the predictive foundation required for robots to autonomously improve from their own rollouts and failures. We introduce Dynamics-Guided Action Correction (DGAC), a training-free ap-proach that leverages these adapted models to repair failed states: each failure be-comes a query for which the learned models propose and rank corrective actions, turning failures into supervision for the next policy update. Across seven real-world manipulation tasks spanning both a mobile manipulator and a static manip-ulator arm, our approach improves success rates from 40% to 81% across multiple policy backbones, demonstrating cross-embodiment robot self-improvement from human-video priors. These results show that human priors and robot failures can be combined to enable scalable autonomous policy improvement. Project page: 
+
+https://ethz-mrl.github.io/robot-self-improvement-website/ .
+
+Keywords: Learning from Human, Dynamics Models, Policy Improvement 
+
+## 1 Introduction Policy   
+
+> Model
+> Dynamics
+> Model
+> Value
+> Model
+> Human Video Pre -training Robot Self -Improvement
+> Updating…
+> Robot Real Env.
+> Autonomous
+> Adaptation
+
+Figure 1: We learn transferable models from human videos, enabling different robots to ground human priors through real-world rollouts and improve from failures. 
+
+Humans rarely master physical skills from a single successful demonstration. Instead, they learn through observation, practice, and failure: watching others interact with the world, attempting the task, recognizing mis-takes, and adjusting future behavior. Robots should learn similarly. Rather than executing a fixed policy after demonstration, a deployed robot should use its own rollouts and failures as supervision for continual im-provement. However, real-world robot learn-ing remains bottlenecked by human supervi-sion. Before deployment, robots often re-quire repetitive, task-specific human demon-strations to obtain a usable policy. During im-provement, the burden becomes even harder to scale: human experts must monitor executions, iden-tify failures, intervene at the right moment, and provide corrective behaviors for recovery [1, 2, 3]. 
+
+> arXiv:2606.21406v1 [cs.RO] 19 Jun 2026
+
+Human videos offer a promising alternative source of supervision. They are abundant, diverse, and contain rich information about interaction skills, world dynamics, and task progress. Prior work has shown that human videos can help initialize useful robot policies by pretraining visual-motor representations [4, 5, 6, 7] or by extracting actionable structures such as affordances, point flows, and wrist motions [8, 9, 10, 11, 12]. Yet most existing methods use human videos primarily for initial deployment : they ask whether a new robot embodiment can imitate behaviors observed in human demonstrations. However, robots continue to encounter embodiment-specific errors and novel situations after deployment. While human videos provide broad interaction priors, successful execution ultimately requires identifying and correcting these failures through experience. This motivates our central question: Can human-video priors support not only robot deployment, but also self-improvement from real-world failures? Answering this question requires moving beyond imitation: robots need representations that transfer across embodiments while supporting predic-tion, evaluation, and correction. We therefore learn three reusable structures from human videos: an embodiment-agnostic action representation, a predictive world-state representation, and a task-progress value representation. Together, they allow the robot to ground human-pretrained priors in its own rollouts, anticipate their outcomes, and convert failures into policy supervision. Concretely, actions are represented by 6-DoF wrist motion and hand closure, while world states combine seman-tic visual tokens [13] with short-horizon 3D point trajectories [14], capturing broad scene context in a compact representation. Using these representations, we jointly pretrain policy, dynamics, and value models on human videos, then ground the latter two to the target robot through autonomous rollouts driven by the human-pretrained policy. Building on these adapted models, we further in-troduce Dynamics-Guided Action Correction (DGAC), which turns failed states into corrective su-pervision. Our key insight is that many failure states are still recoverable : they reveal the boundary of the current policy while remaining close enough to successful behavior to be repaired. DGAC retrieves progress-aligned successful experiences for each failed state, generates corrective action chunks by composing current and retrieved policy contexts during flow matching, and ranks the candidates using the learned dynamics and value models. The selected correction relabels the failed transition, turning the robot’s own failures into supervision for policy improvement. We evaluate our framework on seven real-world manipulation tasks across two robot embodiments: a mobile manipulator and a static robot arm. Our method raises the average success rate from 40.0% to 81.0%, demonstrating that human-video priors can support self-improvement beyond initial de-ployment. We further show that DGAC is policy-agnostic: when applied to π0.5 [15], a strong policy backbone pretrained on large-scale robot data, DGAC improves performance from 62.7% after su-pervised fine-tuning to 88.0%. Crucially, while naively fine-tuning on the same rollout data using standard value-filtering RECAP [2] yields only a modest gain from 62.7% to 68.0%, explicitly cor-recting failures via DGAC provides a 20.0% absolute performance leap. These results suggest that human-video priors enable scalable policy improvement across embodiments and policy backbones. In summary, our framework offers three key advantages: (1) Reusable human-video priors :The learned embodiment-agnostic action, dynamics, and value representations from scalable hu-man videos support autonomous policy improvement across robot morphologies. (2) Failure-to-supervision learning : DGAC converts failed rollout states into corrective supervision, improving policies without online human intervention. (3) Policy-agnostic improvement : DGAC acts as a plug-and-play post-training module that improves different policy backbones. 
+
+## 2 Related Work 
+
+Learning from Human Videos. Human videos offer a promising resource for scaling robot learn-ing, as they are ubiquitous and contain rich priors about object interactions, task progress, and con-tact dynamics. Prior works have explored several forms of supervision from human videos [16], including visual representations for motor control [7, 5, 4] and reward functions for policy extrac-tion [17, 18, 19, 20]. More recent works extract robot-actionable structures for zero-shot manip-ulation, such as 2D affordances [17, 21, 22, 23], 3D waypoints [8, 24], dexterous hand configura-tions [11, 25, 26], and point flows [10, 9, 27]. In contrast, our work goes beyond learning deployable 2policies from human videos: we learn embodiment-agnostic action, dynamics, and value represen-tations that provide the predictive foundation for downstream robot self-improvement. 
+
+Robot Learning with Dynamics Models. Collecting physical data for real-world robot learning is expensive. To improve sample efficiency, prior works learn dynamics models (or world models) for policy optimization [28, 29, 30, 31, 32, 33, 34]. Recent methods further use dynamics models for policy evaluation [35, 3, 36, 37], policy steering [38, 39, 40], and synthetic data generation [41, 42]. However, these methods typically require substantial robot interaction data to learn models accurate enough for downstream policy improvement. Our work reduces this requirement by first learning transferable dynamics from human videos through shared action and state representations, and then grounding these priors with autonomous robot rollouts collected by a human-pretrained policy. 
+
+Real-World Policy Improvement from Failures. To improve a base policy beyond initial human demonstrations in the real world, prior works have explored several strategies [1, 2, 43, 44, 45, 46, 47]. Among them, online human-in-the-loop corrections during robot execution can stabilize rollouts when compounding errors cause the robot to deviate from successful behavior. Recent works also improve deployed policies through reinforcement-learning objectives [3, 2, 48, 49, 50] or post-training objectives such as residual policy training [51, 52], enhancing robustness and precision through additional interaction or optimization. In contrast, our method corrects failure-inducing actions offline using a learned dynamics model, avoiding costly online human supervision. 
+
+## 3 Preliminaries 
+
+Flow Matching. Flow matching learns a time-dependent velocity field that transports a noise dis-tribution toward the data distribution [53]. Given clean data x and Gaussian noise ϵ ∼ N (0, I), a noisy sample at timestamp τ ∈ [0 , 1] is defined by linear interpolation xτ = τ x + (1 − τ )ϵ, with the corresponding velocity v = dxτ 
+
+> dτ
+
+= x − ϵ. The model vθ (xτ , τ ) is trained to match this velocity field, and generation is performed by integrating the resulting ODE from noise to data. In our work, following recent suggestions on prediction space [54], we adopt the x-prediction parameterization: the network directly predicts the clean target ˆxθ (xτ , τ ), from which the velocity field is recovered as vθ (xτ , τ ) = 
+
+ ˆxθ (xτ ,τ )−xτ
+
+
+
+/(1 −τ ) for numerical integration. 
+
+Reinforcement Learning. We formulate the robot manipulation task as a finite-horizon contextual Markov decision process (MDP) with observation space O, action space A, reward function r,and episode horizon T . At time step t, the policy predicts an action chunk [55] at:t+H−1 ∈ A H
+
+conditioned on the current observation ot ∈ O , thereby inducing a trajectory distribution ρπ (τ ).The RL objective is to maximize the cumulative reward J (π) = Eτ ∼ρπ [PTt=0 rt]. To assess the long-horizon utility of the current state, we learn a parametric value model Vψ (ot). We evaluate a candidate action chunk using the following chunk-level bootstrap estimate of advantage: 
+
+ˆA(ot, at:t+H−1) = 
+
+> t+H−1
+
+X
+
+> t′=t
+
+rt′ + Vψ (ot+H ) − Vψ (ot). (1) Rather than solving a regularized RL objective, we adopt the policy-extraction view and construct an improved target policy from a reference policy πref : ˆπ(at:t+H−1 | ot) ∝ πref (at:t+H−1 |
+
+ot) p(It | ˆA(ot, at:t+H−1)) β , where It denotes an improvement event and β controls the sharpness of the extracted policy. Since improvement is determined by the advantage, we instantiate It =
+
+1( ˆA(ot, at:t+H−1, ℓ ) > ϵ ) with a task-specific threshold ϵ, following CFGRL formulation [56, 2]. 
+
+## 4 Method 
+
+4.1 Learning Representations from Human Videos 
+
+We aim to extract reusable structures from human videos for robot learning so that the learned repre-sentations transfer across embodiments while remaining amenable to downstream policy improve-ment. To this end, we define transferable action, world-state, and value representations, and jointly learn policy, dynamics, and value models that provide the foundation for robot self-improvement. 3Policy         
+
+> 𝜋 !
+> Auxiliary Conditions History/Future Visual Tokens
+> History Wrist State History/ Future Point Traj.
+> Wrist Action State Value
+> Dynamics Model
+> 𝑓 "
+> Value Model
+> 𝑉 #
+> DINO -v3
+> Encoder
+> TAPIP3D
+> Point Tracker
+> RGB -D +
+> Cam. Pose
+> 0.17
+> Fine -tuning
+> Policy
+> 𝜋 !
+> Dynamics
+> Model 𝑓 "
+> Value
+> Model 𝑉 #
+> DGAC Module
+> Advantage
+> Estimation
+> Adv. -Cond.
+> Policy Update
+> 𝒟 repair
+> 𝒟 succ
+> 𝒟 fail
+> Real Env.
+> Learning Representations from Human Videos Iterative Robot Self -Improvement Loop
+> 𝒟 succ
+> RGB
+
+Figure 2: Overview of our framework. We first pretrain reusable policy, dynamics, and value models from human videos, which then enable iterative robot policy self-improvement in the real world. 
+
+Embodiment-Agnostic Representations. We design transferable action, world-state, and value representations that preserve interaction structure while abstracting away embodiment-specific de-tails, enabling prediction, evaluation, and correction across embodiments. Each action is repre-sented as at = [ ξt, c t], where ξt ∈ SE (3) denotes absolute 6-DoF wrist motion and ct ∈ [0 , 1] 
+
+is a scalar hand-closure variable estimated from human finger configurations. This abstracts away embodiment-specific articulation while retaining key motion cues. The world state is represented as ot = [ zt, Pt], where zt ∈ RLz ×D denotes current-frame DINO-v3 visual tokens [57], and Pt ∈ RLp×H′×3 denotes short-horizon 3D point flows [14] ending at time t.This asymmetric temporal design is compact: semantic context changes slowly over short horizons, while point flows capture the fine-grained geometry and contact dynamics needed for prediction. We train the value function using the discounted return induced by a sparse terminal reward: Vt =PTt′=t γt′−trt′ = γT −trT , where γ is the discount factor, T is the terminal timestep, all intermediate rewards are 0, and the terminal reward rT ∈ { 1, −1} denotes success or failure. 
+
+Policy, Dynamics, and Value Modeling. Building on the representations above, we jointly learn a policy model, a dynamics model, and a value model. We use H′ to denote the history horizon and 
+
+H to denote the future prediction horizon. For compactness, we write auxiliary conditioning inputs as mt, which include language embeddings, gripper-view observations, and other task-dependent metadata. Each model consumes the relevant subset of these inputs. We formulate the models as: Policy Model: ˆat:t+H−1 = πθ (st−H′+1: t, zt−H′+1: t; mπt ),
+
+Dynamics Model: ˆot+H−1 = fϕ(ot−H′+1: t, at:t+H−1; mft ),
+
+Value Model: ˆVt = Vψ (ot; mVt ).
+
+(2) 
+
+πθ predicts an action chunk from the wrist-state history st−H′+1: t and the visual-token history 
+
+zt−H′+1: t, conditioned on policy-side inputs mπt such as language embeddings [58]. The dynamics model fϕ and value model Vψ operate on the proposed world state ot = [ zt, Pt]. Given world-state history and a candidate action chunk, fϕ predicts the future state ˆot+H−1, while Vψ maps ot to a scalar value. We omit inputs mπt , mft , and mVt in later equations when they are unchanged. 
+
+Optimization Objective. We train the action and dynamics models under the flow-matching paradigm introduced in Sec. 3, while the value model is optimized using a standard regression objective. Concretely, under the x-prediction parameterization, the action and dynamics networks directly regress clean targets from noisy samples at a randomly sampled timestamp τ ∈ [0 , 1] . Let 
+
+at:t+H−1, ot+H−1, and Vt denote the corresponding supervision targets. The losses are: 
+
+Lπ = ˆa τt:t+H−1 − at:t+H−1 
+
+> 22
+
+, Lf = ˆo τt+H−1 − ot+H−1 
+
+> 22
+
+, LV = ˆVt − Vt
+
+> 22
+
+. (3) 
+
+4.2 From Human-Video Pre-training to Robot Self-Improvement 
+
+Starting from human-pretrained models, we first adapt the dynamics model through autonomous robot exploration, then use the adapted dynamics and value models for iterative policy improvement. 4Figure 3: Given a failed state, DGAC samples candidate actions (left), rolls them out with the dynamics model, scores them with the value model, and selects the highest-value one (right) as corrective supervision. 
+
+Algorithm 1: Dynamics-Guided Action Cor-rection (DGAC) 
+
+Require: Policy πθ , dynamics model fϕ, value model Vψ , thresholds δv, δ s
+
+Input: Failed state ot, successful dataset Dsucc 
+
+Output: Corrected action a⋆t:t+H−1 or ∅
+
+Find O(k) 
+
+> t
+
+⊂ D succ and select ˜ot by Eq. 4 
+
+if |Vψ ( ˜ ot) − Vψ (ot)| > δ v or sim( ot, ˜ot) < δ s then return ∅
+
+Sample action candidates {a(n)
+
+> t:t+H−1
+
+}Nn=1 via Eq. 5 
+
+for n = 1 to N do 
+
+ˆo(n) 
+
+> t+H−1
+
+← fϕ(ot−H′+1: t, a(n)
+
+> t:t+H−1
+
+)
+
+V (n) 
+
+> t+H−1
+
+← Vψ ( ˆ o(n)
+
+> t+H−1
+
+)
+
+a⋆t:t+H−1 ← argmax n V (n)
+
+> t+H−1
+
+return a⋆t:t+H−1
+
+Autonomous Robot Adaptation. Al-though human-video pretraining provides transferable dynamics and progress pri-ors, direct transfer is limited by residual embodiment gaps, bias toward success-ful human executions, and failures that arise only during robot deployment. We therefore adapt the dynamics and value models based on real robot interaction data before policy improvement, ground-ing them in robot-specific transitions and rollout outcomes. Instead of relying on costly teleoperation, we autonomously collect diverse robot rollouts by using a VLM [59] to propose plausible atomic in-teraction instructions ( e.g. , close the drawer), which the frozen human-pretrained policy then exe-cutes on the robot. These rollouts expose the models to robot states and natural failures. 
+
+Policy Model Initialization. For each new manipulation task involving multiple interaction modes, we first collect a small amount of teleoperation data Dtele to anchor the policy to the target environment. Starting from the human-pretrained policy, we initialize the robot policy with the same architecture and train it on Dtele using the action loss Lπ . The robot policy model is additionally conditioned on gripper-view observations through mπt and on an improve-ment indicator It ∈ { 0, 1} used later for advantage-conditioned policy extraction: ˆat:t+H−1 =
+
+πθ (st−H′+1: t, zt−H′+1: t; mπt , I t) . During initialization, we set It = 1 for all samples in Dtele .
+
+Iterative Self-Improvement Loop. With the adapted models and the initialized task policy, we iteratively improve the robot policy through deployment and relabeling, as summarized in Fig. 2. At each iteration, the current policy πθ is executed in the real environment for data collection, which are split into successful and failed trajectories, denoted by Dsucc and Dfail , where Dsucc is initialized with Dtele . We fine-tune the dynamics model fϕ and value model Vψ on all collected data so that they adapt to the policy-induced state distribution. For failed states in Dfail , we invoke a dynamics-guided action correction (DGAC) module described below to correct failure-inducing actions into supervision using fϕ and Vψ , forming a repaired dataset Drepair . Finally, we estimate advantages on 
+
+Dsucc ∪ D repair and use advantage-conditioned policy updates to update πθ for the next iteration. 
+
+Dynamics-Guided Action Correction (DGAC). As summarized in Alg. 1, DGAC converts failed rollout states into corrective supervision by using successful experiences as guidance . The central idea is that many states from failed rollouts are recoverable if they can be matched to successful interactions at similar task stages and in compatible scene configurations. Rather than copying such references, DGAC uses them to steer action generation and relies on the dynamics and value models to select the candidate predicted to best improve future task progress. Given a failed state ot
+
+from Dfail , we retrieve the steering reference in two stages: value similarity first narrows Dsucc to progress-aligned successful states, and state similarity then selects the most compatible reference: 5Socks  Microwave  Table  Basketball Kitchen  Sweep Box Figure 4: We design seven real-world manipulation tasks across two robot platforms, covering reaching, grasp-ing, articulated-object manipulation, placement, and task-conditioned sequencing. 
+
+O(k) 
+
+> t
+
+= TopK o′∈D succ (−| Vψ (o′) − Vψ (ot)|) , ˜ot = arg max o′∈O (k)
+
+> t
+
+sim( ot, o′). (4) We generate corrections only if the retrieved reference satisfies |Vψ ( ˜ ot) − Vψ (ot)| ≤ δv and 
+
+sim( ot, ˜ot) ≥ δs. These thresholds ensure recoverability: they prevent correction when the failed rollout has drifted too far from successful behavior for the reference to provide meaningful guidance. Because the policy is trained with conditional flow matching, it defines a velocity field over noisy action chunks under a given policy context, denoted by vθ (aτt:t+H−1, τ ; ·). Let ht =[st−H′+1: t, zt−H′+1: t, mπt , I ] and ˜ht = [˜ st−H′+1: t, ˜zt−H′+1: t, ˜mπt , ˜I] denote the policy contexts associated with the current state ot and the retrieved reference ˜ot, respectively. We compose the corresponding velocity fields with weight wn ∼ U (0 .1, 1) as: 
+
+v(n) 
+
+> θ
+
+= vθ (aτt:t+H−1, τ ; ht) + wn
+
+h
+
+vθ (aτt:t+H−1, τ ; ˜ht) − vθ (aτt:t+H−1, τ ; ht)
+
+i
+
+. (5) Integrating v(n) 
+
+> θ
+
+from Gaussian noise yields a candidate action chunk a(n)
+
+> t:t+H−1
+
+. This composi-tion anchors generation to the current observation, steers it toward the retrieved success, and pre-serves diversity through wn sampling. Repeating this process yields N candidate action chunks 
+
+{a(n)
+
+> t:t+H−1
+
+}Nn=1 . As shown in Fig. 3, each candidate is then evaluated using the learned dynamics and value models: ˆo(n) 
+
+> t+H−1
+
+= fϕ(ot−H′+1: t, a(n)
+
+> t:t+H−1
+
+), V (n) 
+
+> t+H−1
+
+= Vψ ( ˆ o(n)
+
+> t+H−1
+
+). The corrected action chunk is selected as a⋆t:t+H−1 = arg max n V (n)
+
+> t+H−1
+
+, and add the resulting repaired transition to Drepair , initialized from Dfail with corrected actions relabeled at recoverable failure states. 
+
+Advantage-Conditioned Policy Update. After collecting successful and repaired trajectories, we estimate the advantage ˆAt on Dsucc ∪ D repair via Eq. 1 and update the policy with the advantage-conditioned policy extraction objective following CFGRL [56] described in Sec. 3. 
+
+Optimization Objective. When deployed on robots, all three models are optimized with the same objectives as in Eq. 3. We further augment LV with a temporal-difference (TD) term [60] following RISE [3]: LTD = ∥ ˆVt − (rt + γ ˆVt+1 )∥22, where γ is the discount factor. This additional objective refines the value estimate to better distinguish between successes and failures. 
+
+## 5 Experiments 
+
+We design our experiments to answer the following questions: (1) How does our framework com-pare against prior policy improvement methods? (2) Can DGAC convert robot failures into useful corrective supervision? (3) Do human-video priors transfer across robot embodiments and policy backbones? (4) How do human-video scaling and robot adaptation affect self-improvement? 
+
+5.1 Experimental Setup Evaluation Setup. We conduct baseline comparisons and ablation studies using a Hello Robot Stretch 3 platform. Our main benchmark includes five manipulation tasks, with each policy evalu-ated over 15 independent trials per task. To assess cross-embodiment applicability, we further test our method on two additional tasks using a Franka Panda robot. All tasks are visualized in Fig. 4. 
+
+Baselines. We compare against six representative baselines. Expert BC trains only on task-specific teleoperation demonstrations and serves as the initialization for policy improvement meth-ods. AWR [61] and RECAP [2] perform value-guided policy extraction from collected rollouts, 6Method T1 T2 T3 T4 T5 Avg.                                             
+
+> Expert BC 33.3 46.7 46.7 40.0 40.0 41.3 SWIM [62] 53.3 40.0 46.7 46.7 60.0 49.3 LPB [63] 53.3 40.0 66.7 80.0 60.0 60.0 AWR [61] 53.3 53.3 80.0 60.0 53.3 60.0 RECAP †[2] 60.0 53.3 73.3 53.3 66.7 61.3 RISE †[3] 86.7 60.0 73.3 80.0 80.0 76.0
+> Ours 86.7 80.0 80.0 93.3 86.7 85.3
+
+Table 1: Benchmark evaluated on success rate (%). 
+
+T1 : Socks, T2 : Kitchen, T3 : Microwave, T4 : Table, 
+
+T5 : Basketball. †: no human-intervened corrections.                                                 
+
+> Variant T1 T2 T3 T4 T5 Avg.
+> w/o DGAC [V1] 66.7 60.0 60.0 66.7 60.0 62.7 Reference [V2] 40.0 53.3 73.3 60.0 66.7 58.7 Rand. Val. [V3] 33.3 53.3 60.0 46.7 66.7 52.0 Med. Val. [V4] 46.7 60.0 60.0 66.7 53.3 57.3 Min. Val. [V5] 26.7 53.3 53.3 53.3 53.3 48.0 VLM Val. [V6] 60.0 53.3 66.7 73.3 66.7 64.0
+> Ours 86.7 80.0 80.0 93.3 86.7 85.3
+
+Table 2: Ablation of DGAC sampling and ranking variants on success rate (%). All variants are evalu-ated on the same real-robot tasks as in Tab. 1. Original Policy DGAC Action Improved Policy                    
+
+> Original Policy Action Actual Rollout Outcome: Failure
+> Incorrect Approach Direction
+> DGAC -Corrected Action Retrieved Success Reference
+> Correct Approach Directio n
+> Improved Policy Action Actual Rollout Outcome: Success
+> Correct Approach Direction
+> Original Policy Action Actual Rollout Outcome: Failure
+> Collision Before Grasp
+> DGAC -Corrected Action Retrieved Success Reference
+> Successful Reach
+> Improved Policy Action Actual Rollout Outcome: Success
+> Successful Reach
+
+Figure 5: DGAC repairs failure-inducing actions from the original policy (top) by steering predicted futures toward successful references (middle), and training on these corrections leads to successful rollouts (bottom). 
+
+using advantage weighting and value conditioning, respectively. RISE [3] improves policies with synthesized rollouts from a video generation model. For fair comparison in our autonomous setting, RECAP and RISE are evaluated without human-intervened corrections. SWIM [62] learns human-video dynamics over pixel-level affordances, and we adapt its distance-to-goal metric for corrective action selection. LPB [63] optimizes actions via diffusion guidance with a learned dynamics model. 
+
+5.2 Results and Discussion Does Our Framework Improve Real-World Manipulation over Prior Methods? Tab. 1 shows that our framework achieves the highest average success rate across five real-world tasks, reaching 85.3% and outperforming the strongest baseline, RISE (76.0%), by 9.3 percentage points. The gap to Expert BC shows that limited task-specific teleoperation is insufficient for these long-horizon ma-nipulation tasks. Methods that reuse human or robot dynamics priors provide clear gains: SWIM improves over Expert BC, suggesting that human-pretrained dynamics are useful for robot policy learning, while RISE achieves the second-best performance by leveraging a dynamics model for self-improvement. However, these baselines do not explicitly convert failed states into corrective supervision. SWIM is limited by its simplified action space, and RISE lacks semantically guided action exploration from retrieved successful experiences; our compact state representation also en-ables faster rollout evaluation than RISE ( 4 Hz vs. 0.6 Hz). Value-guided policy extraction methods further highlight the importance of using rollout quality. AWR and RECAP improve upon Expert BC by emphasizing high-quality rollout data, but their lower performance suggests that simply down-weighting failed behaviors is not enough: near-failure states often contain useful information about the boundary of the current policy, yet these methods do not leverage them. Similarly, LPB en-courages actions to remain close to the expert demonstration distribution, but its repair signal is less failure-specific and mainly supports local corrections. In contrast, our method treats failed states as correction queries, using adapted dynamics and value models to generate and rank corrective actions for policy extraction. Fig. 5 illustrates how DGAC repairs failures for policy improvement. 
+
+Can DGAC Convert Failures into Supervision? To answer this question, we isolate the two key steps required for turning a failed state into a useful training target: generating corrective action can-didates and selecting the most promising correction. Tab. 2 ablates both components. For candidate 7generation, V1 removes DGAC entirely, while V2 directly retrieves the trajectory from the most sim-ilar state in Dsucc as the correction. For candidate selection, V3–V6 use the same DGAC-generated candidate pool but differ in how the final action is chosen: V3 selects randomly, V4 selects the median-ranked candidate under Vψ , V5 selects the lowest-ranked candidate, and V6 uses an off-the-shelf VLM [64] to select from the candidate pool, inspired by SOAR [46]. Without DGAC-based correction, V1 reaches only 62.7%, indicating that policy improvement remains limited when failed rollouts are not explicitly repaired. V2 performs even worse at 58.7%: although retrieved success-ful trajectories provide useful priors, directly copying them does not adapt the action to the current failed scene. In contrast, Ours improves over V2 by percentage points, showing that velocity-space composition produces corrections that are both grounded in successful behavior and locally adapted to the current state. Holding this candidate pool fixed further highlights the importance of phys-ically grounded ranking. Random selection (V3) and lower-ranked selections under Vψ (V4, V5) substantially underperform the full method, showing that not all generated candidates provide useful supervision. V6 is the strongest alternative selector, suggesting that VLMs can recognize semanti-cally plausible corrections, but its 21.3-point gap to Ours indicates that fine-grained action repair still requires physically grounded dynamics and value prediction. Together, these results show that DGAC effectively converts failures into supervision by generating adapted corrective candidates and using the value model Vψ to select corrections with higher predicted future value.                                  
+
+> Method T1 T2 T3 T4 T5 Avg.
+> π0.5+ SFT 60.0 66.7 80.0 40.0 66.7 62.7
+> π0.5+ RECAP †66.7 66.7 73.3 53.3 80.0 68.0
+> π0.5+ DGAC 93.3 86.7 86.7 86.7 86.7 88.0 Ours 86.7 80.0 80.0 93.3 86.7 85.3
+
+Table 3: Success rates (%) of the baseline policy π0.5
+
+under different policy improvement schemes. †: no human-intervened corrections. Socks Kitchen Microwave Table Basketball Avg.    
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success  Rate  (%)  0% 50% w/o Adaptation 100%
+
+Figure 6: Ablation of human-video pre-training scale and robot adaptation, evaluated on success rate (%). 
+
+Can DGAC Improve a Different Policy Backbone? We test whether DGAC is policy-agnostic by applying it to π0.5 [15], a pol-icy pretrained on large-scale robot data. Af-ter supervised fine-tuning (SFT), π0.5 already achieves an average success rate of 62.7% in Tab. 3. We then compare two self-improvement schemes based on the same base policy: RECAP without human-intervened cor-rections and our DGAC module. RECAP im-proves the average success rate to 68.0%, but its modest gain over SFT suggests that value-conditioned extraction alone is limited without explicitly repairing failures. In contrast, π0.5
+
++ DGAC reaches 88.0%, outperforming π0.5 +RECAP by 20.0 percentage points. This shows that DGAC can provide substantial additional gains even when plugged into a different policy backbone. Notably, our full framework starts from a much weaker behavior-cloned policy (41.3%) yet reaches 85.3%, closely matching π0.5 + DGAC. This suggests that scalable human-video priors, combined with failure-to-supervision learning, can substantially close the gap to large-scale robot-pretrained policy backbones. 
+
+Does Our Framework Generalize across Embodiments? We evaluate whether the same im-provement pipeline can transfer to a different robot embodiment. On Franka Panda, our method im-proves over Expert BC from 46.7% to 73.3% on the Box task and from 26.7% to 66.7% on the Sweep 
+
+task, raising the average success from 36.7% to 70.0%. These gains highlight the embodiment-agnostic nature of our human-video priors: shared action, dynamics, and value representations can be grounded with robot rollouts to support self-improvement across robot morphologies. 
+
+How Do Human-Video Scaling and Robot Adaptation Affect Self-Improvement? We study whether human-video priors improve with data scale and whether robot adaptation is necessary for embodiment grounding. To isolate the effect of human-video scale, we vary the pretraining corpus. As shown in Fig. 6, final task success increases from 52.0% without human pretraining to 58.7% with 50% of the data and 85.3% with the full corpus. This monotonic trend shows that human videos provide scalable priors for downstream policy improvement. However, removing robot adaptation consistently reduces performance, indicating that robot rollouts are necessary to ground these priors in embodiment-specific states and dynamics for reliable DGAC corrections. We emphasize that this 8adaptation is cheaper and faster than teleoperation approaches [3, 35, 37], since robot interactions are collected autonomously using VLM-proposed instructions and the human-pretrained policy. 
+
+## 6 Conclusion 
+
+In this work, we demonstrate that passive human observation can provide the predictive foundation required for autonomous robot self-improvement. By learning embodiment-agnostic action, dynam-ics, and value representations from human videos, robots can ground human priors through their own interactions, evaluate the consequences of their actions, and improve from failure without on-line human intervention. Building on these representations, we introduce Dynamics-Guided Action Correction (DGAC), a training-free policy improvement approach that transforms failed executions into corrective supervision through dynamics model prediction and value based evaluation. Across diverse manipulation tasks, robot embodiments, and policy backbones, our approach sub-stantially improves policy performance. These results suggest that human video data can play a broader role beyond policy initialization: rather than serving solely as demonstrations for imitation, it can provide predictive models that enable robots to reason about action outcomes, learn from their own experiences, and convert failures into a scalable source of supervision after deployment. More broadly, our findings suggest a complementary paradigm for robot learning. While large-scale demonstrations remain essential for skill acquisition, expanding the capabilities of robots may increasingly depend on their ability to autonomously interpret and learn from real-world failures. We believe that combining internet-scale human observation with embodiment-specific robot experience offers a promising path toward robotic systems that continue improving long after deployment. 
+
+Limitations and Future Work. While our framework achieves strong performance without online human corrections, several open challenges remain. First, we currently rely on human annotations to determine rollout outcomes. Replacing this human supervision with automatic feedback from foun-dation models would further increase data scaling and autonomy. Second, DGAC operates locally over short-horizon action chunks. Extending the framework to incorporate longer-horizon dynam-ics prediction and hierarchical task planning may enable recovery from complex failures requiring multiple sequential interventions. Finally, scaling predictive human-video pretraining to larger and more diverse interaction datasets remains important for learning richer physical priors and bridging internet-scale observation with embodied interaction. 
+
+Acknowledgments 
+
+This work was supported by Technical University of Munich (TUM) and the State of Bavaria through the REACT project, TUM Georg Nemetschek Institute via the SPAICR project, Munich Center for Machine Learning (MCML) and ETH Zurich. We thank Helen Oleynikova for her support during the initial phase of the project. 
+
+## References 
+
+[1] E. Jang, A. Irpan, M. Khansari, D. Kappler, F. Ebert, C. Lynch, S. Levine, and C. Finn. Bc-z: Zero-shot task generalization with robotic imitation learning. In CoRL , pages 991–1002. PMLR, 2022. [2] P. Intelligence, A. Amin, R. Aniceto, A. Balakrishna, K. Black, K. Conley, G. Connors, J. Darpinian, K. Dhabalia, J. DiCarlo, et al. π∗
+
+> 0.6
+
+: A vla that learns from experience. arXiv preprint arXiv:2511.14759 , 2025. [3] J. Yang, K. Lin, J. Li, W. Zhang, T. Lin, L. Wu, Z. Su, H. Zhao, Y.-Q. Zhang, L. Chen, et al. Rise: Self-improving robot policy with compositional world model. arXiv preprint arXiv:2602.11075 , 2026. [4] S. Nair, A. Rajeswaran, V. Kumar, C. Finn, and A. Gupta. R3m: A universal visual represen-tation for robot manipulation, 2022. arXiv:2203.12601. 9[5] H. Bharadhwaj, A. Gupta, V. Kumar, and S. Tulsiani. Towards generalizable zero-shot manip-ulation via translating human interaction plans. In ICRA , pages 6904–6911. IEEE, 2024. [6] T. Xiao, I. Radosavovic, T. Darrell, and J. Malik. Masked visual pre-training for motor control. 
+
+arXiv preprint arXiv:2203.06173 , 2022. [7] Y. J. Ma, S. Sodhani, D. Jayaraman, O. Bastani, V. Kumar, and A. Zhang. Vip: Towards univer-sal visual reward and representation via value-implicit pre-training, 2023. arXiv:2210.00030. [8] H. Chen, B. Sun, A. Zhang, M. Pollefeys, and S. Leutenegger. Vidbot: Learning generalizable 3d actions from in-the-wild 2d human videos for zero-shot robotic manipulation. CVPR , 2025. [9] M. Xu, Z. Xu, Y. Xu, C. Chi, G. Wetzstein, M. Veloso, and S. Song. Flow as the cross-domain manipulation interface. In CoRL , 2024. [10] A. Zhang, H. Chen, Y. Burkhardt, Y. Zhong, J. Betz, H. Oleynikova, and S. Leutenegger. Actron3d: Learning actionable neural functions from videos for transferable robotic manipu-lation. arXiv preprint arXiv:2510.12971 , 2025. [11] R. Yang, Q. Yu, Y. Wu, R. Yan, B. Li, A.-C. Cheng, X. Zou, Y. Fang, X. Cheng, R.-Z. Qiu, et al. Egovla: Learning vision-language-action models from egocentric human videos. arXiv preprint arXiv:2507.12440 , 2025. [12] J. Borja-Diaz, O. Mees, G. Kalweit, L. Hermann, J. Boedecker, and W. Burgard. Affordance learning from play for sample-efficient policy learning. In Proceedings of the IEEE Interna-tional Conference on Robotics and Automation (ICRA) , Philadelphia, USA, 2022. [13] G. Zhou, H. Pan, Y. LeCun, and L. Pinto. Dino-wm: World models on pre-trained visual features enable zero-shot planning. arXiv preprint arXiv:2411.04983 , 2024. [14] B. Zhang, L. Ke, A. W. Harley, and K. Fragkiadaki. Tapip3d: Tracking any point in persistent 3d geometry, 2025. arXiv:2504.14717. [15] P. Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, et al. π0.5: A vision-language-action model with open-world generalization. 
+
+arXiv preprint arXiv:2504.16054 , 2025. [16] Z. Feng, Q. Li, H. Liang, R. Yang, Y. Shen, Z. Du, Z. Zhang, Y. Deng, L. Zhao, H. Zhao, Z. Lu, O. Mees, M. Pollefeys, J. Yang, and B. Guo. From human videos to robot manipulation: A survey on scalable vision-language-action learning with human-centric data. In Proceed-ings of the 35th International Joint Conference on Artificial Intelligence (IJCAI-26) , Bremen, Germany, 2026. [17] S. Bahl, A. Gupta, and D. Pathak. Human-to-robot imitation in the wild. arXiv preprint arXiv:2207.09450 , 2022. [18] A. S. Chen, S. Nair, and C. Finn. Learning generalizable robotic reward functions from" in-the-wild" human videos. arXiv preprint arXiv:2103.16817 , 2021. [19] O. Mees, M. Merklinger, G. Kalweit, and W. Burgard. Adversarial skill networks: Unsuper-vised robot skill learning from videos. In Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , Paris, France, 2020. [20] J. Shi, J. Smith, J. Qian, and D. Jayaraman. Points2reward: Robotic manipulation rewards from just one video. In Robotics: Science and Systems (RSS) , 2025. [21] S. Bahl, R. Mendonca, L. Chen, U. Jain, and D. Pathak. Affordances from human videos as a versatile representation for robotics. In CVPR , pages 13778–13790, 2023. 10 [22] R. Mendonca, S. Bahl, and D. Pathak. Structured world models from human videos. arXiv preprint arXiv:2308.10901 , 2023. [23] Y. Zhong, H. Chen, S. Schaefer, A. Zhang, and S. Leutenegger. Gopla: Generalizable ob-ject placement learning via synthetic augmentation of human arrangement. arXiv preprint arXiv:2510.14627 , 2025. [24] G. Papagiannis, N. D. Palo, P. Vitiello, and E. Johns. R+x: Retrieval and execution from everyday human videos. ICRA , 2025. [25] Y. Qin, Y.-H. Wu, S. Liu, H. Jiang, R. Yang, Y. Fu, and X. Wang. Dexmv: Imitation learning for dexterous manipulation from human videos. In ECCV , pages 570–587. Springer, 2022. [26] Q. Li, Y. Deng, Y. Liang, L. Luo, L. Zhou, C. Yao, L. Zeng, Z. Feng, H. Liang, S. Xu, et al. Scalable vision-language-action model pretraining for robotic manipulation with real-life hu-man activity videos. arXiv preprint arXiv:2510.21571 , 2025. [27] C. Yuan, C. Wen, T. Zhang, and Y. Gao. General flow as foundation affordance for scalable robot learning. CoRL , 2024. [28] P. Wu, A. Escontrela, D. Hafner, P. Abbeel, and K. Goldberg. Daydreamer: World models for physical robot learning. In Conference on robot learning , pages 2226–2240. PMLR, 2023. [29] A. Nagabandi, K. Konolige, S. Levine, and V. Kumar. Deep dynamics models for learning dexterous manipulation. In Conference on robot learning , pages 1101–1112. PMLR, 2020. [30] K. Chua, R. Calandra, R. McAllister, and S. Levine. Deep reinforcement learning in a handful of trials using probabilistic dynamics models. Advances in neural information processing systems , 31, 2018. [31] D. Hafner, T. Lillicrap, J. Ba, and M. Norouzi. Dream to control: Learning behaviors by latent imagination. arXiv preprint arXiv:1912.01603 , 2019. [32] D. Hafner, T. Lillicrap, I. Fischer, R. Villegas, D. Ha, H. Lee, and J. Davidson. Learning latent dynamics for planning from pixels. In International conference on machine learning , pages 2555–2565. PMLR, 2019. [33] I. Nematollahi, O. Mees, L. Hermann, and W. Burgard. Hindsight for foresight: Un-supervised structured dynamics models from physical interaction. In Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Las Ve-gas, USA, 2020. URL http://ais.informatik.uni-freiburg.de/publications/ papers/nematoli20iros.pdf .[34] B. Hou, G. Li, J. Jia, T. An, X. Guo, S. Leng, H. Geng, Y. Ze, T. Harada, P. Torr, O. Mees, M. Pollefeys, Z. Liu, J. Wu, P. Abbeel, J. Malik, Y. Du, and J. Yang. World model for robot learning: A comprehensive survey. arXiv preprint arXiv:2605.00080 , 2026. [35] Y. Guo, L. X. Shi, J. Chen, and C. Finn. Ctrl-world: A controllable generative world model for robot manipulation. arXiv preprint arXiv:2510.10125 , 2025. [36] A. L. Chandra, I. Nematollahi, C. Huang, T. Welschehold, W. Burgard, and A. Valada. Diwa: Diffusion policy adaptation with world models. arXiv preprint arXiv:2508.03645 , 2025. [37] G. R. Team, K. Choromanski, C. Devin, Y. Du, D. Dwibedi, R. Gao, A. Jindal, T. Kipf, S. Kir-mani, I. Leal, et al. Evaluating gemini robotics policies in a veo world simulator. arXiv preprint arXiv:2512.10675 , 2025. [38] Z. Sun and S. Song. Latent policy barrier: Learning robust visuomotor policies by staying in-distribution. arXiv preprint arXiv:2508.05941 , 2025. 11 [39] H. Qi, H. Yin, A. Zhu, Y. Du, and H. Yang. Inference-time enhancement of generative robot policies via predictive world modeling. IEEE Robotics and Automation Letters , 2026. [40] M. Du and S. Song. Dynaguide: Steering diffusion polices with active dynamic guidance. 
+
+arXiv preprint arXiv:2506.13922 , 2025. [41] L. Ke, Y. Zhang, A. Deshpande, S. Srinivasa, and A. Gupta. Ccil: Continuity-based data augmentation for corrective imitation learning. arXiv preprint arXiv:2310.12972 , 2023. [42] J. Jang, S. Ye, Z. Lin, J. Xiang, J. Bjorck, Y. Fang, F. Hu, S. Huang, K. Kundalia, Y.-C. Lin, et al. Dreamgen: Unlocking generalization in robot learning through neural trajectories. arXiv e-prints , pages arXiv–2505, 2025. [43] P. Wu, Y. Shentu, Q. Liao, D. Jin, M. Guo, K. Sreenath, X. Lin, and P. Abbeel. Robocopi-lot: Human-in-the-loop interactive imitation learning for robot manipulation. arXiv preprint arXiv:2503.07771 , 2025. [44] M. Kelly, C. Sidrane, K. Driggs-Campbell, and M. J. Kochenderfer. Hg-dagger: Interactive imitation learning with human experts. In 2019 International Conference on Robotics and Automation (ICRA) , pages 8077–8083. IEEE, 2019. [45] J. Luo, C. Xu, J. Wu, and S. Levine. Precise and dexterous robotic manipulation via human-in-the-loop reinforcement learning. Science Robotics , 10(105):eads5033, 2025. [46] Z. Zhou, P. Atreya, A. Lee, H. Walke, O. Mees, and S. Levine. Autonomous improvement of instruction following skills via foundation models. arXiv preprint arXiv:407.20635 , 2024. [47] D. Kalashnikov, J. Varley, Y. Chebotar, B. Swanson, R. Jonschkowski, C. Finn, S. Levine, and K. Hausman. Mt-opt: Continuous multi-task robotic reinforcement learning at scale. arXiv preprint arXiv:2104.08212 , 2021. [48] H. Li, Y. Zuo, J. Yu, Y. Zhang, Z. Yang, K. Zhang, X. Zhu, Y. Zhang, T. Chen, G. Cui, et al. Simplevla-rl: Scaling vla training via reinforcement learning. arXiv preprint arXiv:2509.09674 , 2025. [49] K. Lei, H. Li, D. Yu, Z. Wei, L. Guo, Z. Jiang, Z. Wang, S. Liang, and H. Xu. Rl-100: Performant robotic manipulation with real-world reinforcement learning. arXiv preprint arXiv:2510.14830 , 2025. [50] Y. Guo, J. Zhang, X. Chen, X. Ji, Y.-J. Wang, Y. Hu, and J. Chen. Improving vision-language-action model with online reinforcement learning. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , pages 15665–15672. IEEE, 2025. [51] W. Xiao, H. Lin, A. Peng, H. Xue, T. He, Y. Xie, F. Hu, J. Wu, Z. Luo, L. Fan, et al. Self-improving vision-language-action models with data generation via residual rl. arXiv preprint arXiv:2511.00091 , 2025. [52] L. Ankile, A. Simeonov, I. Shenfeld, M. Torne, and P. Agrawal. From imitation to refinement – residual rl for precise visual assembly, 2024. URL https://arxiv.org/abs/2407.16677 .[53] Y. Lipman, R. T. Chen, H. Ben-Hamu, M. Nickel, and M. Le. Flow matching for generative modeling. arXiv preprint arXiv:2210.02747 , 2022. [54] T. Li and K. He. Back to basics: Let denoising generative models denoise, 2025. URL https://arxiv. org/abs/2511.13720 , 7, 2026. [55] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn. Learning fine-grained bimanual manipulation with low-cost hardware. arXiv preprint arXiv:2304.13705 , 2023. 12 [56] K. Frans, S. Park, P. Abbeel, and S. Levine. Diffusion guidance is a controllable policy im-provement operator. arXiv preprint arXiv:2505.23458 , 2025. [57] O. Siméoni, H. V. Vo, M. Seitzer, F. Baldassarre, M. Oquab, C. Jose, V. Khalidov, M. Szafraniec, S. Yi, M. Ramamonjisoa, F. Massa, D. Haziza, L. Wehrstedt, J. Wang, T. Darcet, T. Moutakanni, L. Sentana, C. Roberts, A. Vedaldi, J. Tolan, J. Brandt, C. Cou-prie, J. Mairal, H. Jégou, P. Labatut, and P. Bojanowski. DINOv3, 2025. URL https: //arxiv.org/abs/2508.10104 .[58] C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, and P. J. Liu. Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of machine learning research , 21(140):1–67, 2020. [59] OpenAI. Gpt-4o system card, 2024. arXiv:2410.21276. [60] R. S. Sutton. Learning to predict by the methods of temporal differences. Machine learning , 3 (1):9–44, 1988. [61] X. B. Peng, A. Kumar, G. Zhang, and S. Levine. Advantage-weighted regression: Simple and scalable off-policy reinforcement learning. CoRR , abs/1910.00177, 2019. URL https: //arxiv.org/abs/1910.00177 .[62] R. Mendonca, S. Bahl, and D. Pathak. Structured world models from human videos. In RSS ,2023. [63] Z. Sun and S. Song. Latent policy barrier: Learning robust visuomotor policies by staying in-distribution. arXiv preprint arXiv:2508.05941 , 2025. [64] OpenAI. Openai gpt-5 system card, 2026. URL https://arxiv.org/abs/2601.03267 .[65] Y. Liu, Y. Liu, C. Jiang, K. Lyu, W. Wan, H. Shen, B. Liang, Z. Fu, H. Wang, and L. Yi. Hoi4d: A 4d egocentric dataset for category-level human-object interaction. In CVPR , pages 21013–21022, June 2022. [66] A. Werby, M. Büchner, A. Röfer, C. Huang, W. Burgard, and A. Valada. Articulated object estimation in the wild. In Conference on Robot Learning (CoRL) , volume 2, 2025. [67] R. Hoque, P. Huang, D. J. Yoon, M. Sivapurapu, and J. Zhang. Egodex: Learning dexterous manipulation from large-scale egocentric video. arXiv preprint arXiv:2505.11709 , 2025. [68] H. Lin, S. Chen, J. Liew, D. Y. Chen, Z. Li, G. Shi, J. Feng, and B. Kang. Depth anything 3: Recovering the visual space from any views. arXiv preprint arXiv:2511.10647 , 2025. [69] G. Pavlakos, D. Shan, I. Radosavovic, A. Kanazawa, D. Fouhey, and J. Malik. Reconstructing hands in 3D with transformers. In CVPR , 2024. [70] A. Savitzky and M. J. Golay. Smoothing and differentiation of data by simplified least squares procedures. Analytical chemistry , 36(8):1627–1639, 1964. [71] C. Chi, S. Feng, Y. Du, Z. Xu, E. Cousineau, B. Burchfiel, and S. Song. Diffusion policy: Visuomotor policy learning via action diffusion. In Proceedings of Robotics: Science and Systems (RSS) , 2023. [72] Q. Wang, Y. Zhang, A. Holynski, A. A. Efros, and A. Kanazawa. Continuous 3d perception model with persistent state. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 10510–10522, 2025. [73] Y. Zhou, C. Barnes, J. Lu, J. Yang, and H. Li. On the continuity of rotation representations in neural networks. In CVPR , pages 5745–5753, 2019. 13 [74] A. Bar, G. Zhou, D. Tran, T. Darrell, and Y. LeCun. Navigation world models, 2024. URL 
+
+https://arxiv.org/abs/2412.03572 .[75] W. Peebles and S. Xie. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF international conference on computer vision , pages 4195–4205, 2023. [76] I. Loshchilov and F. Hutter. Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 , 2017. [77] Wan Team, A. Wang, B. Ai, et al. Wan: Open and advanced large-scale video generative models. arXiv preprint arXiv:2503.20314 , 2025. 14 A.1 Supplementary Video 
+
+We include a supplementary video showcasing an overview of our framework, along with demon-strations of various real-world robot manipulation tasks: https://www.youtube.com/watch?v= ZW3ZHjrllJA .
+
+## A.2 Implementation Details 
+
+A.2.1 Human Video Dataset Processing 
+
+We construct the human-video pretraining dataset from HOI4D [65], Arti4D [66], EgoDex [67]. For each frame, we extract semantic visual tokens using DINO-v3 [57] and obtain point-trajectory supervision with the off-the-shelf 3D point tracker TAPIP3D [14]. Since TAPIP3D requires camera parameters and dense depth, we use the SLAM poses and camera intrinsics provided by the datasets and estimate dense depth with DepthAnything-v3 [68] for EgoDex, where dense depth annotations are unavailable. We obtain wrist trajectories from dataset annotations when available and estimate them automatically otherwise. For videos without wrist annotations, we first use HaMeR [69] to initialize the wrist translation in the first frame. We then sample 3D points around the initialized wrist location and propagate the wrist translation over time using TAPIP3D point flows. Wrist orientations are estimated by HaMeR and temporally smoothed with a Savitzky–Golay filter [70]. Overall, this pipeline produces approximately one million samples for human-video pretraining. 
+
+A.2.2 Robot Dataset Collection 
+
+During the robot adaptation phase, the robot autonomously interacts with the scene using the human-pretrained policy. This procedure yields approximately 400 robot episodes in about three hours, providing task-agnostic interaction data that captures robot-specific states, contacts, action effects, and natural failures. For each downstream task, we collect 25 teleoperated demonstrations, which are also used to initialize the task policy before self-improvement. 
+
+A.2.3 Control Strategy for Autonomous Robot Adaptation 
+
+Directly deploying the human-pretrained policy for robot exploration is challenging since human videos provide useful interaction priors but often lack the precision required for robot contact local-ization. We therefore collect autonomous robot interaction data using an open-loop control strategy. For each scene, we first use the pretrained affordance model from VidBot [8] to detect plausible contact regions. We then select a target contact point and plan a pre-contact trajectory that moves the gripper to the corresponding region while avoiding collisions. Once the gripper reaches the con-tact region, we query the human-pretrained policy to generate the post-contact interaction trajectory. The robot follows the predicted end-effector poses using its low-level controller, while the gripper is smoothly adjusted along the trajectory to improve execution stability. This strategy separates coarse contact acquisition from post-contact interaction, allowing the robot to explore semantically mean-ingful behaviors even when the human-pretrained policy does not provide precise contact poses. The collected rollouts contain both successful and failed interactions caused by robot-specific contacts, dynamics, and scene configurations. We use these autonomous rollouts to adapt the dynamics and value models before task-level self-improvement. 
+
+A.2.4 Baseline Implementation Details SWIM. Since SWIM [22] is not open-sourced, we re-implement the baseline ourselves. We use the same architectural configurations as ours for both the affordance and dynamics models, but modify the affordance head to predict SWIM’s structured action space. SWIM is originally demon-strated on relatively short-horizon goal-conditioned manipulation tasks, such as object picking or drawer opening. To extend it to our long-horizon tasks, we use the same goal-image retrieval strat-A1 egy as ours and rank candidate corrections by the distance between the predicted future feature and the retrieved goal feature. 
+
+LPB. LPB [63] was originally formulated as a plug-and-play module for diffusion policies [71], where differentiable guidance is used to steer action generation. For a fair comparison, we adapt LPB to our flow-matching policy by using the gradient of the latent distance-to-goal objective to guide the inferred velocity field during action generation. As LPB’s nearest-neighbor search scales poorly with the size of the teleoperation dataset, we use our value model to accelerate goal retrieval. 
+
+AWR. We follow AWR [61] to update the policy with advantage-weighted behavioral cloning. We convert the estimated advantage into a sample weight using the its proposed exponential form. The resulting weights are clipped for numerical stability and used to weight the behavior-cloning objective during policy training. 
+
+RECAP. RECAP [2] is closely related to CFGRL [56]: both convert advantage estimates into con-ditioning embeddings and train the policy under different conditioning modes. Following RECAP, we estimate the advantage for all states in the collected dataset and use the 70th percentile of the em-pirical advantage distribution as the cutoff. Samples above this cutoff are trained with the optimal embedding, while the remaining samples are trained with the non-optimal embedding. For a fair comparison in our autonomous self-improvement setting, we remove human-in-the-loop corrections from RECAP. 
+
+RISE. RISE [2] extends RECAP by introducing a video generator to synthesize additional rollouts for policy co-training. We initialize from their provided video model checkpoints and fine-tune the model using our collected robot rollout data. It shares the same action space as our dynamics model, which is represented using the wrist 6-DoF pose and closure parameter. 
+
+A.2.5 Network Architecture Policy Model. Our policy model follows a transformer-based action-chunking architecture sim-ilar to Diffusion Policy [71]. We implement it as an encoder-decoder transformer that predicts future end-effector action chunks at:t+H−1 under the flow-matching objective. The model condi-tions on the language instruction, visual history, and wrist-state history st−H′+1: t. These inputs are projected into a shared latent space and encoded as conditioning tokens, together with the flow-matching timestep and advantage embeddings when applicable. The decoder takes noisy action tokens with learnable positional embeddings and predicts the clean future action chunk using causal self-attention. The policy outputs actions in the world frame with a chunk size of H = 30 . We use 16 transformer decoder layers, 12 attention heads, and a latent dimension of 384. In the main text, we denote the auxiliary policy conditions as mπt , which include language tokens and camera-aware ray maps [72]. Language tokens are extracted using a pretrained text encoder [58]. For visual history, we extract DINO-v3 visual tokens [57] from head-camera observations and concatenate them with the corresponding ray maps. During robot deployment, we additionally include DINO-v3 visual tokens from the gripper camera, together with the corresponding gripper-camera ray maps. Camera extrinsics are represented as relative transformations between the current camera pose and historical camera poses. All head-camera images used during human pretraining and robot deployment are center-cropped and resized to 224 × 224 , while gripper-camera images are resized to 240 × 320 .To accommodate bi-manual demonstrations in human videos, we represent each wrist state and action using two 6-DoF wrist poses, each paired with a scalar closure value. Rotations are pa-rameterized using the continuous 6D representation from [73], resulting in a 20-dimensional action representation: 2 × (3 translation +6 rotation +1 closure ). During robot deployment, we preserve this two-hand format for compatibility. For single-arm robots, we duplicate the robot action into the unused hand slot only as a placeholder; this placeholder is ignored by the controller, and only the executable robot action is applied. For human-video pretraining, we set the history horizon H′ to 15; for robot policy training, we set it to 1. 
+
+Dynamics Model. The dynamics model follows the CDiT transformer architecture [74, 75]. It predicts the future state representation ˆot+H−1 conditioned on the history state ot−H′+1: t, a candi-date action chunk at:t+H−1, and auxiliary context tokens mft . In our implementation, mft includes A2 language tokens extracted by T5 [58] and camera ray maps, which are concatenated with the vi-sual tokens for conditioning. Under the flow-matching objective, the noisy future-state sample is patchified and linearly projected into latent tokens. The historical state maps are also patchified and projected into latent tokens, while context tokens and action tokens are embedded with separate MLPs. The history, context, and action tokens are then concatenated to form the conditioning se-quence. We add learnable absolute positional embeddings to the noisy future-state patches, history patches, context tokens, and action tokens. Each transformer layer performs self-attention over the noisy future-state tokens, followed by cross-attention to the conditioning sequence and an MLP. Fol-lowing DiT-style conditioning [75], the flow-matching timestep is encoded as a global conditioning vector and used to modulate the self-attention, cross-attention, and MLP layers through adaptive LayerNorm. The model predicts the clean future state ˆot+H−1, represented by future visual tokens 
+
+ˆzt+H−1 and point trajectories ˆPt+H−1. We use 16 transformer layers, 12 attention heads, and a la-tent dimension of 384. All camera images used during human pretraining and robot deployment are center-cropped and resized to 224 × 224 . We set the history horizon H′ to 15 for both human-video pretraining and robot policy training. 
+
+Value Model. The value model uses a transformer-based conditioning architecture to predict a scalar value for the current state. It takes the state representation ot as input and conditions on auxiliary information mVt , including language tokens extracted by T5 [58] and the current wrist state st. We use a learnable value token as the decoder query to attend to the encoded state and auxiliary conditioning tokens. The output feature corresponding to this value token is passed through a prediction head to produce the scalar value estimate ˆVt. This value measures task progress and is used to rank candidate corrective actions during DGAC. We implement the value model with 8 transformer layers, 8 attention heads, and a latent dimension of 384. All camera images used during human pretraining and robot deployment are center-cropped and resized to 224 × 224 .
+
+A.2.6 Training Details Human-Video Pre-training. For human-video pre-training, we train the action policy, dynamics model, and value model jointly for 250k iterations with a batch size of 20 on 4 GPUs. We use AdamW [76] with a learning rate of 1 × 10 −4. Since the dynamics model predicts both point flows and visual tokens, we use separate loss terms for the two prediction targets and weight the visual dynamics loss by 100. 
+
+Robot Adaptation and Policy Initialization. For robot adaptation, we train the dynamics and value models for 80k iterations with a batch size of 20 on 4 GPUs. We use the same AdamW optimizer with a learning rate of 1 × 10 −4. To initialize the task policy, we train it on the task-specific teleoperation data for 30k iterations with a batch size of 32 on 2 GPUs. 
+
+Per-Task Fine-Tuning during Self-Improvement. Starting from the adapted dynamics and value models, we further fine-tune them during each self-improvement iteration for 8k iterations with a batch size of 12 on 2 GPUs. We again use AdamW with a learning rate of 1 × 10 −4. For value-model training, we weight the temporal-difference loss LTD by a factor of 10. The policy is updated in each self-improvement loop using the same number of training iterations as in the policy initial-ization stage and uses the same weight initialization. For advantage-conditioned policy extraction, we compute the advantage threshold ϵ from the advantage distribution and use its 70th percentile as the cutoff. We run two self-improvement iterations for all methods and collect 20 robot episodes in each iteration. 
+
+## A.3 Manipulation Task Design Details 
+
+We evaluate policy improvement on seven real-world manipulation tasks across two robots, covering diverse long-horizon household interactions. The tasks involve reaching, grasping, articulated-object manipulation, placement, and task-conditioned sequencing, with randomized object appearances and scene layouts. Their multi-stage structure and contact-rich dynamics induce diverse failure modes, providing a challenging testbed for evaluating whether human-video priors and DGAC-based self-improvement can turn robot failures into useful supervision. A3 A.4 Additional Experiment Results 
+
+A.4.1 Manipulation Tasks for Hello Robot Stretch 3 Manipulation Task: Socks. 
+
+• Initial state: Two socks with randomized colors and positions are placed on the tabletop. The drawer is initially open. A basket is placed on either the left or right side of the table and may be empty or contain one sock. • Subgoals: (a) Reach toward one sock and pick it up; (b) Place it into the drawer; (c) Reach toward the remaining sock and pick it up; (d) Place it into the drawer; (e) Close the drawer. • Success criterion: The task succeeds if both socks are placed inside the drawer and the drawer is fully closed. 
+
+Manipulation Task: Kitchen. 
+
+• Initial state: A rice cooker is positioned on the left side, and a pan is placed on either the left or right burner of the stove. A randomly selected vegetable is placed either in the pan or in the sink. The rice cooker is initially closed. • Subgoals: (a) Press the button to open the rice cooker lid. (b) Reach toward the veg-etable. (c) Grasp the vegetable. (d) Transport the vegetable to the rice cooker. (e) Place the vegetable into the rice cooker. (f) Close the rice cooker lid. • Success criterion: The task is successful if the vegetable is placed inside the rice cooker and the rice cooker lid is fully closed. 
+
+Manipulation Task: Microwave. 
+
+• Initial state: A microwave with its door initially closed is placed on the tabletop. A drink with a randomized shape and color is placed inside the microwave, and a blue plate is randomly placed in the center-left region of the counter. • Subgoals: (a) Open the microwave door. (b) Reach toward the drink inside the microwave. (c) Take the drink out of the microwave. (d) Place the drink onto the blue plate. • Success criterion: The task is successful if the drink is removed from the microwave and placed upright on the blue plate. 
+
+Manipulation Task: Table. 
+
+• Initial state: A tabletop cleaning setup is placed in front of the robot. A sponge is placed on either the left or right side of the table, and a visible stain is located near the center of the tabletop. • Subgoals: (a) Reach toward the sponge. (b) Grasp the sponge from the tabletop. (c) Move the sponge toward the stained region. (d) Wipe the tabletop until the stain is removed. (e) Place the sponge back on the counter. • Success criterion: The task is successful if the visible stain is sufficiently removed from the tabletop and the sponge is placed back on the counter after cleaning. 
+
+Manipulation Task: Basketball. 
+
+• Initial state: A mini basketball hoop is mounted at the back-left side of the workspace. A basketball is placed on a small sofa with a randomized initial position. • Subgoals: (a) Reach toward the basketball. (b) Grasp the basketball from the sofa. (c) Lift the basketball and move it toward the hoop. (d) Drop the basketball through the hoop. • Success criterion: The task is successful if the basketball passes through the hoop and lands in the box. A4 A.4.2 Manipulation Tasks for the Franka Panda Manipulation Task: Box. 
+
+• Initial state: A target object and a box are randomly placed on the workspace. • Subgoals: (a) Reach toward the target object and grasp it; (b) Transport the object to the box; (c) Place the object into the box. • Success criterion: The task is successful if the target object is placed inside the box. 
+
+Manipulation Task: Sweep. 
+
+• Initial state: A brush and a dustpan are placed on the workspace with randomized posi-tions, either to the left or right of the robot. Several 3D-printed objects with randomized shapes and colors are placed between them. • Subgoals: (a) Reach toward the brush and grasp it; (b) Keep swiping util all objects into the dustpan; (c) Place the brush down after all objects have been swept into the dustpan. • Success criterion: The task is successful if all objects are placed inside the dustpan and the robot places the brush down afterward. The robot should neither continue sweeping after all objects are inside the dustpan nor place the brush down before completing the sweep. 
+
+## A.5 Additional Quantitative Results 
+
+A.5.1 Impact of World-State Representation Choices. 
+
+We ablate the choice of world-state representation in Tab. A4. V7 uses point trajectories Pt only, while V8 uses visual tokens zt only. V9 follows the same visual-only setting as V8, but replaces the DINOv3 backbone with an encoder from a video generation model [77]. Both single-modality variants degrade performance: Points Only obtains 68.0%, and Visual Only obtains 72.0%, compared to 85.3% for Ours . Compared with V8, V9 drops from 72.0% to 65.3%, suggesting that pretrained video-generation features encode temporal priors but lack action-conditioned, embodiment-aware dynamics. In contrast, our action-conditioned pretraining over DINOv3 visual features and explicit point trajectories yields a more reliable representation for corrective dynamics and value prediction, which is critical for robot self-improvement. 
+
+Variant T1 T2 T3 T4 T5 Avg. 
+
+Points Only [V7] 60.0 66.7 60.0 80.0 73.3 68.0 Visual Only [V8] 73.3 66.7 66.7 66.7 86.7 72.0 Video Latent [V9] 66.7 60.0 66.7 66.7 66.7 65.3 
+
+Ours 86.7 80.0 80.0 93.3 86.7 85.3 
+
+> Table A4: Ablation of world-state representation choices, evaluated on success rate (%).
+
+A.5.2 t-SNE Analysis of Failure Correction 
+
+Fig. A7 visualizes successful states, failed roll-out states, and DGAC-predicted future dynamics in the learned state-embedding space. Across tasks, the corrected dynamics tend to move away from failed states and toward regions occupied by successful roll-outs. We further show nearest-neighbor successful states for representative corrected predictions. These examples correspond to interpretable repairs: in Socks, DGAC corrects insufficient downward reach and grasp misalign-ment; in Kitchen, it mitigates grasp misalignment and reach overshoot; in Microwave, it avoids collision and incorrect placement; and in Basketball, it improves grasp stability and prevents over-shooting. The nearest-neighbor images indicate that the corrected actions lead to predicted outcomes that are semantically aligned with successful execution, rather than merely remaining close to the failed roll-out. A5 Socks Kitchen 
+
+Basketball Microwave  
+
+> Collision
+> Incorrect Placement
+> Grasp Slip Reach Overshoot
+> Reach Overshoot
+> Grasp Misalignment
+> Grasp Misalignment
+> Insufficient Downward Reach
+
+Figure A7: t-SNE visualization of state dynamics embeddings across four real-world tasks. Light blue cir-cles denote successful states, inverted triangles denote states from bad-action roll-outs, and diamonds denote predicted future dynamics after DGAC correction. For representative corrected predictions, we show their nearest-neighbor successful states. The corrected dynamics move toward successful regions and correspond to interpretable repairs, including correcting grasp misalignment, insufficient reach, collision, incorrect place-ment, etc. 
+
+A.5.3 Advantage Distribution Analysis 
+
+As shown in Fig. A8, we compare the estimated advantage distributions of failed, repaired, and successful rollouts to diagnose two potential failure modes of DGAC: optimistic max-over-N bias from value-based candidate selection and insufficient value resolution between successful and failed behavior. Across tasks, failed rollouts concentrate in low-advantage regions, while repaired rollouts shift toward the successful distributions, indicating that DGAC converts failed-state actions into higher-utility corrective supervision. At the same time, repaired rollouts do not systematically sit above successful rollouts; they largely overlap with or remain slightly below the successful distri-butions, suggesting that max-over-N selection bias is limited in practice. The separation between failed and successful rollouts further indicates that Vψ provides a sufficiently discriminative ranking signal for selecting corrective actions. 
+
+A.5.4 Additional Modalities Input 
+
+In Tab. A5, we further examine whether our asymmetric information design is necessary by adding extra modalities to either the action policy or the dynamics model. V10 augments the policy input with point trajectories, while V11 adds wrist-camera observations to the dynamics model during A6 Table  Basketball   
+
+> Kitchen Microwave Figure A8: Advantage distributions of failed, repaired, and successful rollout states across tasks. DGAC shifts failed rollouts toward the successful distributions without systematically placing repaired samples above suc-cessful ones, suggesting useful corrective supervision with limited max-over-Nselection bias.
+
+robot deployment. Adding point-flow features to the policy yields a comparable average success rate to the full model (84.0% vs. 85.3%), suggesting that semantic visual features are sufficient for action proposals. We therefore keep the execution-time policy lightweight by conditioning it only on semantic features while using geometry as privileged information for dynamics-based action correc-tion. In contrast, adding wrist-camera observations to the dynamics model does not improve perfor-mance (78.7%). This suggests that wrist views provide limited complementary information beyond point trajectories, which already capture fine-grained geometric motion and contact changes, while introducing embodiment-specific and viewpoint-dependent variations that differ from the human-video pretraining stage and can make dynamics learning less stable. Overall, these results support our asymmetric design: a lightweight policy uses semantic features to propose actions during online rollout, while geometric information is reserved for offline action correction. 
+
+Variant T1 T2 T3 T4 T5 Avg. 
+
+Policy model + Points [V10] 80.0 73.3 80.0 100.0 86.7 84.0 Dynamics model + Wrist Cam. [V11] 66.7 66.7 73.3 93.3 93.3 78.7 
+
+Ours (Full model) 86.7 80.0 80.0 93.3 86.7 85.3 
+
+> Table A5: Ablation on additional modality inputs.
+
+A7

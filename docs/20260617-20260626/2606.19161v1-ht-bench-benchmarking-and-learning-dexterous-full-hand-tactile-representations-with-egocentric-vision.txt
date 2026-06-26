@@ -1,0 +1,227 @@
+Title: HT-Bench: Benchmarking and Learning Dexterous Full-Hand Tactile Representations with Egocentric Vision
+
+URL Source: https://arxiv.org/pdf/2606.19161v1
+
+Published Time: Thu, 18 Jun 2026 01:20:48 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# HT-Bench: Benchmarking and Learning Dexterous Full-Hand Tactile Representations with Egocentric Vision 
+
+## Yuzhe Huang 1,2 ⋆, Jiaping Wu 2,3 ⋆, Jiaming Jiang 4, Hezhe Lin 2,5 , Aikebaier Aierken 2,6 ,Yunlong Wang 2, Kun Cheng 3, Ziyuan Jiao 1†, Yuanxin Zhong 2†, ‡
+
+> 1
+
+Beihang University 2Rimbot 3BUPT 4ShanghaiTech University 5Tsinghua University 6CAS 
+
+> ⋆
+
+Equal contributors †Corresponding authors ‡Project Lead 
+
+Abstract 
+
+Establishing a universal benchmark for tactile represen-tation learning in robotic manipulation remains chal-lenging due to the diversity of tactile sensor designs, data formats, and robot embodiments. Rather than seek-ing to establish such, we explore a scalable and promis-ing direction for future development: egocentric vision paired with full-hand tactile data. To this end, we in-troduce HT-Bench , a large-scale multi-task benchmark for dexterous full-hand tactile sensing, comprising 10M RGB frames and 7.8M tactile frames collected across 226 tasks. HT-Bench evaluates tactile representations from three key perspectives: whether they encode mean-ingful contact geometry, whether they can align tac-tile observations with visual information, and whether they generalize to unseen tasks. To assess these ca-pabilities, HT-Bench includes four tasks: fine-grained tactile similarity retrieval, masked tactile inpainting, vision-to-tactile synthesis, and multimodal tactile frame prediction. We further propose HandTouch , a vector-quantized vision–tactile encoder that learns tactile rep-resentations through progressive spatial, cross-modal, and temporal training. Across HT-Bench, HandTouch consistently outperforms representative tactile encoder baselines, improving Recall@5 on fine-grained tac-tile similarity retrieval from 74.65% to 85.23%, reduc-ing RMSE on masked tactile inpainting from 0.022 to 0.010, and increasing OOD cIoU on vision-to-tactile synthesis from 0.628 to 0.705. These results demon-strate the effectiveness of HandTouch and suggest that large-scale egocentric full-hand tactile data provides a scalable basis for evaluating and advancing tactile rep-resentation learning in dexterous manipulation. 
+
+## 1 Introduction 
+
+Tactile sensing has attracted increasing attention as a key modality for building robust multimodal foundation mod-els for robotic manipulation, as it captures direct physi-cal interactions—including contact forces, pressure distri-butions, and slip detection—that vision alone cannot re-liably estimate Yang et al. (2024a); Luo et al. (2026); 
+
+This work was conducted during an internship at Rimbot. We grate-fully acknowledge Rimbot for its support and resources. We will release the data, protocols, pretrained weights, and code to facili-tate future research. 
+
+Huang et al. (2026). With the paradigm shift from vision-centric perception to multimodal robotic policies, tactile sensing has become increasingly important for systems re-quiring contact-rich reasoning Chen et al. (2026b); Li et al. (2026) and precise dexterous manipulation Lin et al. (2025); Pei et al. (2026). Yet, unlike visual perception, which benefits from relatively standardized data formats, scal-able architectures, and mature evaluation benchmarks Doso-vitskiy et al. (2021); Radford et al. (2021); Zhai et al. (2023); Russakovsky et al. (2015); Lin et al. (2015), tac-tile representation learning remains constrained by hetero-geneous datasets, sensor-specific processing pipelines, and task-dependent evaluation protocols Chen et al. (2026a); Cao et al. (2026). This challenge is fundamentally rooted in the intrinsic heterogeneity of tactile sensing across both sensor designs and robotic embodiments. Tactile sensors differ substan-tially in hardware principles, spatial layouts, signal modal-ities, and mounting configurations, while robot embodi-ments further introduce diverse end-effector morphologies and contact patterns Schneider et al. (2025); Cao et al. (2026); Chen et al. (2026a). As a result, establishing a uni-versal benchmark that fully resolves all sensor and embod-iment discrepancies is currently impractical. Rather than seeking such a universal benchmark, we explore a scalable and promising direction for future development: egocentric vision paired with full-hand tactile data. This setting is par-ticularly attractive because egocentric observations naturally capture interaction-centric visual context, while full-hand tactile sensing records distributed contact information dur-ing dexterous manipulation. However, existing evaluations are often tied to narrow tasks or specific sensors, making it difficult to answer a prerequisite question: what kind of en-coder can serve as an effective representation backbone for dexterous full-hand tactile perception? To address this gap, we introduce HT-Bench (as shown in fig. 1left), a large-scale multi-task benchmark for evalu-ating tactile representation learning in dexterous full-hand sensing. HT-Bench aggregates synchronized egocentric vi-sual observations and full-hand tactile sequences, and evalu-ates encoders under four tasks: fine-grained tactile similarity retrieval, masked tactile inpainting, vision-to-tactile synthe-sis, and multimodal tactile frame prediction. Instead of rely-ing on a single downstream objective, HT-Bench examines  
+
+> arXiv:2606.19161v1 [cs.RO] 17 Jun 2026 Useen Scences
+> 10M+ RGB Frames 7.8M+ Tactile Frames 1. Large-Scale Dexterous Manipulation 2. Shared Discrete Tactile Representation
+> Hand Touch
+> Decoder Multi-Stage Training
+> Spatial Topology Stage1
+> Cross-Modal Fusion Stage2
+> Temporal Dynamic Stage3
+> ...
+> t
+> Fine-grained Contact Cross-modal Reasoning
+> Diverse Scenarios 3. Multi Task Evaluation Retrieval Hit@1 Inpainting (Test,F-cIoU) RGB->Tactile (Test,F-CIoU)
+> Retrieval
+> Prediction
+> Reconstruction
+
+# HT-Bench 
+
+> Retrieval Rec@5 Inpainting (Test,H-cIoU) Inpainting (OOD,F-cIoU) Inpainting (OOD,H-cIoU) RGB->Tactile (OOD,F-CIoU)
+
+Figure 1: Overview of HT-Bench. 1. HT-Bench pairs egocentric vision with full-hand tactile data to provide a scalable bench-mark for dexterous tactile representation learning. It contains 10M RGB frames and 7.8M tactile frames collected from diverse manipulation tasks. 2. HandTouch learns a shared discrete tactile representation through progressive spatial, cross-modal, and temporal training, and 3. is evaluated on fine-grained tactile similarity retrieval, masked tactile inpainting, vision-to-tactile syn-thesis, and multimodal tactile frame prediction under task-level out-of-distribution splits. tactile representations from three perspectives: whether they encode meaningful contact geometry, whether they align tactile observations with visual information, and whether they generalize to unseen interaction tasks. Building on HT-Bench, we propose HandTouch , avector-quantized vision–tactile encoder for general dex-terous tactile representation learning. As illustrated in fig. 1middle, HandTouch learns tactile representations through a progressive training pipeline. It first models tac-tile spatial topology through vector-quantized reconstruc-tion, projecting continuous tactile observations into a shared discrete token space. It then learns vision–tactile alignment through cross-modal masked tactile inpainting, and finally models temporal contact evolution through multimodal tac-tile frame prediction. This progressive design encourages the encoder to learn representations that are structurally discrim-inative, visually grounded, and temporally aware, directly matching the core capabilities evaluated by HT-Bench. Experiments on HT-Bench show that HandTouch achieves stronger performance than representative tactile encoder baselines. On fine-grained tactile similarity re-trieval, HandTouch improves Recall@5 from 74.65% to 85.23% compared with the strongest baseline. On masked tactile inpainting, it reduces full-image RMSE from 0.022 to 0.010 and improves full-image cIoU from 0.762 to 0.911 on the standard test split. For vision-to-tactile synthesis, HandTouch improves OOD cIoU from 0.628 to 0.705, indicating stronger cross-modal tactile generation and better generalization to unseen tasks. 
+
+## 2 Related Work 
+
+Tactile and visuo-tactile representation learning. Tactile representation learning has been widely studied for ob-ject recognition Yang et al. (2024b); Huang, Li, and Jiao (2026), contact understanding Xie et al. (2025), manipu-lation feedback Li et al. (2025), and visuo-tactile predic-tion Chen et al. (2026a). Recent methods have shown that tactile signals can provide complementary physical informa-tion for contact-rich dexterous manipulation. However, most existing approaches learn tactile representations within task-specific pipelines, where feature learning is tightly coupled with a particular sensor configuration, interaction domain, or downstream objective Liu et al. (2024); Zorin et al. (2026). As a result, it remains difficult to determine whether the learned features reflect transferable tactile representations or task-specific adaptations. This motivates HT-Bench, which evaluates tactile encoders beyond a single downstream ob-jective by assessing their ability to capture contact geom-etry, align with visual observations, model temporal con-tact dynamics, and generalize to unseen tasks. Building on this evaluation framework, HandTouch is designed to learn general dexterous tactile representations through progres-sive spatial, cross-modal, and temporal training objectives. 
+
+Tactile datasets and benchmarks. Recent tactile datasets and benchmarks have substantially advanced tactile learn-ing, but they also reveal the intrinsic heterogeneity of tac-tile sensing. Existing efforts cover a wide range of sen-sor designs, robot embodiments, and task settings. For ex-ample, datasets and benchmarks such as Sparsh Higuera et al. (2024), AnyTouch Feng et al. (2025, 2026), Open-Touch Song et al. (2025), and TouchAnything Zhou et al. (2026) provide valuable resources for tactile perception, visuo-tactile learning, or touch-centric manipulation across different sensing platforms and interaction scenarios. Other resources, such as VT-DexManip Liu et al. (2025), multi-modal tactile datasets Chi et al. (2024), and UniVTac Chen et al. (2026a), further explore dexterous manipulation, syn-chronized sensory streams, or unified visuo-tactile modeling under specific data and embodiment settings. While these ef-forts have greatly expanded the scale and diversity of tactile data, their differences in sensor principles, spatial layouts, signal formats, and robot embodiments make it difficult to define a single universal benchmark that fairly evaluates tac-tile representations across all settings. Figure 2: Statistics and coverage of HT-Bench. (a) HT-Bench contains large-scale paired egocentric vision and full-hand tactile data, including 10M RGB frames and 7.8M tactile frames collected during dexterous manipulation. (b) The dataset is divided into training, test, and task-level out-of-distribution (OOD) splits to evaluate both in-distribution performance and generalization to unseen interaction tasks. (c) HT-Bench covers diverse environments and scene categories, including home, electronics workbench, chemistry lab, retail, workbench, outdoor, and other scenarios, providing broad coverage for evaluating tactile representation learning. Table 1: Comparison with existing tactile benchmarks. HT-Bench jointly supports dexterous full-hand sensing, multi-task eval-uation, multi-scene data, and task-level OOD splits. 
+
+Benchmark Full-Hand Tasks Scenes OOD Split 
+
+Sparsh Higuera et al. (2024) × Multi-task Single-scene ×
+
+AnyTouch 2 Feng et al. (2026) × Multi-task Multi-scene ×
+
+OpenTouch Song et al. (2025) ✓ Multi-task Multi-scene ×
+
+TouchAnything Zhou et al. (2026) ✓ Single-task Multi-scene ✓
+
+HT-Bench (Ours) ✓ Multi-task Multi-scene ✓
+
+Motivated by this observation, HT-Bench does not aim to resolve the full heterogeneity of tactile sensing. Instead, we take a scalability-driven perspective and focus on a promis-ing data regime for future embodied AI Zheng et al. (2026); Wang et al. (2026): egocentric vision paired with full-hand tactile sensing. Egocentric visual observations provide a scalable hand-centric interaction context, while full-hand tactile sensing captures distributed contact patterns during dexterous manipulation. This pairing offers a practical ba-sis for evaluating whether tactile representations can encode contact geometry, align with visual observations, and gen-eralize to unseen interaction tasks. HT-Bench complements existing datasets by establishing a standardized multi-task evaluation protocol within this scalable setting, with four evaluation tracks. The table 1 shows the comparison with existing tactile benchmarks. 
+
+Masked and discrete representation learning. Masked modeling and vector-quantized representation learning have become effective paradigms for learning compact visual and multimodal representations Razavi, Van den Oord, and Vinyals (2019); Bao et al. (2021); Van Den Oord, Vinyals, and others (2017). However, directly applying these ideas to dexterous hand tactile signals is nontrivial, as tactile ob-servations are sparse, locally structured, and physically cou-pled with interaction dynamics Wu et al. (2026); Xie et al. (2026). HandTouch adapts these principles to full-hand tac-tile representation learning through three progressive stages: vector-quantized tactile reconstruction for spatial topology learning, cross-modal masked tactile inpainting for vision– touch alignment, and multimodal tactile frame prediction for temporal reasoning. These training objectives are designed to encourage tactile representations that are structurally dis-criminative and visually grounded, matching the core capa-bilities evaluated by HT-Bench. 
+
+## 3 HT-Bench: A Multi-Task Tactile Evaluation Benchmark 
+
+Extending upon existing open-source tactile and visuo-tactile datasets Song et al. (2025); Zhou et al. (2026), to-gether with our newly collected real-world full-hand tactile sequences, we construct HT-Bench , a benchmark for evalu-ating tactile representation learning in dexterous full-hand sensing. In total, HT-Bench contains approximately 10M RGB video frames and 7.8M tactile frames; see fig. 2(a). To assess out-of-distribution (OOD) generalization, we adopt a task-level partition strategy. Specifically, one inter-action task is held out as the OOD evaluation split, while the remaining tasks are divided into training and in-distribution test sets with a 9:1 ratio, as shown in fig. 2(b). The data vol-ume and episode distribution across fine-grained scene cat-egories are summarized in fig. 2(c). Based on this dataset, we define four evaluation tasks that examine complemen-tary aspects of tactile representation learning, including con-tact structure understanding, vision–touch alignment, spatial reasoning, and temporal contact modeling. 
+
+Fine-Grained Tactile Similarity Retrieval. To evaluate whether tactile embeddings preserve fine-grained contact characteristics, we design a 1-vs-20 similarity retrieval task. For each query tactile map, candidate tactile maps are ranked according to the Structural Similarity Index Measure (SSIM), yielding reference rankings based on tactile struc-ture similarity. The encoder is then evaluated by comparing the cosine-similarity ranking induced by the learned embed-dings with these reference rankings. 
+
+Masked Tactile Inpainting. To evaluate spatial reason-ing under incomplete tactile observations, we introduce a masked tactile inpainting task. Regions of the tactile map are masked out, and the model is required to reconstruct the missing tactile responses using the remaining tactile obser-vations together with visual cues. This setting mimics par-tial tactile information loss caused by sensor failures or de-graded sensing regions, and evaluates whether the learned representation captures spatially coherent contact patterns. 
+
+Vision-to-Tactile Synthesis (RGB-to-Tactile). To evaluate cross-modal alignment between vision and touch, we con-sider a vision-to-tactile synthesis task. Given a single RGB observation, the model predicts the corresponding tactile pressure distribution. This task is motivated by the human ability to form tactile expectations from visual perception, a phenomenon related to cross-modal sensory integration and synesthetic associations reported in cognitive science Cy-towic (2002). Humans can often anticipate how an object may feel based solely on its appearance, suggesting that vi-sual cues contain rich information about potential tactile in-teractions. This task examines whether the learned represen-tation captures the relationship between visual observations and tactile responses arising from object geometry and phys-ical interaction. 
+
+Multimodal Tactile Frame Prediction. Accurately model-ing contact dynamics is essential for dexterous manipula-tion, as tactile observations evolve continuously with object motion and hand interactions. To evaluate temporal contact modeling, we introduce a multimodal tactile frame predic-tion task. Given recent visual observations vT −2 and past tactile trajectories tT −2, the model predicts the tactile dis-tribution tT at time step T . This task measures whether the learned representation can integrate visual context and tac-tile history to anticipate future contact states and capture the temporal evolution of tactile interactions. 
+
+## 4 HandTouch: Vector-Quantized Vision–Tactile Representation Learning 
+
+Given the evaluation requirements defined by HT-Bench, we propose HandTouch , a vector-quantized vision–tactile en-coder for learning transferable full-hand tactile representa-tions. The overall pipeline is illustrated in fig. 3. HandTouch is trained progressively through three stages, each corre-sponding to a core capability evaluated by HT-Bench. First, it learns unimodal tactile reconstruction to capture spatial contact topology (section 4.1). Second, it incorporates visual cues through cross-modal masked tactile inpainting to learn vision-tactile alignment (section 4.2). Finally, it models con-tact dynamics through multimodal tactile frame prediction (section 4.3). 
+
+4.1 Vector-Quantized Tactile Reconstruction 
+
+As illustrated in fig. 3 (upper-left), Stage 1 learns a unimodal tactile reconstruction objective to capture the spatial topol-ogy of full-hand tactile maps. Given a normalized tactile map t ∈ [0 , 1] 1×224 ×224 , a convolutional projection layer to-kenizes it into non-overlapping patches. After adding learn-able positional embeddings, the patch tokens are processed by an 8-layer Vision Transformer (ViT) encoder, producing continuous latent features Ze ∈ RN ×D .To construct a compact and robust discrete feature space, we employ a factorized vector quantizer. Let C = {ei}Ki=1 ⊂
+
+Rd denote the shared codebook of size K = 2048 with a lower bottleneck dimension d ≪ D. For the j-th patch em-bedding z(j) 
+
+> e
+
+∈ RD , we first project it into the codebook space using an input projection Win ∈ Rd×D :
+
+z(j) 
+
+> q
+
+= ek, where k = arg min  
+
+> i
+
+∥Win z(j) 
+
+> e
+
+− ei∥22 (1) The quantized token is mapped back to the encoder embed-ding space by an output projection Wout ∈ RD×d before being passed to the decoder. A common issue in vector quantization is codebook col-lapse, where only a small subset of codebook entries is fre-quently selected while many entries remain inactive. To mit-igate this issue, we track the usage frequency of each code-book entry with an exponential moving average during train-ing. Codebook entries whose cumulative usage falls below a restart threshold τ are reinitialized using randomly sampled active projected features from Win Ze in the current batch, with small isotropic Gaussian noise added for exploration. The decoder reconstructs the input tactile map ˆt from the quantized tokens using attention blocks and convolutional upsampling. The Stage 1 objective is defined as: 
+
+Lstage1 = ∥t − ˆt∥22 + ∥Zq − sg[ Win Ze]∥22
+
++ β∥ sg[ Zq ] − Win Ze∥22
+
+(2) where sg[ ·] denotes the stop-gradient operator and β is the commitment loss weight. All modules in this stage are opti-mized jointly, as indicated by the flame icons in fig. 3. 
+
+4.2 Cross-Modal Masked Tactile Inpainting 
+
+Stage 2 extends HandTouch from unimodal tactile recon-struction to cross-modal vision–tactile alignment through 
+
+Cross-Modal Masked Tactile Inpainting . As illustrated in fig. 3 (bottom-left), the objective is to reconstruct corrupted tactile maps by using both the remaining tactile observations and synchronized visual cues. Given a tactile map t, we generate a masked tactile input 
+
+˜t using a curriculum-based dual masking strategy. The first masking mode is Regional Random Masking , where tactile regions corresponding to anatomical hand parts, such as the thumb, index finger, middle finger, or palm, are masked to simulate partial tactile information loss. The second mode is Complete Masking , where the tactile map is entirely masked, and the model must infer the tactile response pri-marily from visual context. To gradually increase task dif-ficulty, the probability of applying Complete Masking in-creases over training. Let γ ∈ [0 , 1] denote the normalized SA Layer 
+
+# ... 
+
+# ... CA Layer MLP Stage 1 Stage 2 
+
+> Shared Codebook
+> Pretrained ViT
+
+Random Masked Codebook Restart Regularly  
+
+> SA Layers Upsampl e Layers
+
+Stage 3 Reconstructed Tactile 
+
+> Masked Inpainting
+> Past Tactile Streams RGB Streams
+> Predicted Tactile
+
+Figure 3: Training pipeline of HandTouch. Stage 1: Learning spatial topologies of tactile graphics via unimodal self-attention reconstruction and vector quantization with a shared codebook. Stage 2: Reconstructing highly corrupted tactile images under a dynamic regional/complete masking scheme, guided by visual priors injected through cross-attention. Stage 3: Forecasting the current tactile distribution tT based on sequential visual context vT −2: T and past tactile histories tT −2: T −1. Modules with flame icons are actively trained in each phase. training progress. We define: 
+
+Pfull (γ) = pmin + (pmax − pmin )1 + exp[ −12( γ − 0.5)] , (3) where pmin and pmax denote the minimum and maximum probabilities of Complete Masking, respectively. The re-maining probability, 1 − Pfull (γ), is assigned to Regional Random Masking. This curriculum gradually shifts the training objective from local tactile inpainting to more chal-lenging vision-conditioned tactile synthesis. The synchronized visual frame v is encoded by a frozen pre-trained ViT to extract visual context features Fv . To in-ject visual information into the tactile reconstruction pro-cess, we apply a cross-attention layer followed by a multi-layer perceptron. The tactile tokens from the masked tactile input serve as queries, while visual features serve as keys and values. This design allows the tactile decoder to use visual context when reconstructing missing tactile regions. Since Stage 2 processes tactile observations from both left and right hands, we additionally introduce a learnable hand-specific token thand ∈ { tleft , tright } to reduce geometric ambiguity caused by lateral mirroring. The Stage 2 loss combines reconstruction terms with the vector-quantization losses inherited from Stage 1. Let 
+
+M ∈ {0, 1}1×224 ×224 denote a binary occlusion mask, where Mc,h,w = 1 indicates a masked pixel. 
+
+Lstage2 = λvis ∥(1 − M) ⊙ (t − ˆtcm )∥22
+
++ λmask ∥M ⊙ (t − ˆtcm )∥22
+
++ ∥Zq − sg[ Win Ze]∥22
+
++ β∥ sg[ Zq ] − Win Ze∥22
+
+(4) where ⊙ denotes the Hadamard product, ˆtcm is the cross-modally reconstructed tactile output, and λvis and λmask 
+
+balance the visible-region and masked-region reconstruction losses. We set λmask > λ vis to emphasize reconstruction quality in the missing tactile regions. The codebook restart mechanism from section 4.1 remains active in this stage to prevent codebook underutilization. All non-frozen modules are optimized jointly. 
+
+4.3 Multimodal Tactile Frame Prediction 
+
+In the final stage, HandTouch learns temporal contact mod-eling through Multimodal Tactile Frame Prediction . As il-lustrated in fig. 3 (right), this stage predicts the tactile frame at time step T by integrating recent visual observations and past tactile history. Formally, the model takes recent visual observations 
+
+vT −2 and past tactile trajectories tT −2 as input. These mul-timodal sequences are temporally aggregated and projected into the shared discrete latent space learned in the previous stages. The decoder then predicts the tactile distribution ˆtT
+
+at time step T . This objective requires the model to com-bine visual context with tactile history, thereby encouraging temporally aware tactile representations. The Stage 3 objective is defined as: 
+
+Lstage3 = |tT − ˆtT |22. (5) During this stage, the prediction modules, shared codebook, and decoder are fine-tuned to improve multimodal tactile prediction, as indicated by the flame icons in fig. 3. 
+
+## 5 Experiment 
+
+We evaluate the proposed HandTouch framework on HT-Bench. To assess its representation capability, we compare it with representative tactile encoder baselines that are com-monly used in tactile perception and manipulation tasks, in-cluding a CNN-based encoder Lee, Grimaldi, and Yu (2026), ResNet-18 Calandra et al. (2018), a VQ-VAE-based en-coder Xu et al. (2025), and a ViT-based encoder Zhao et al. (2024). For a fair comparison, all baselines are pretrained on the same training split and evaluated under the same HT-Bench protocols. Table 2: Quantitative comparison on HT-Bench. We compare HandTouch with representative tactile encoder baselines on fine-grained tactile similarity retrieval, masked tactile inpainting, and vision-to-tactile synthesis (RGB →Tac). Retrieval perfor-mance is evaluated using Hit@1 and Recall@5, while inpainting and synthesis are evaluated on the standard test and task-level OOD splits using RMSE and contact IoU (cIoU). ‘F-’ and ‘H-’ denote metrics computed over the full tactile map and masked hole regions, respectively. ↑ and ↓ indicate that higher and lower is better, and the best results are highlighted in bold .                                                                                        
+
+> Model Retrieval Inpainting (Test) Inpainting (OOD) RGB →Tac (Test) RGB →Tac (OOD)
+> Hit@1 ↑Rec@5 ↑F-RMSE ↓F-cIoU ↑H-RMSE ↓H-cIoU ↑F-RMSE ↓F-cIoU ↑H-RMSE ↓H-cIoU ↑F-RMSE ↓F-cIoU ↑F-RMSE ↓F-cIoU ↑
+> ResNet-18 92.13 72.85 0.025 0.742 0.025 0.742 0.041 0.727 0.056 0.620 0.038 0.624 0.084 0.445 CNN-based 89.61 70.09 0.030 0.684 0.030 0.684 0.047 0.715 0.068 0.538 0.036 0.642 0.083 0.447 VQ-VAE 63.60 51.98 0.042 0.570 0.042 0.570 0.053 0.630 0.068 0.499 0.060 0.456 0.081 0.408 ViT-based 94.27 74.65 0.022 0.762 0.033 0.662 0.056 0.615 0.065 0.522 0.038 0.628 0.083 0.446
+> Ours 99.27 85.23 0.010 0.911 0.024 0.758 0.039 0.768 0.066 0.565 0.031 0.705 0.082 0.459
+
+5.1 Comparison with Baseline Encoders 
+
+We first compare HandTouch with representative tactile rep-resentation baselines on fine-grained tactile similarity re-trieval, masked tactile inpainting, and vision-to-tactile syn-thesis. The results are summarized in table 2. Overall, Hand-Touch achieves the best performance on most evaluation metrics, demonstrating stronger tactile structural modeling, cross-modal alignment, and generalization under both in-distribution and OOD settings. 
+
+Fine-Grained Tactile Similarity Retrieval. For fine-grained tactile similarity retrieval, HandTouch outperforms all baseline encoders. Hit@1 measures whether the SSIM-nearest tactile candidate is ranked first by the learned em-bedding similarity, while Recall@5 measures the fraction of SSIM top-5 candidates recovered in the top-5 retrieved candidates. Compared with the strongest baseline, the ViT-based encoder, HandTouch improves Hit@1 from 94.27% to 99.27% and Recall@5 from 74.65% to 85.23%. This in-dicates that the embedding space learned by HandTouch bet-ter preserves fine-grained structural similarity among tactile observations. In contrast, CNN- and ResNet-based models can capture local spatial patterns but are less effective in or-ganizing tactile samples according to global structural cor-respondence. VQ-VAE performs notably worse on retrieval, suggesting that reconstruction-oriented discrete latent rep-resentations alone may lose subtle structural cues that are important for fine-grained tactile matching. 
+
+Spatially Masked Tactile Inpainting. For masked tac-tile inpainting, HandTouch achieves the lowest reconstruc-tion error and the highest contact overlap on the standard test split. Specifically, it obtains a full-map RMSE of 0.010 and a full-map cIoU of 0.911, substantially outperforming all baselines. We define contact IoU (cIoU) as: 
+
+cIoU = 
+
+P 
+
+> i,j
+
+min( Pi,j , ˆPi,j )
+
+P 
+
+> i,j
+
+max( Pi,j , ˆPi,j )
+
+where Pi,j and ˆPi,j denote the ground-truth and predicted pressure values at pixel (i, j ), respectively. HandTouch also performs well in masked hole regions, achieving 0.024 RMSE and 0.758 cIoU, which demonstrates its ability to in-fer missing tactile responses from visible tactile context and learned spatial priors. Under the OOD setting, HandTouch maintains the best full-map reconstruction performance, with 0.039 RMSE and 0.768 cIoU. However, ResNet-18 per-forms better on OOD hole-region metrics. This suggests that although HandTouch generalizes well at the global tactile-map level, precise reconstruction of severely corrupted local regions in unseen tasks remains challenging. 
+
+Vision-to-Tactile Synthesis. For vision-to-tactile synthe-sis, HandTouch demonstrates strong cross-modal predictive capability. On the standard test split, HandTouch reduces the full-map RMSE to 0.031 and improves cIoU to 0.705, out-performing CNN-, ResNet-, VQ-VAE-, and ViT-based base-lines. These results indicate that HandTouch learns effec-tive vision–tactile correspondence, allowing it to infer tac-tile pressure distributions from visual observations. Under the OOD setting, HandTouch achieves the highest cIoU of 0.459, indicating better cross-modal generalization to un-seen tasks. VQ-VAE slightly outperforms HandTouch in OOD RMSE (0.081 vs. 0.082), but its cIoU is substantially lower (0.408 vs. 0.459). This suggests that VQ-VAE may produce smoother predictions that reduce global pixel-wise error, while failing to capture sharper and more localized contact patterns that are important for physically meaning-ful tactile synthesis. 
+
+Multimodal Tactile Frame Prediction. Unlike the static evaluation tracks, multimodal tactile frame prediction re-quires temporal modeling from recent visual observations 
+
+vT − 2 and past tactile trajectories tT − 2. Since the base-lines are designed as single-frame tactile encoders, we report this temporal prediction track separately to evaluate the pre-dictive capability of HandTouch. As shown in fig. 4, Hand-Touch predicts tactile distributions tT that closely match the ground truth. It achieves accurate prediction on the test split (RMSE: 0.031, cIoU: 0.677) and maintains reasonable performance under OOD tasks, demonstrating its ability to model temporal contact dynamics during continuous inter-action. 
+
+## 6 Limitations and Future Work 
+
+Although HT-Bench and HandTouch show promising results for dexterous tactile representation learning, several limita-tions remain. First, HT-Bench is not a universal benchmark for all tac-tile sensing systems. It focuses on a practical setting that combines egocentric vision with full-hand tactile sensing, but does not cover other sensing paradigms such as fingertip optical tactile sensors, force/torque sensing, skin-like taxel arrays, or non-hand embodiments. Extending the benchmark to broader hardware platforms and embodiments is an im-Figure 4: Qualitative results of multimodal tactile frame prediction. HandTouch predicts tactile distributions that closely match the ground truth under both in-distribution and OOD settings. Prediction errors are magnified by a factor of 3 for better visualization. These results illustrate the temporal contact modeling capability of HandTouch. portant future direction. Second, our experimental analysis is still limited. Due to the cost of large-scale pretraining and multi-task evalu-ation, ablation studies remain preliminary. Future work will provide more comprehensive analyses of key components, including the vector-quantized codebook, masking curricu-lum, cross-attention fusion, hand-specific token, and tempo-ral prediction module, as well as sensitivity studies on train-ing scale and OOD settings. Third, current evaluations focus on representation-level capabilities, including tactile retrieval, tactile inpainting, vision-to-tactile synthesis, and multimodal tactile predic-tion. While these tasks assess structural, cross-modal, and temporal understanding, they do not directly measure down-stream robotic performance. Future work will evaluate HandTouch on real-world dexterous manipulation tasks such as grasp adjustment, slip-aware manipulation, and contact-rich interaction. Finally, HandTouch relies on large-scale paired egocen-tric visual and full-hand tactile data. Although scalable, col-lecting synchronized visuo-tactile data still requires careful calibration and maintenance. Future work will explore more efficient data collection, stronger self-supervised objectives, and cross-dataset adaptation to reduce dependence on tightly synchronized paired data. We hope HT-Bench will serve as a useful foundation for future research on general tactile rep-resentation learning. 
+
+## 7 Conclusion 
+
+In this paper, we introduce HT-Bench , a large-scale multi-task benchmark built on egocentric vision paired with full-hand tactile data. HT-Bench evaluates tactile encoders across complementary capabilities, including fine-grained tactile similarity retrieval, masked tactile inpainting, vision-to-tactile synthesis, and multimodal tactile frame predic-tion, with task-level OOD splits for assessing generaliza-tion. We further proposed HandTouch , a progressive vector-quantized vision–tactile encoder that learns tactile represen-tations through spatial, cross-modal, and temporal objec-tives. Experiments show that HandTouch consistently out-performs representative tactile encoder baselines across the reported evaluation tracks, demonstrating stronger contact-structure modeling, vision–touch alignment, and OOD gen-eralization. While precise reconstruction of highly corrupted local tactile regions in unseen task remains challenging, HT-Bench and HandTouch provide a scalable step toward gen-eral tactile representation learning, with future extensions to broader sensor configurations, richer embodiment settings, and closed-loop robotic manipulation. 
+
+## References 
+
+Bao, H.; Dong, L.; Piao, S.; and Wei, F. 2021. Beit: Bert pre-training of image transformers. arXiv preprint arXiv:2106.08254 .Calandra, R.; Owens, A.; Jayaraman, D.; Lin, J.; Yuan, W.; Malik, J.; Adelson, E. H.; and Levine, S. 2018. More than a feeling: Learning to grasp and regrasp using vision and touch. IEEE Robotics and Automation Letters 3(4):3300– 3307. Cao, Z.; Tian, D.; Guan, R.; Mu, Y.; Sun, X.; Liang, S.; Liu, D.; Huang, T.; Yue, Y.; Ding, H.; Fang, B.; Zhou, A.; Han, Q.-L.; and Xiong, H. 2026. Tactile-based multimodal fusion in embodied intelligence: A survey of vision, lan-guage, and contact-driven paradigms. Chen, B.; Wan, W.; Chen, T.; Guo, X.; Xu, C.; Qi, Y.; Zhang, H.; Wu, L.; Xu, T.; Li, Z.; Wu, Y.; Li, R.; Yang, X.; Luo, P.; Sui, W.; and Mu, Y. 2026a. Univtac: A unified simu-lation platform for visuo-tactile manipulation data gener-ation, learning, and benchmarking. Chen, H.; Xu, J.; Chen, H.; Hong, K.; Huang, B.; Liu, C.; Mao, J.; Li, Y.; Du, Y.; and Driggs-Campbell, K. 2026b. Multi-modal manipulation via multi-modal policy con-sensus. Chi, H.-G.; Barreiros, J.; Mercat, J.; Ramani, K.; and Kollar, T. 2024. Multi-modal representation learning with tactile data. In 2024 IEEE/RSJ International Conference on In-telligent Robots and Systems (IROS) , 9660–9667. IEEE. Cytowic, R. E. 2002. Synesthesia: A union of the senses .MIT press. Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; Gelly, S.; Uszkoreit, J.; and Houlsby, N. 2021. An image is worth 16x16 words: Transformers for image recognition at scale. Feng, R.; Hu, J.; Xia, W.; Gao, T.; Shen, A.; Sun, Y.; Fang, B.; and Hu, D. 2025. Anytouch: Learning unified static-dynamic representation across multiple visuo-tactile sen-sors. arXiv preprint arXiv:2502.12191 .Feng, R.; Zhou, Y.; Mei, S.; Zhou, D.; Wang, P.; Cui, S.; Fang, B.; Yao, G.; and Hu, D. 2026. Anytouch 2: General optical tactile representation learning for dynamic tactile perception. arXiv preprint arXiv:2602.09617 .Higuera, C.; Sharma, A.; Bodduluri, C. K.; Fan, T.; Lan-caster, P.; Kalakrishnan, M.; Kaess, M.; Boots, B.; Lam-beta, M.; Wu, T.; and Mukadam, M. 2024. Sparsh: Self-supervised touch representations for vision-based tactile sensing. Huang, Y.; Lin, P.; Li, W.; Li, D.; Li, J.; Jiang, J.; Xiao, C.; and Jiao, Z. 2026. Taf-vla: Tactile-force alignment in vision-language-action models for force-aware manipula-tion. Huang, Y.; Li, W.; and Jiao, Z. 2026. Tactile-guided explo-ration and positioning for high-precision robotic peg-in-hole tasks. IEEE/ASME Transactions on Mechatronics .Lee, W.; Grimaldi, M.; and Yu, T. 2026. Symmetry-aware fusion of vision and tactile sensing via bilateral force priors for robotic manipulation. arXiv preprint arXiv:2602.13689 .Li, Y.; Jin, Z.; Liu, J.; and Ma, D. 2025. Visuo-tactile feedback policies for terminal assembly facilitated by reinforcement learning. Frontiers in Robotics and AI 
+
+12:1660244. Li, Y.; Chen, Y.; Zhao, Z.; Li, P.; Liu, T.; Huang, S.; and Zhu, Y. 2026. Simultaneous tactile-visual perception for learning multimodal robot manipulation. Lin, T.-Y.; Maire, M.; Belongie, S.; Bourdev, L.; Girshick, R.; Hays, J.; Perona, P.; Ramanan, D.; Zitnick, C. L.; and Doll´ ar, P. 2015. Microsoft coco: Common objects in con-text. Lin, P.; Huang, Y.; Li, W.; Ma, J.; Xiao, C.; and Jiao, Z. 2025. Pp-tac: Paper picking using tactile feedback in dex-terous robotic hands. Liu, Q.; Ye, Q.; Sun, Z.; Cui, Y.; Li, G.; and Chen, J. 2024. Masked visual-tactile pre-training for robot manipulation. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , 13859–13875. IEEE. Liu, Q.; Cui, Y.; Sun, Z.; Li, G.; Chen, J.; and Ye, Q. 2025. Vtdexmanip: A dataset and benchmark for visual-tactile pretraining and dexterous manipulation with reinforce-ment learning. In The Thirteenth International Confer-ence on Learning Representations .Luo, S.; Li, Y.; Hu, Y.; Yu, C.; Xu, C.; Zhang, J.; Yao, G.; Huang, T.; He, R.; and Wang, Z. 2026. Omniumi: Towards physically grounded robot learning via human-aligned multimodal interaction. Pei, L.; Yuzhe, H.; Wanlin, L.; Chenxi, X.; and Ziyuan, J. 2026. Dexmove: Learning tactile-guided non-prehensile manipulation with dexterous hands. In The Fourteenth International Conference on Learning Representations .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I. 2021. Learning transferable visual models from natural language supervision. Razavi, A.; Van den Oord, A.; and Vinyals, O. 2019. Gen-erating diverse high-fidelity images with vq-vae-2. Ad-vances in neural information processing systems 32. Russakovsky, O.; Deng, J.; Su, H.; Krause, J.; Satheesh, S.; Ma, S.; Huang, Z.; Karpathy, A.; Khosla, A.; Bernstein, M.; Berg, A. C.; and Fei-Fei, L. 2015. Imagenet large scale visual recognition challenge. Schneider, T.; Duret, G.; de Farias, C.; Calandra, R.; Chen, L.; and Peters, J. 2025. Tactile mnist: Benchmarking ac-tive tactile perception. Song, Y. R.; Li, J.; Fu, R.; Murphy, D.; Zhou, K.; Shiv, R.; Li, Y.; Xiong, H.; Owens, C. E.; Du, Y.; Luo, Y.; Cheng, X.; Torralba, A.; Matusik, W.; and Liang, P. P. 2025. Opentouch: Bringing full-hand touch to real-world inter-action. Van Den Oord, A.; Vinyals, O.; et al. 2017. Neural discrete representation learning. Advances in neural information processing systems 30. Wang, Z.; He, B.; Yu, K.; Lee, S.; Gao, R.; Huang, F.; and Aloimonos, Y. 2026. Humanego: Zero-shot robot learning from minutes of human egocentric videos. Wu, Y.; Lin, Y.; Lao, W.; Lin, Y.; Wei, Y.-L.; Zheng, W.-S.; and Wu, A. 2026. Dexgrasp-zero: A morphology-aligned policy for zero-shot cross-embodiment dexterous grasping. arXiv preprint arXiv:2603.16806 .Xie, Y.; Li, M.; Li, S.; Li, X.; Chen, G.; Ma, F.; Yu, F. R.; and Ding, W. 2025. Universal visuo-tactile video under-standing for embodied interaction. Xie, Y.; Li, M.; Li, S.; Li, X.; Chen, G.; Ma, F.; Yu, F.; and Ding, W. 2026. Universal visuo-tactile video understand-ing for embodied interaction. Advances in Neural Infor-mation Processing Systems 38:127864–127883. Xu, Z.; Uppuluri, R.; Zhang, X.; Fitch, C.; Crandall, P. G.; Shou, W.; Wang, D.; and She, Y. 2025. Unit: Data effi-cient tactile representation with generalization to unseen objects. Yang, F.; Feng, C.; Chen, Z.; Park, H.; Wang, D.; Dou, Y.; Zeng, Z.; Chen, X.; Gangopadhyay, R.; Owens, A.; and Wong, A. 2024a. Binding touch to everything: Learning unified multimodal tactile representations. Yang, F.; Feng, C.; Chen, Z.; Park, H.; Wang, D.; Dou, Y.; Zeng, Z.; Chen, X.; Gangopadhyay, R.; Owens, A.; and Wong, A. 2024b. Binding touch to everything: Learn-ing unified multimodal tactile representations. In 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 26330–26343. Zhai, X.; Mustafa, B.; Kolesnikov, A.; and Beyer, L. 2023. Sigmoid loss for language image pre-training. Zhao, J.; Ma, Y.; Wang, L.; and Adelson, E. H. 2024. Transferable tactile transformers for representation learn-ing across diverse sensors and tasks. arXiv preprint arXiv:2406.13640 .Zheng, R.; Niu, D.; Xie, Y.; Wang, J.; Xu, M.; Jiang, Y.; Casta˜ neda, F.; Hu, F.; Tan, Y. L.; Fu, L.; Darrell, T.; Huang, F.; Zhu, Y.; Xu, D.; and Fan, L. 2026. Egoscale: Scaling dexterous manipulation with diverse egocentric human data. Zhou, J.; Gao, Z.; Hong, F.; Liu, Z.; Zhang, G.; Dai, W.; Zhen, R.; Lyu, C.; Wu, H.; Mao, Y.; Wang, X.; Jiang, Y.; Ding, W.; and Yang, S. 2026. Touchanything: A dataset and framework for bimanual tactile estimation from ego-centric video. Zorin, A.; Si, Z.; Park, M.; Park, J.; Buynitsky, A.; Bhadang, S.; Park, T.; Yoon, S. J.; Park, Y.-L.; Kroemer, O.; et al. 2026. Taco: Benchmarking tactile sensors for object ma-nipulation. arXiv preprint arXiv:2605.21976 .

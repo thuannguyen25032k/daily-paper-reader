@@ -1,0 +1,583 @@
+Title: Wh0: Generative World Models as Scalable Sources of Egocentric Human Hand Manipulation Data
+
+URL Source: https://arxiv.org/pdf/2606.22136v1
+
+Published Time: Tue, 23 Jun 2026 02:06:28 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Wh0: Generative World Models as Scalable Sources of Egocentric Human Hand Manipulation Data 
+
+Yangtao Chen ∗ 1,2, Zixuan Chen ∗ 2, Peiyang Wang ∗ 2,Yong-Lu Li † 1,3, Jing Huo † 2, Jieqi Shi 2, Yang Gao 21Shanghai Innovation Institute, 2Nanjing University, 3Shanghai Jiaotong University 
+
+Abstract: Scaling dexterous manipulation requires generalization across objects, scenes, and tasks, yet existing data sources face a trade-off between scale and scene/embodiment alignment: teleoperation data is well aligned with robot de-ployment but expensive to collect; simulation is scalable but limited by the sim-to-real gap; and real egocentric videos scale effectively but remain misaligned with robot deployment. We propose Wh0 , a framework that uses generative video world models as scalable and controllable sources of egocentric human-hand ma-nipulation data to unlock the manipulation capabilities of pretrained dexterous VLA models. Conditioned on language, objects, and scenes, Wh0 uses a genera-tive world model to produce WM-H, a 50k-episode dataset of egocentric human-object interaction videos. Wh0 then converts the generated videos into robot-trainable supervision through hand motion reconstruction and visual editing. Co-trained with a limited amount of real robot data, WM-H adapts pretrained VLA models to dexterous manipulation deployment. Across 18 real-world dexterous manipulation tasks, compared with a model post-trained only on robot data, Wh0 improves zero-shot success on unseen tasks from 8.3% to 38.9%. Ablation stud-ies further show that scalable generation and scene/embodiment alignment are key drivers of performance gains. Videos and open-source code can be found on our project website: https://chenyt31.github.io/wh0.github.io/. 
+
+## 1 Introduction 
+
+Modern VLA models [1, 2, 3, 4] achieve strong generalization by leveraging large-scale data, es-pecially egocentric human videos [5, 6, 7, 8, 9, 10, 11, 12], but still face scene and embodiment misalignment when deployed to dexterous manipulation. Specifically, everyday human environ-ments [13, 14] differ from robot workspaces, leading to a scene gap. Meanwhile, the acting hand in egocentric videos is a human hand rather than a dexterous robot hand [15, 16], resulting in an embodiment gap. Existing data sources address only part of this trade-off. Teleoperation aligns with deployment but is expensive and platform-specific [17, 18]. Simulation scales but suffers from a sim-to-real gap [19, 20]. Real egocentric video scales but remains misaligned [13, 21]. An ideal data source should be scalable and deployment-aligned, while minimizing reliance on human data collection. In this paper, we formulate generative video world models as scalable, compute-driven sources for synthesizing egocentric human-hand manipulation data. Their key advantage lies not in precisely simulating robot dynamics, but in generating diverse human-object interaction videos on demand, conditioned on language, objects, and scenes [22, 23]. Therefore, unlike prior work that uses world models as environment dynamics simulators [24, 25, 26, 27], robot trajectory video generators [28, 29, 30], human-hand generators for downstream retargeting or affordance inference [31, 32, 33, 34], or backbones for training future-predictive policies [35, 36, 37], we focus on their role as controllable 
+
+> ∗
+
+These authors contributed equally to this work. 
+
+> †
+
+Corresponding author: Yong-Lu Li (yonglu_li@sjtu.edu.cn), Jing Huo (huojing@nju.edu.cn).        
+
+> arXiv:2606.22136v1 [cs.RO] 20 Jun 2026 Functional Grasp Across Diverse Objects Robust Spatial Reasoning Realistic Robot -Hand -Object Interaction
+> cup
+> whisk pan
+> hammer grasp the hard pepper and place it onto the dry fork
+> pick the notebook and place it by the velvet cat
+> teapot basket
+> box knife
+
+WM -H Dataset: Controllable World -Model -Generated Egocentric Manipulation Data 
+
+Lab Human Video 
+
+> A Sample from
+> HOI4D
+
+In -the -Wild Human Video 
+
+> A Sample from
+> Ego4D
+
+Scene & Embodiment Gap 
+
+> More Scalability
+> Less Gap
+> Less Scalability
+> More Gap
+
+WM -H Data (Ours )
+
+Teleop Demo         
+
+> Zero -shot Generalization
+> to Unseen Tasks
+> Zero -shot Generalization
+> to Unseen Environment Generalizable Instruction Following Capability
+> wipe the table tissue into basket
+> cola into drawer teapot into container
+> measure tape
+> remote green and white bottle
+> apple bottle in Env2
+> gripper in Env3
+> teapot in Env1
+> tripod in Env4
+
+VLA Policy 
+
+Knowledge -Rich but Skill -Locked Learner  
+
+> In -the -Wild
+> Human Video
+> (Pre -train)
+> Teleop Demo
+> (Post -train)
+> WM -H Data
+> (Post -train)
+
+Wh0 Workflow 
+
+Scalable Data Generation from World Model 
+
+Scene & Embodied Alignment Figure 1: Overview of Wh0. Top: WM-H provides world-model-generated egocentric manipulation videos with diverse objects, layouts, and hand-object interactions. Middle: WM-H uniquely combines scale with low scene & embodiment gap to deployment; Wh0 converts them to robot-trainable supervision and co-trains with limited robot data atop a human-video-pretrained VLA. Bottom: The resulting policy zero-shot generalizes to unseen tasks, environments, and instructions in real-world manipulation. 
+
+human-hand data generators, where scenes, objects, task types, and embodiment appearance become design variables that scale with compute rather than human labor. As shown in Fig 1, we instantiate this idea with Wh0 , a framework that uses generative video world models to build egocentric human-hand manipulation data for unlocking dexterous capabilities in pretrained VLA models. Wh0 constructs WM-H , a 50k-sample dataset with egocentric manipu-lation videos, language instructions, and 3D hand motion annotations, via automated instruction generation, scene- and embodiment-aligned video synthesis, visual editing, and hand motion re-construction. During post-training, Wh0 co-trains WM-H with limited real teleoperated robot data: robot data supplies deployment-specific constraints, while WM-H bridges human manipulation pri-ors and robot execution through a unified hand action space and embodiment alignment. On a Unitree G1 humanoid with Inspire dexterous hands, under zero-shot evaluation, the strong VLA baseline VITRA [7] post-trained only on robot data without test-task demonstrations achieves 2an 8.3% success rate, while co-training with WM-H improves it to 38.9%, a 4.7 × gain. Ablations verify that scene and embodiment alignment, together with data scale, are the primary drivers of Wh0’s gains. A separate analysis shows that WM-H exposes pretraining-acquired manipulation capabilities inaccessible with limited robot data alone. 
+
+## 2 Related Work 
+
+Vision-Language-Action Models for Dexterous Manipulation. Vision-language-action (VLA) models [1, 2, 3, 4, 38, 39, 40] extend vision-language models to robot control by learning general-purpose policies from large-scale robots and heterogeneous data [17, 41, 42]. Recent work explores vision-language models for dexterous manipulation, including hierarchical VLA frameworks [43] and VLM-based planning systems [44]. To reduce reliance on costly dexterous demonstrations of real-robots, prior work uses egocentric human videos [13, 21], often with hand reconstruc-tion [45, 46], to learn manipulation priors, affordances, transferable hand actions, and policy rep-resentations [47, 48, 49, 50, 15, 6, 5, 7, 51, 8, 52]. However, passive human videos are difficult to control and remain misaligned with robot deployment. We instead construct egocentric human-hand data through controllable generation for deployment-aligned VLA post-training. 
+
+World Models for Robotic Manipulation. World models have been widely used in robotics as dynamics models, visual predictors, and policy-learning substrates [24, 25, 27]. Recent video-generation approaches use world models to synthesize future interaction videos and convert them into robot supervision, such as trajectories, point tracks, object poses, or 3D flows [31, 53, 33, 54, 30, 26, 35]. As general-purpose data engines, Cosmos [23] and GigaWorld [55] treat world models as platforms for robotics. More related to dexterous manipulation, Large Video Planner generates human-hand or robot-gripper video plans for action extraction and retargeting [32], while Dexterous World Models [34] and DexWM [26] model hand-conditioned interaction dynamics from egocentric hand motions or human videos. Wh0 instead treats generated human-hand videos as post-training data, co-trained with limited real robot demonstrations to improve the transfer of manipulation ca-pabilities from human-video pretraining. 
+
+## 3 WM-H Dataset Construction via Controllable Video Synthesis 
+
+We use video world models as controllable generators to produce egocentric human-hand manipula-tion data. Conditioned on language instructions, object specifications, and scene layouts, the model synthesizes diverse human-object interaction videos. The scalability of the pipeline mainly depends on GPU compute rather than human labor. As shown in Fig. 2, the pipeline consists of instruction generation, scene and embodiment aligned video synthesis, and hand motion extraction, ultimately producing WM-H : a 50k-sample egocentric video dataset with 3D hand pose annotations and lan-guage task descriptions. The generation cost is approximately 5.44 GPU-hours per 1k videos. We measure instruction diversity using noun and adjective h-indexes [7], where an h-index of h means that at least h words each appear in at least h samples. Despite being much smaller than large-scale human video datasets [7, 6, 17, 18], WM-H achieves broad manipulation-relevant coverage, with a noun h-index of 201 and an adjective h-index of 117 across pick, place, and grasp instructions. 
+
+Instruction Generation for Balanced Diversity. A key insight behind our instruction generation pipeline is that a diverse manipulation dataset should contain not only many distinct words, but also sufficient coverage of each word [7]. Simply increasing vocabulary size is insufficient if most words appear only rarely. To balance breadth and frequency, we employ a dual-agent system as shown in Fig. 2(1). The first agent uses a large language model to continually discover object nouns and attribute adjectives related to graspable items, expanding the candidate vocabulary pool. The second agent preferentially samples under-represented words and assembles natural language commands using structured templates such as pick the {adj} {noun} . A database tracks word usage frequencies and filters duplicate instructions, enabling systematic and balanced coverage of the space of (object, attribute) combinations. 3• Discover object nouns  
+
+> •Discover attribute adjectives
+
+Agent A (LLM discovery) Agent B (Balanced sampler)       
+
+> •Prioritize under -represented words
+> •Compose commands
+> Example command:
+> “pick the red mug”
+> Balanced the diversity of(object, attribute) combinations
+> Add Adj.: “r ed”
+> Add Nouns: “m ug”
+> Add to
+> database
+> Compose
+> Instructions
+
+1. Instruction Generation 
+
+B 
+
+> （a) Image Editing
+> （b) Image -to -Video
+> Take a photo in robot view
+> Scene Alignment: Aligned in viewpoint and metric scale
+> Add specified objects
+> Animate egocentric human
+> hand manipulation
+
+2. Scene and Embodied Aligned Video Synthesis from Generative World Models  
+
+> Embodied Alignment: Aligned in visual appearance
+
+… … 
+
+> DiT
+> VAE
+> Enc.
+> VAE
+> Dec.
+
+Wan -I2V -A14B 
+
+Qwen3 -VL 
+
+> Describing
+> video dynamics
+> （c) Robot -Hand Editing
+
+… … 
+
+> Replace the person’s hands
+> with realistic robotic hands
+
+4. WM -H Dataset 3. Hand Motion Extraction         
+
+> HaWoR
+> Camera
+> Motion
+> Hand
+> Motion
+> Human Hand Motion in Camera Space
+> for Explicit Action Supervision
+> MegaSAM
+> •5.44 GPU -hours per 1k
+> 81 -frame videos
+> •50k episodes with human
+> action labels
+> adj. h -
+> index
+> n. h -
+> index
+> Dataset
+> 277 428 VITRA -1M
+> (Pretrain)
+> 147 303 EgoDex
+> 77 150 OXE
+> 63 133 DROID
+> 117 201 WM -H
+
+Figure 2: The overview of WM-H data synthesis pipeline. 
+
+Video Synthesis with Scene and Embodiment Alignment. Given a generated instruction, we synthesize an egocentric manipulation video through the three-stage pipeline shown in Fig. 2. The pipeline aims to preserve the natural hand-object interaction patterns of video world models while reducing the visual gap to robot deployment: (a) Scene image capture and editing. We first capture background images in the target robot workspace for scene alignment. The images are collected by the deployment camera, with the same viewpoint and resolution as the policy input. During capture, we place a human hand in the target interaction region as a scale anchor, providing references for hand size, object scale, and camera-to-workspace distance. Based on the aligned background, we use Qwen-Image-Edit [56] to insert the specified objects into the scene, producing the initial frame for video synthesis. (b) Image-to-video generation. We use Wan-I2V-A14B [22] to animate the edited image and generate an egocentric human-hand manipulation video conditioned on the language instruction. To improve the correctness of the generated motion, we use Qwen3-VL [57] to generate a description of the expected hand-object state changes and append it to the video prompt. To enable efficient large-scale synthesis, we adopt LightX2V LoRA adapters, reducing video generation to four inference steps. (c) Robot-hand editing. For embodiment alignment, we treat a robotic dexterous hand as a hand entity with a different visual appearance. We use Qwen-Image-Edit [56] to replace the human hand with a realistic robot hand on selected frames, while preserving the original pose, position, object motion, and scene composition. This renders the same manipulation trajectory with both human and robot hand appearances, encouraging the policy to focus on action semantics rather than executor identity. We ablate this design in Section 5.3. For the evaluation of video quality and the prompts involved in the pipeline, please refer to Appendix A. 
+
+Motion Extraction for Explicit Action Supervision. Follow [7], we extract 3D hand poses from synthesized human-hand videos as action labels. Generating human rather than robot manipulation videos is important here: human hand reconstruction is comparatively mature, making it feasible to recover reliable motion supervision from generated videos at scale. For each video, we use HaWoR [46] to reconstruct the hand motion. The method first detects hands in each frame and then regresses MANO parameters [58] together with the wrist pose. We keep the wrist pose in camera 4space and the articulated hand pose in the MANO parameter space. When needed, camera tracking from MegaSAM is used to associate these per-frame predictions with the video camera trajectory. 
+
+## 4 Wh0: Policy Learning with Human-Robot Alignment "
+
+# VLA Policy 
+
+VITRA -Backbone        
+
+> or
+> Visual Observation: RGB Image from Teleop or WM -HInstruction State in Human Space
+> “Place the
+> teapot into
+> the orange
+> container .”
+> Cognition
+> Token
+> Cognition
+> Feature
+> Camera
+> FoV
+
+## Action Expert   
+
+> Iterative Denoising
+> Action
+> Diffusion
+> in Human
+> Action Space
+> 77%
+> Ego4D
+> Epic -Kitchen
+> 12%
+> EgoExo4D
+> 6%
+> SSV2
+> 5%
+> SSV2
+> 50%
+> EgoExo4D
+> 30 %
+> Epic -Kitchen
+> 10%
+> Ego4D
+> 10 %
+> WM -H 50k
+> 94.2%
+> Pretrain
+> VITRA -1M
+> Post -train
+> WM -H 50k
+> WM -H EA
+> 5% Teleop 0.8%
+> Pretrain
+> Sample Ratio
+> Post -train
+> Sample Ratio
+> Teleop
+> 28%
+> WM -H 50k
+> 68%
+> WM -H EA
+> 4%
+
+Figure 3: Policy architecture and data composition. Top: A VITRA-style policy denoises actions in the unified MANO space, conditioned on PaliGemma cognition features, FoV, and current hand state. Bottom: 
+
+Pretraining mixture (VITRA-1M, Ego4D-dominant) and post-training mixtures: Wh0 uses 28% teleop and 68% WM-H, heavily oversampling robot data per-sample given 400 teleop vs. 50k WM-H samples. 
+
+Policy Architecture We adopt a VITRA-style vision-language-action policy [7]: aPaliGemma [59] vision-language backbone encodes the current observation and language in-struction (with FoV as an auxiliary token for viewpoint cues), and the resulting feature conditions a diffusion-based action decoder that predicts future hand motions from the current hand state. The action space is defined in the camera coordinate frame of the current observation ot:
+
+at = [∆ tl, ∆rl, θ lh, ∆tr , ∆rr , θ rh] ∈ R102 , (1) where ∆t, ∆r ∈ R3 denote the relative wrist translation and rotation (Euler angles) between consec-utive frames, and θh ∈ R15 ×3 encodes the joint rotations of a 15-DoF MANO [58] hand model in its local frames. Superscripts l, r denote left and right hands; we focus on right-hand manipulation in this work. We retarget robot joints to MANO and reuse the per-joint normalization parameters pre-computed by VITRA [7] from large-scale human videos. This avoids robot-specific normalization from limited data and keeps robot actions aligned with the human action space. The diffusion action decoder is trained with a noise-prediction MSE loss: 
+
+LMSE = Eϵ∼N (0 ,1) , i 
+
+[
+
+∥ˆϵi − ϵ∥22
+
+]
+
+, (2) where ˆϵi is the predicted noise at diffusion step i.
+
+Training Strategy The policy is initialized from VITRA [7], pretrained on Ego4D [13], Epic-Kitchens [21], EgoExo4D [60], and Something-Something-V2 [61] (per-dataset ratios in Fig. 3), giving the model strong priors on human hand-object interaction. We then co-finetune on a 125:1 5Unseen Objects         
+
+> Seen Objects
+> Unitree G1
+> with
+> Inspire Hand
+> First -
+> person
+> View
+> Vision Pro
+> for teleop
+> Seen BG
+> Unseen BG Unseen BG
+> Unseen BG
+
+Figure 4: Real-world evaluation setup. Unitree G1 with Inspire hands and a head-mounted egocentric camera (teleop via Vision Pro); evaluation spans seen/unseen objects and one seen plus three unseen backgrounds. Wipe Stains 
+
+Bottle in Plate Grasp Tripod 
+
+Glove in Container Cola in Drawer 
+
+Figure 5: Zero-shot rollouts on real-world dexterous tasks , including container-aware placement, small-object grasping, and tool use. None of these object, container, or task combinations appear in the training set. 
+
+mixture of 50k WM-H samples and 400 real teleoperated robot demonstrations. Each batch draws 28% from teleop, 68% from WM-H, and 4% from WM-H EA (WM-H frames after robot-hand editing for embodiment alignment). This oversamples the scarce robot data, providing stable embodiment-specific signals, while WM-H supplies the visual and semantic diversity needed for generalization. We freeze the vision encoder and update the remaining backbone together with the diffusion action decoder, using learning rate 1 × 10 −5 and VLM weight decay 0.1. For additional details on training, please refer to Appendix B. 
+
+## 5 Experiments 
+
+We evaluate Wh0, a post-training framework that uses world-model-generated human-hand data to improve VLA policies for dexterous manipulation, through three questions: (Q1) Real-World Performance : Does Wh0 improve zero-shot real-world dexterous manipulation over strong VLA baselines? (Q2) Ablations and Analysis : Which properties of WM-H drive dexterous generaliza-tion? (Q3) Pretraining Priors : Does WM-H unlock pretrained human manipulation priors? 
+
+5.1 Experimental Setup (1) Robot platform. We evaluate Wh0 on a Unitree G1 humanoid with Inspire dexterous hands; all methods share the same hardware, camera, and control interface. (2) Training data. We collect 400 6Method Training Setup Success Rate (%) ↑
+
+Pretraining Adaptation Data Strategy 
+
+π0.5 Robot Teleop FT 7.78 ±15 .6
+
+VITRA Human Teleop FT 8.3±8.6
+
+VITRA Real Version Human Teleop + Real Ego Co-FT 21 .4±23 .4
+
+Wh0 Human Teleop + WM-H Co-FT 38 .9±19 .8
+
+Table 1: Real-world dexterous manipulation performance. We compare different pretraining sources and adaptation data under the same real-robot evaluation protocol. FT denotes fine-tuning on a single adaptation source, while Co-FT denotes joint fine-tuning on multiple data sources. 
+
+expert trajectories via Apple Vision Pro on the seen tasks and backgrounds in Fig. 4, mainly pick-and-place over the shown objects. Unless otherwise specified, all policies train on these trajectories; mixed-training setups are explicitly noted. (3) Evaluation protocol. The benchmark contains 18 tasks across four scenes (grasping, placing, object-specific interactions), each evaluated over 20 trials with randomized object poses and scenes; success rate is the primary metric. All policies are evaluated zero-shot without task-specific demonstrations. 
+
+5.2 Q1: Does Wh0 Improve Real-World Zero-Shot Dexterous Manipulation? 
+
+We compare Wh0 against representative VLA adaptation baselines that differ in pretraining source and adaptation data: π0.5 [62], a robot-data-pretrained policy adapted with teleoperated demon-strations; VITRA [7], a human-video-pretrained VLA model adapted with the same teleoperated demonstrations; and VITRA Real Version , which replaces WM-H with real egocentric human-hand manipulation videos from the HOI4D dataset [63] during co-training. The conventional paradigm adapts pretrained policies via robot post-training alone, but π0.5 and VITRA show lim-ited instruction-following in our experiments, suggesting that post-training on limited robot data overfits to seen tasks and weakens pretraining generalization. By contrast, co-training with addi-tional human data, either lab-collected videos or WM-H, substantially improves zero-shot success. Moreover, Fig. 5 qualitatively shows more deployment-aligned rollouts from Wh0 than from real egocentric videos, suggesting that world-model-generated data provides more suitable supervision for robot execution. For further experimental results, please refer to Appendix C. 
+
+5.3 Q2: Which Properties of WM-H Matter? 
+
+Variant HO (human) ↑
+
+HO (robot) ↑
+
+Task Succ. ↑
+
+No model 18 .9±2.8 18 .9±2.8 –Teleop only 16 .2±3.3 16 .2±3.3 8.3±8.6
+
+Alignment ablations 
+
+w/o scene align. 14 .9±2.7 14 .3±2.5 20 .0±24 .7
+
+w/o emb. align. 10 .2±2.5 13 .8±3.6 34 .7±18 .0
+
+Scale ablations 
+
+WM-H 5k 11 .9±2.8 10 .5±3.2 27 .8±21 .8
+
+WM-H 25k 11 .4±2.5 9.9±2.6 32 .5±23 .5
+
+Wh0 (50k) 10 .6±2.0 9.6±1.8 38 .9±19 .8
+
+Table 2: Ablation Study: effects of deployment alignment and WM-H scale on robot-object grounding and task success. HO = Hand-Object Distance (cm). 
+
+We analyze the factors behind the gains in Table 1 through two ablations: remov-ing scene and embodiment alignment from WM-H, and varying the number of WM-H samples used for co-training. As shown in Table 2 and Fig. 6, we evaluate these factors with three metrics: Hand-Object Distance human, which measures ground-ing on original human-hand videos; Hand-Object Distance robot, which measures grounding stability after robot-hand ap-pearance editing; and real-world task suc-cess. Without scene alignment , WM-H still provides hand-object interaction pat-terns, but the scene distribution and view-point no longer match deployment, limit-ing both grounding and real-world success. Without embodiment alignment , the model performs 7Pick up the knife 
+
+Turn on the faucet 
+
+Dataset w/o Scene Alignment 
+
+Dataset w/ Scene Alignment 
+
+（Ours 
+
+）
+
+Dataset w/ Embodied Alignment (Ours) 
+
+Target Scene 
+
+Dataset w/o Embodied Alignment Figure 6: Effect of scene and embodiment alignment. Top: Without scene alignment, generated videos drift from the target workspace (left); with it ( ours ), they stay anchored. Middle: Embodiment alignment edits selected frames to a robot hand while preserving pose and motion. Right: Action-feature cosine similarity under original vs. edited appearance. 
+
+well under the human-hand appearance, but degrades under the robot-hand appearance and achieves lower task success than full Wh0, indicating that its grounding does not reliably transfer to robot embodiment. Fig. 6 further shows that embodiment alignment keeps action features more stable under appearance changes. Finally, increasing WM-H scale consistently improves both grounding metrics and real-world success, showing that aligned data becomes more effective as it scales. 
+
+5.4 Q3: Does WM-H Unlock Pretrained Human Manipulation Priors? Variant Training Sources Evaluation Metrics Human Pretrain Teleop WM-H Hand-Object Dist. (cm) ↓ Task Success ↑                              
+
+> No model (initial pose) –––18 .9±2.8–
+> PaliGemma pretrain , Teleop ✗✓✗14 .3±2.00.8±2.6
+> PaliGemma pretrain , Teleop + WM-H ✗✓✓12 .7±1.40.6±1.6
+> Human pretrain ✓✗✗13 .1±1.80.0
+> Human pretrain , Teleop ✓✓✗16 .2±3.38.3±8.6
+> Wh0 ✓✓✓10 .6±2.038 .9±19 .8
+
+Table 3: Unlocking pretraining priors: effects of human-video pretraining, teleop demonstrations, and WM-H co-training. The strongest result combines all three. 
+
+Table 3 studies whether WM-H helps leverage human-video pretraining. Human pretraining alone achieves low Hand-Object Distance but zero task success, suggesting general human hand-motion priors, consistent with the evaluation in [7], but these priors are not directly deployable on the robot. Without human pretraining, teleoperation data and WM-H still yield near-zero success. In contrast, combining human pretraining, teleoperation, and WM-H achieves the best grounding and success. These results are consistent with WM-H helping activate and align pretrained human manipulation priors, rather than learning dexterous skills from scratch. 86 Conclusion and Limitations 
+
+We presented Wh0 , a framework that uses generative video world models to build egocentric human-hand manipulation data for VLA post-training. By constructing the 50k-sample WM-H dataset and co-training it with limited real robot demonstrations, Wh0 improves zero-shot dexterous manipula-tion on a Unitree G1 humanoid with Inspire hands, increasing a strong VITRA baseline from 8.3% to 38.9% success, a 4.7 × improvement. Ablations show that scene alignment, embodiment alignment, and data scale all contribute to the gains, while further analysis indicates that WM-H mainly un-locks human-video-pretrained manipulation priors rather than learning dexterous skills from scratch. These results support world-model-generated human-hand videos as scalable, deployment-aligned post-training data for dexterous VLA policies. Wh0 remains limited by video generation quality, hand reconstruction accuracy, human-robot mor-phology mismatch, dependence on strong pretraining, and task scope. The generator may produce physically implausible interactions, unexpected objects, or inconsistent long-horizon videos. Hand-object occlusions can degrade reconstructed finger poses and introduce noisy supervision, while the robot hand’s larger size can unintentionally disturb objects during execution. WM-H also provides little benefit without a human-video-pretrained backbone, indicating that it complements rather than replaces large-scale pretraining. Finally, our experiments focus on single-arm pick-and-place ma-nipulation; extending Wh0 to bimanual, tool-use, and longer-horizon tasks remains future work. 
+
+## References 
+
+[1] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn, K. Gopalakrishnan, K. Haus-man, A. Herzog, J. Hsu, J. Ibarz, B. Ichter, A. Irpan, T. Jackson, S. Jesmonth, N. J. Joshi, R. Julian, D. Kalashnikov, Y. Kuang, I. Leal, K. Lee, S. Levine, Y. Lu, U. Malla, D. Manju-nath, I. Mordatch, O. Nachum, C. Parada, J. Peralta, E. Perez, K. Pertsch, J. Quiambao, K. Rao, M. S. Ryoo, G. Salazar, P. R. Sanketi, K. Sayed, J. Singh, S. Sontakke, A. Stone, C. Tan, H. T. Tran, V. Vanhoucke, S. Vega, Q. Vuong, F. Xia, T. Xiao, P. Xu, S. Xu, T. Yu, and B. Zitkovich. RT-1: robotics transformer for real-world control at scale. In K. E. Bekris, K. Hauser, S. L. Herbert, and J. Yu, editors, Robotics: Science and Systems XIX, Daegu, Republic of Korea, July 10-14, 2023 , 2023. [2] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid, Q. Vuong, V. Vanhoucke, H. T. Tran, R. Soricut, A. Singh, J. Singh, P. Sermanet, P. R. San-keti, G. Salazar, M. S. Ryoo, K. Reymann, K. Rao, K. Pertsch, I. Mordatch, H. Michalewski, Y. Lu, S. Levine, L. Lee, T. E. Lee, I. Leal, Y. Kuang, D. Kalashnikov, R. Julian, N. J. Joshi, A. Irpan, B. Ichter, J. Hsu, A. Herzog, K. Hausman, K. Gopalakrishnan, C. Fu, P. Florence, C. Finn, K. A. Dubey, D. Driess, T. Ding, K. M. Choromanski, X. Chen, Y. Chebotar, J. Car-bajal, N. Brown, A. Brohan, M. G. Arenas, and K. Han. RT-2: vision-language-action models transfer web knowledge to robotic control. In J. Tan, M. Toussaint, and K. Darvish, editors, 
+
+Conference on Robot Learning, CoRL 2023, 6-9 November 2023, Atlanta, GA, USA , Proceed-ings of Machine Learning Research, pages 2165–2183. PMLR, 2023. [3] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. P. Foster, P. R. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn. Openvla: An open-source vision-language-action model. In P. Agrawal, O. Kroemer, and W. Burgard, editors, Conference on Robot Learning, 6-9 November 2024, Munich, Germany , Proceedings of Machine Learning Research, pages 2679–2713. PMLR, 2024. [4] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Haus-man, B. Ichter, S. Jakubczak, T. Jones, L. Ke, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, L. X. Shi, J. Tanner, Q. Vuong, A. Walling, H. Wang, and U. Zhilinsky. π0: A vision-language-action flow model for general robot control. CoRR , abs/2410.24164, 2024. 9[5] R. Yang, Q. Yu, Y. Wu, R. Yan, B. Li, A. Cheng, X. Zou, Y. Fang, X. Cheng, R. Qiu, H. Yin, S. Liu, S. Han, Y. Lu, and X. Wang. Egovla: Learning vision-language-action models from egocentric human videos. CoRR , abs/2507.12440, 2025. [6] R. Hoque, P. Huang, D. J. Yoon, M. Sivapurapu, and J. Zhang. Egodex: Learning dexterous manipulation from large-scale egocentric video. CoRR , abs/2505.11709, 2025. [7] Q. Li, Y. Deng, Y. Liang, L. Luo, L. Zhou, C. Yao, L. Zeng, Z. Feng, H. Liang, S. Xu, Y. Zhang, X. Chen, H. Chen, L. Sun, D. Chen, J. Yang, and B. Guo. Scalable vision-language-action model pretraining for robotic manipulation with real-life human activity videos. arXiv preprint arXiv:2510.21571 , 2025. [8] H. Luo, Y. Feng, W. Zhang, S. Zheng, Y. Wang, H. Yuan, J. Liu, C. Xu, Q. Jin, and Z. Lu. Being-h0: vision-language-action pretraining from large-scale human videos. arXiv preprint arXiv:2507.15597 , 2025. [9] H. Luo, Y. Wang, W. Zhang, S. Zheng, Z. Xi, C. Xu, H. Xu, H. Yuan, C. Zhang, Y. Wang, et al. Being-h0. 5: Scaling human-centric robot learning for cross-embodiment generalization. 
+
+arXiv preprint arXiv:2601.12993 , 2026. [10] H. Luo, W. Zhang, Y. Feng, S. Zheng, H. Xu, C. Xu, Z. Xi, Y. Fu, and Z. Lu. Being-h0. 7: A latent world-action model from egocentric videos. arXiv preprint arXiv:2605.00078 , 2026. [11] A. Gavryushin, X. Wang, R. J. Malate, C. Yang, D. Liconti, R. Zurbrügg, R. K. Katzschmann, and M. Pollefeys. Maple: Encoding dexterous robotic manipulation priors learned from ego-centric videos. arXiv preprint arXiv:2504.06084 , 2025. [12] M. Lepert, J. Fang, and J. Bohg. Phantom: Training robots without robots using only human videos. arXiv preprint arXiv:2503.00779 , 2025. [13] K. Grauman, A. Westbury, E. Byrne, V. Cartillier, Z. Chavis, A. Furnari, R. Girdhar, J. Ham-burger, H. Jiang, D. Kukreja, M. Liu, X. Liu, M. Martin, T. Nagarajan, I. Radosavovic, S. K. Ramakrishnan, F. Ryan, J. Sharma, M. Wray, M. Xu, E. Z. Xu, C. Zhao, S. Bansal, D. Batra, S. Crane, T. Do, M. Doulaty, A. Erapalli, C. Feichtenhofer, A. Fragomeni, Q. Fu, A. Gebre-selasie, C. González, J. Hillis, X. Huang, Y. Huang, W. Jia, W. Khoo, J. Kolár, S. Kottur, A. Kumar, F. Landini, C. Li, Y. Li, Z. Li, K. Mangalam, R. Modhugu, J. Munro, T. Mur-rell, T. Nishiyasu, W. Price, P. R. Puentes, M. Ramazanova, L. Sari, K. K. Somasundaram, A. Southerland, Y. Sugano, R. Tao, M. Vo, Y. Wang, X. Wu, T. Yagi, Z. Zhao, Y. Zhu, P. Ar-beláez, D. Crandall, D. Damen, G. M. Farinella, C. Fuegen, B. Ghanem, V. K. Ithapu, C. V. Jawahar, H. Joo, K. Kitani, H. Li, R. A. Newcombe, A. Oliva, H. S. Park, J. M. Rehg, Y. Sato, J. Shi, M. Z. Shou, A. Torralba, L. Torresani, M. Yan, and J. Malik. Ego4d: Around the world in 3,600 hours of egocentric video. IEEE Trans. Pattern Anal. Mach. Intell. , 47(11): 9468–9509, 2025. [14] Y. Li, X. Wei, J. Luo, Y. Xiao, Y. Bai, G. Zhou, T. Zou, C. Gui, J. Wen, H. Zhang, et al. Egolive: A large-scale egocentric dataset from real-world human tasks. arXiv preprint arXiv:2604.23570 , 2026. [15] S. Kareer, D. Patel, R. Punamiya, P. Mathur, S. Cheng, C. Wang, J. Hoffman, and D. Xu. Egomimic: Scaling imitation learning via egocentric video. In IEEE International Conference on Robotics and Automation, ICRA 2025, Atlanta, GA, USA, May 19-23, 2025 , pages 13226– 13233. IEEE, 2025. [16] J. Shi, Z. Zhao, T. Wang, I. Pedroza, A. Luo, J. Wang, J. Ma, and D. Jayaraman. Zeromimic: Distilling robotic manipulation skills from web videos. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , pages 16939–16947. IEEE, 2025. 10 [17] A. O’Neill, A. Rehman, A. Maddukuri, A. Gupta, A. Padalkar, A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain, A. Tung, A. Bewley, A. Herzog, A. Irpan, A. Khazatsky, A. Rai, A. Gupta, A. E. Wang, A. Singh, A. Garg, A. Kembhavi, A. Xie, A. Brohan, A. Raffin, A. Sharma, A. Yavary, A. Jain, A. Balakrishna, A. Wahid, B. Burgess-Limerick, B. Kim, B. Schölkopf, B. Wulfe, B. Ichter, C. Lu, C. Xu, C. Le, C. Finn, C. Wang, C. Xu, C. Chi, C. Huang, C. Chan, C. Agia, C. Pan, C. Fu, C. Devin, D. Xu, D. Morton, D. Driess, D. Chen, D. Pathak, D. Shah, D. Büchler, D. Jayaraman, D. Kalashnikov, D. Sadigh, E. Johns, E. P. Fos-ter, F. Liu, F. Ceola, F. Xia, F. Zhao, F. Stulp, G. Zhou, G. S. Sukhatme, G. Salhotra, G. Yan, G. Feng, G. Schiavi, G. Berseth, G. Kahn, G. Wang, H. Su, H. Fang, H. Shi, H. Bao, H. B. Amor, H. I. Christensen, H. Furuta, H. Walke, H. Fang, H. Ha, I. Mordatch, I. Radosavovic, I. Leal, J. Liang, J. Abou-Chakra, J. Kim, J. Drake, J. Peters, J. Schneider, J. Hsu, J. Bohg, J. T. Bingham, J. Wu, J. Gao, J. Hu, J. Wu, J. Wu, J. Sun, J. Luo, J. Gu, J. Tan, J. Oh, J. Wu, J. Lu, J. Yang, J. Malik, J. Silvério, J. Hejna, J. Booher, J. Tompson, J. Yang, J. Salvador, J. J. Lim, J. Han, K. Wang, K. Rao, K. Pertsch, K. Hausman, K. Go, K. Gopalakrishnan, K. Goldberg, K. Byrne, K. Oslund, K. Kawaharazuka, K. Black, K. Lin, K. Zhang, K. Ehsani, K. Lekkala, K. Ellis, K. Rana, K. Srinivasan, K. Fang, K. P. Singh, K. Zeng, K. Hatch, K. Hsu, L. Itti, L. Y. Chen, L. Pinto, L. Fei-Fei, L. Tan, L. J. Fan, L. Ott, L. Lee, L. Weihs, M. Chen, M. Lepert, M. Memmel, M. Tomizuka, M. Itkina, M. G. Castro, M. Spero, M. Du, M. Ahn, M. C. Yip, M. Zhang, M. Ding, M. Heo, M. K. Srirama, M. Sharma, M. J. Kim, N. Kanazawa, N. Hansen, N. Heess, N. J. Joshi, N. Sünderhauf, N. Liu, N. D. Palo, N. M. M. Shafiullah, O. Mees, O. Kroemer, O. Bastani, P. R. Sanketi, P. T. Miller, P. Yin, P. Wohlhart, P. Xu, P. D. Fagan, P. Mitrano, P. Sermanet, P. Abbeel, P. Sundaresan, Q. Chen, Q. Vuong, R. Rafailov, R. Tian, R. Doshi, R. Martín-Martín, R. Baijal, R. Scalise, R. Hendrix, R. Lin, R. Qian, R. Zhang, R. Mendonca, R. Shah, R. Hoque, R. Julian, S. Bustamante-Gomez, S. Kirmani, S. Levine, S. Lin, S. Moore, S. Bahl, S. Dass, S. D. Sonawani, S. Song, S. Xu, S. Haldar, S. Karamcheti, S. Adebola, S. Guist, S. Nasiriany, S. Schaal, S. Welker, S. Tian, S. Ramamoorthy, S. Dasari, S. Belkhale, S. Park, S. Nair, S. Mirchandani, T. Osa, T. Gupta, T. Harada, T. Matsushima, T. Xiao, T. Kollar, T. Yu, T. Ding, T. Davchev, T. Z. Zhao, T. Armstrong, T. Darrell, T. Chung, V. Jain, V. Vanhoucke, W. Zhan, W. Zhou, W. Burgard, X. Chen, X. Wang, X. Zhu, X. Geng, X. Liu, L. Xu, X. Li, Y. Lu, Y. J. Ma, Y. Kim, Y. Chebotar, Y. Zhou, Y. Zhu, Y. Wu, Y. Xu, Y. Wang, Y. Bisk, Y. Cho, Y. Lee, Y. Cui, Y. Cao, Y. Wu, Y. Tang, Y. Zhu, Y. Zhang, Y. Jiang, Y. Li, Y. Li, Y. Iwasawa, Y. Matsuo, Z. Ma, Z. Xu, Z. J. Cui, Z. Zhang, and Z. Lin. Open x-embodiment: Robotic learning datasets and RT-X models : Open x-embodiment collabora-tion. In IEEE International Conference on Robotics and Automation, ICRA 2024, Yokohama, Japan, May 13-17, 2024 , pages 6892–6903. IEEE, 2024. [18] A. Khazatsky, K. Pertsch, S. Nair, A. Balakrishna, S. Dasari, S. Karamcheti, S. Nasiriany, M. K. Srirama, L. Y. Chen, K. Ellis, et al. Droid: A large-scale in-the-wild robot manipulation dataset. arXiv preprint arXiv:2403.12945 , 2024. [19] M. Mittal, P. Roth, J. Tigue, A. Richard, O. Zhang, P. Du, A. Serrano-Munoz, X. Yao, R. Zur-brügg, N. Rudin, et al. Isaac lab: A gpu-accelerated simulation framework for multi-modal robot learning. arXiv preprint arXiv:2511.04831 , 2025. [20] R. Zhao, S. Xu, R. Jin, Y. Deng, Y. Tai, K. Jia, and G. Liu. Sim2real vla: Zero-shot generaliza-tion of synthesized skills to realistic manipulation. In The Fourteenth International Conference on Learning Representations , 2026. [21] D. Damen, H. Doughty, G. M. Farinella, S. Fidler, A. Furnari, E. Kazakos, D. Moltisanti, J. Munro, T. Perrett, W. Price, et al. Scaling egocentric vision: The epic-kitchens dataset. In 
+
+Proceedings of the European conference on computer vision (ECCV) , pages 720–736, 2018. [22] Wan Team, A. Wang, B. Ai, B. Wen, C. Mao, C.-W. Xie, D. Chen, F. Yu, H. Zhao, J. Yang, et al. Wan: Open and advanced large-scale video generative models. arXiv preprint arXiv:2503.20314 , 2025. 11 [23] N. Agarwal, A. Ali, M. Bala, Y. Balaji, E. Barker, T. Cai, P. Chattopadhyay, Y. Chen, Y. Cui, Y. Ding, D. Dworakowski, J. Fan, M. Fenzi, F. Ferroni, S. Fidler, D. Fox, S. Ge, Y. Ge, J. Gu, S. Gururani, E. He, J. Huang, J. S. Huffman, P. Jannaty, J. Jin, S. W. Kim, G. Klár, G. Lam, S. Lan, L. Leal-Taixé, A. Li, Z. Li, C. Lin, T. Lin, H. Ling, M. Liu, X. Liu, A. Luo, Q. Ma, H. Mao, K. Mo, A. Mousavian, S. Nah, S. Niverty, D. Page, D. Paschalidou, Z. Patel, L. Pavao, M. Ramezanali, F. Reda, X. Ren, V. R. N. Sabavat, E. Schmerling, S. Shi, B. Stefaniak, S. Tang, L. Tchapmi, P. Tredak, W. Tseng, J. Varghese, H. Wang, H. Wang, H. Wang, T. Wang, F. Wei, X. Wei, J. Z. Wu, J. Xu, W. Yang, Y. Lin, X. Zeng, Y. Zeng, J. Zhang, Q. Zhang, Y. Zhang, Q. Zhao, and A. Zólkowski. Cosmos world foundation model platform for physical AI. CoRR ,abs/2501.03575, 2025. [24] Y. Matsuo, Y. LeCun, M. Sahani, D. Precup, D. Silver, M. Sugiyama, E. Uchibe, and J. Mo-rimoto. Deep learning, reinforcement learning, and world models. Neural Networks , 152: 267–275, 2022. [25] H. Zhen, X. Qiu, P. Chen, J. Yang, X. Yan, Y. Du, Y. Hong, and C. Gan. 3d-vla: A 3d vision-language-action generative world model. In R. Salakhutdinov, Z. Kolter, K. A. Heller, A. Weller, N. Oliver, J. Scarlett, and F. Berkenkamp, editors, Forty-first International Confer-ence on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 , Proceedings of Machine Learning Research, pages 61229–61245. PMLR / OpenReview.net, 2024. [26] R. G. Goswami, A. Bar, D. Fan, T. Yang, G. Zhou, P. Krishnamurthy, M. Rabbat, F. Khorrami, and Y. LeCun. World models can leverage human videos for dexterous manipulation. CoRR ,abs/2512.13644, 2025. [27] G. Lu, B. Jia, P. Li, Y. Chen, Z. Wang, Y. Tang, and S. Huang. Gwm: Towards scalable gaus-sian world models for robotic manipulation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 9263–9274, 2025. [28] J. Jang, S. Ye, Z. Lin, J. Xiang, J. Bjorck, Y. Fang, F. Hu, S. Huang, K. Kundalia, Y. Lin, L. Magne, A. Mandlekar, A. Narayan, Y. L. Tan, G. Wang, J. Wang, Q. Wang, Y. Xu, X. Zeng, K. Zheng, R. Zheng, M. Liu, L. Zettlemoyer, D. Fox, J. Kautz, S. Reed, Y. Zhu, and L. Fan. Dreamgen: Unlocking generalization in robot learning through neural trajectories. CoRR ,abs/2505.12705, 2025. [29] Y. Du, S. Yang, B. Dai, H. Dai, O. Nachum, J. Tenenbaum, D. Schuurmans, and P. Abbeel. Learning universal policies via text-guided video generation. Advances in Neural Information Processing Systems , 36:9156–9172, 2023. [30] H. Bharadhwaj, D. Dwibedi, A. Gupta, S. Tulsiani, C. Doersch, T. Xiao, D. Shah, F. Xia, D. Sadigh, and S. Kirmani. Gen2act: Human video generation in novel scenarios enables generalizable robot manipulation. arXiv preprint arXiv:2409.16283 , 2024. [31] J. Liang, R. Liu, E. Ozguroglu, S. Sudhakar, A. Dave, P. Tokmakov, S. Song, and C. Von-drick. Dreamitate: Real-world visuomotor policy learning via video generation. arXiv preprint arXiv:2406.16862 , 2024. [32] B. Chen, T. Zhang, H. Geng, K. Song, C. Zhang, P. Li, W. T. Freeman, J. Malik, P. Abbeel, R. Tedrake, et al. Large video planner enables generalizable robot control. arXiv preprint arXiv:2512.15840 , 2025. [33] H. Li, L. Sun, Y.-H. Hu, D. Ta, J. Barry, G. Konidaris, and J. Fu. Novaflow: Zero-shot manip-ulation via actionable flow from generated videos. arXiv preprint arXiv:2510.08568 , 2025. [34] B. Kim, T. Kim, J. Lee, and H. Joo. Dexterous world models. arXiv preprint arXiv:2512.17907 ,2025. [35] S. Ye, Y. Ge, K. Zheng, S. Gao, S. Yu, G. Kurian, S. Indupuru, Y. L. Tan, C. Zhu, J. Xiang, et al. World action models are zero-shot policies. arXiv preprint arXiv:2602.15922 , 2026. 12 [36] MotuBrain Team, C. Xiang, F. Bao, H. Liu, H. Tan, H. Bi, J. Li, J. Liu, J. Pang, K. Jing, et al. Motubrain: An advanced world action model for robot control. arXiv preprint arXiv:2604.27792 , 2026. [37] L. Li, Q. Zhang, Y. Luo, S. Yang, R. Wang, F. Han, M. Yu, Z. Gao, N. Xue, X. Zhu, et al. Causal world modeling for robot control. arXiv preprint arXiv:2601.21998 , 2026. [38] J. Bjorck, F. Castañeda, N. Cherniadev, X. Da, R. Ding, L. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, J. Jang, Z. Jiang, J. Kautz, K. Kundalia, L. Lao, Z. Li, Z. Lin, K. Lin, G. Liu, E. LLontop, L. Magne, A. Mandlekar, A. Narayan, S. Nasiriany, S. Reed, Y. L. Tan, G. Wang, Z. Wang, J. Wang, Q. Wang, J. Xiang, Y. Xie, Y. Xu, Z. Xu, S. Ye, Z. Yu, A. Zhang, H. Zhang, Y. Zhao, R. Zheng, and Y. Zhu. GR00T N1: an open foundation model for generalist humanoid robots. CoRR , abs/2503.14734, 2025. [39] Physical Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. R. Equi, C. Finn, N. Fusai, M. Y. Galliker, et al. π0.5: A vision-language-action model with open-world generalization. In Proceedings of The 9th Conference on Robot Learning , 2025. [40] Physical Intelligence, B. Ai, A. Amin, R. Aniceto, A. Balakrishna, G. Balke, K. Black, G. Bokinsky, S. Cao, T. Charbonnier, et al. π0.7: A steerable generalist robotic foundation model with emergent capabilities. arXiv preprint arXiv:2604.15483 , 2026. [41] E. Jang, A. Irpan, M. Khansari, D. Kappler, F. Ebert, C. Lynch, S. Levine, and C. Finn. Bc-z: Zero-shot task generalization with robotic imitation learning. In conference on Robot Learning ,pages 991–1002. PMLR, 2022. [42] H. R. Walke, K. Black, T. Z. Zhao, Q. Vuong, C. Zheng, P. Hansen-Estruch, A. W. He, V. My-ers, M. J. Kim, M. Du, et al. Bridgedata v2: A dataset for robot learning at scale. In Conference on Robot Learning , pages 1723–1736. PMLR, 2023. [43] Y. Zhong, X. Huang, R. Li, C. Zhang, Z. Chen, T. Guan, F. Zeng, K. N. Lui, Y. Ye, Y. Liang, Y. Yang, and Y. Chen. Dexgraspvla: A vision-language-action framework towards general dex-terous grasping. In S. Koenig, C. Jenkins, and M. E. Taylor, editors, Fortieth AAAI Conference on Artificial Intelligence, Thirty-Eighth Conference on Innovative Applications of Artificial Intelligence, Sixteenth Symposium on Educational Advances in Artificial Intelligence, AAAI 2026, Singapore, January 20-27, 2026 , pages 18836–18844. AAAI Press, 2026. [44] H. Liu, S. Guo, P. Mai, J. Cao, H. Li, and J. Ma. Robodexvlm: Visual language model-enabled task planning and motion control for dexterous robot manipulation. In IEEE/RSJ International Conference on Intelligent Robots and Systems, IROS 2025, Hangzhou, China, October 19-25, 2025 , pages 1381–1388. IEEE, 2025. [45] G. Pavlakos, D. Shan, I. Radosavovic, A. Kanazawa, D. Fouhey, and J. Malik. Reconstructing hands in 3d with transformers. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2024, Seattle, WA, USA, June 16-22, 2024 , pages 9826–9836. IEEE, 2024. [46] J. Zhang, J. Deng, C. Ma, and R. A. Potamias. Hawor: World-space hand motion reconstruc-tion from egocentric videos. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 1805–1815, 2025. [47] S. Bahl, R. Mendonca, L. Chen, U. Jain, and D. Pathak. Affordances from human videos as a versatile representation for robotics. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 13778–13790, 2023. [48] K. Shaw, S. Bahl, and D. Pathak. Videodex: Learning dexterity from internet videos. In 
+
+Conference on Robot Learning , pages 654–665. PMLR, 2023. 13 [49] Y. Qin, Y.-H. Wu, S. Liu, H. Jiang, R. Yang, Y. Fu, and X. Wang. Dexmv: Imitation learning for dexterous manipulation from human videos. In European Conference on Computer Vision ,pages 570–587. Springer, 2022. [50] C. Wang, H. Shi, W. Wang, R. Zhang, L. Fei-Fei, and C. K. Liu. Dexcap: Scalable and portable mocap data collection system for dexterous manipulation. In D. Kulic, G. Venture, K. E. Bekris, and E. Coronado, editors, Robotics: Science and Systems XX, Delft, The Netherlands, July 15-19, 2024 , 2024. [51] R. Zheng, D. Niu, Y. Xie, J. Wang, M. Xu, Y. Jiang, F. Castañeda, F. Hu, Y. L. Tan, L. Fu, et al. Egoscale: Scaling dexterous manipulation with diverse egocentric human data. arXiv preprint arXiv:2602.16710 , 2026. [52] S. Kareer, K. Pertsch, J. Darpinian, J. Hoffman, D. Xu, S. Levine, C. Finn, and S. Nair. Emergence of human to robot transfer in vision-language-action models. arXiv preprint arXiv:2512.22414 , 2025. [53] S. Patel, S. Mohan, H. Mai, U. Jain, S. Lazebnik, and Y. Li. Robotic manipulation by imitating generated videos without physical demonstrations. arXiv preprint arXiv:2507.00990 , 2025. [54] K. Dharmarajan, W. Huang, J. Wu, L. Fei-Fei, and R. Zhang. Dream2flow: Bridging video gen-eration and open-world manipulation with 3d object flow. arXiv preprint arXiv:2512.24766 ,2025. [55] G. Team, A. Ye, B. Wang, C. Ni, G. Huang, G. Zhao, H. Li, J. Zhu, K. Li, M. Xu, Q. Deng, S. Wang, W. Qin, X. Chen, X. Wang, Y. Wang, Y. Cao, Y. Chang, Y. Xu, Y. Ye, Y. Wang, Y. Zhou, Z. Zhang, Z. Dong, and Z. Zhu. Gigaworld-0: World models as data engine to empower embodied AI. CoRR , abs/2511.19861, 2025. [56] C. Wu, J. Li, J. Zhou, J. Lin, K. Gao, K. Yan, S.-m. Yin, S. Bai, X. Xu, Y. Chen, et al. Qwen-image technical report. arXiv preprint arXiv:2508.02324 , 2025. [57] S. Bai, Y. Cai, R. Chen, K. Chen, X. Chen, Z. Cheng, L. Deng, W. Ding, C. Gao, C. Ge, et al. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 , 2025. [58] J. Romero, D. Tzionas, and M. J. Black. Embodied hands: modeling and capturing hands and bodies together. ACM Trans. Graph. , 36(6):245:1–245:17, 2017. [59] L. Beyer, A. Steiner, A. S. Pinto, A. Kolesnikov, X. Wang, D. Salz, M. Neumann, I. Alabdul-mohsin, M. Tschannen, E. Bugliarello, et al. Paligemma: A versatile 3b vlm for transfer. arXiv preprint arXiv:2407.07726 , 2024. [60] K. Grauman, A. Westbury, L. Torresani, K. Kitani, J. Malik, T. Afouras, K. Ashutosh, V. Baiyya, S. Bansal, B. Boote, E. Byrne, Z. Chavis, et al. Ego-exo4d: Understanding skilled human activity from first- and third-person perspectives. In IEEE/CVF Conference on Com-puter Vision and Pattern Recognition (CVPR) , 2024. [61] R. Goyal, S. Ebrahimi Kahou, V. Michalski, J. Materzy´ nska, S. Westphal, H. Kim, V. Haenel, I. Fruend, P. Yianilos, M. Mueller-Freitag, F. Hoppe, C. Thurau, I. Bax, and R. Memisevic. The “something something” video database for learning and evaluating visual common sense. In 
+
+Proceedings of the IEEE International Conference on Computer Vision (ICCV) , pages 5842– 5850, 2017. [62] K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. R. Equi, C. Finn, N. Fusai, M. Y. Galliker, D. Ghosh, L. Groom, K. Hausman, brian ichter, S. Jakubczak, T. Jones, L. Ke, D. LeBlanc, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, A. Z. Ren, L. X. Shi, L. Smith, J. T. Springenberg, K. Stachowicz, J. Tanner, Q. Vuong, H. Walke, A. Walling, H. Wang, L. Yu, and U. Zhilinsky. π0.5: a vision-language-action model with open-world generalization. In 9th Annual Conference on Robot Learning , 2025. 14 [63] Y. Liu, Y. Liu, C. Jiang, K. Lyu, W. Wan, H. Shen, B. Liang, Z. Fu, H. Wang, and L. Yi. HOI4D: A 4d egocentric dataset for category-level human-object interaction. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2022, New Orleans, LA, USA, June 18-24, 2022 , pages 20981–20990. IEEE, 2022. doi:10.1109/CVPR52688.2022.02034. 15 Appendix A WM-H Dataset Construction 
+
+A.1 Instruction Generation and Prompt Design 
+
+The pipeline is implemented as a database-driven iterative process. The database tracks nouns, adjectives, instructions, and word frequencies. At each iteration, low-frequency words are pri-oritized for instruction assembly, and vocabulary expansion is triggered only when all exist-ing words have reached minimum usage thresholds. Newly generated words are parsed from a JSON output returned by the LLM, filtered, and inserted into the database, while duplicate instructions are rejected. As shown in Tab. A.1, the vocabulary-expansion prompt includes: 
+
+{num_nouns} and {num_adjectives} to specify the number of new words; {existing_nouns} 
+
+and {existing_adjectives} as a compact subset to avoid duplicates; and {diversity_hint} 
+
+suggesting a scene category (e.g., kitchen, office) to encourage diverse word types. Vocabulary Expansion Prompt      
+
+> Generate {num_nouns} new nouns and {num_adjectives} new adjectives for graspable manipulation objects. Existing nouns: {existing_nouns} Existing adjectives: {existing_adjectives} Diversity hint: {diversity_hint} Return only a JSON object: {"nouns": [...], "adjectives": [...]}
+
+A.2 Scene-Aligned Image Editing 
+
+We collect desktop/workspace images using the same deployment camera, viewpoint, and input resolution as the robot policy. A human hand is placed in the target interaction area during capture to provide relative scale cues for hand size, object size, and camera distance. For each instruction, we randomly select a workspace image and insert the required objects with Qwen-Image-Edit. To localize editing, we draw a rectangular guide region on the image. The region covers a fixed proportion of the image and its center is randomly sampled within the reachable workspace area. For multiple objects, guide regions are sampled sequentially while avoiding overlap. The rectangle is used only to indicate the desired insertion area and is removed in the final edited image. We use a small number of editing steps and a low CFG scale with Lightning LoRA acceleration. The edited image is then used as the initial frame for video synthesis. The prompt template is shown in Tab. A.2. Scene-Aligned Image Editing Prompt   
+
+> Add {object} inside the rectangle drawn on the image. The rectangle is only a guide. The final image must not show the rectangle. Keep the original desktop layout, lighting, camera perspective, background, and existing objects unchanged.
+
+A.3 Image-to-Video Generation 
+
+Given the edited scene image, we use it as the initial frame for image-to-video generation. The video prompt is constructed from the task instruction, the egocentric camera setting, the acting hand, and an optional dynamics description generated by Qwen3-VL. The Qwen3-VL prompt asks the model to infer the expected hand-object motion and temporal evolution from the edited image and language instruction, as shown in Tab. A.3. The resulting description is appended to the final video prompt in Tab. A.3. 16 We keep the camera fixed and specify a first-person top-down view with a single acting hand entering from the lower part of the frame. The generated video focuses on completing the instructed manip-ulation, and the hand is encouraged to stop after the action is completed. We use LightX2V LoRA acceleration with a small number of inference steps and a low CFG scale for efficient large-scale synthesis. Qwen3-VL Video Dynamics Prompt 
+
+> The image shows a scene, and a person’s {LEFT/RIGHT} hand will perform the following action in the frame: {instruction}. The task is completed using only the {LEFT/RIGHT} hand. Please carefully observe the objects and layout in the image, and based on this action, describe in detail the video dynamics that should occur during the action. Focus on the hand motion, object motion, hand-object interaction, and the temporal order of the manipulation. Make sure to mention that the {LEFT/RIGHT} hand is performing the action. Please describe the video dynamics in English, output the description text directly, do not add any other content. Be specific.
+
+Image-to-Video Generation Prompt 
+
+> 4k high definition, fixed camera, first-person top-down view, showing a human {left/right} hand and objects on the desktop. The {left/right} hand extends from the lower part of the frame. A person’s {LEFT/RIGHT} hand performs the following action in the frame: {instruction}. Only the {left/right} hand is used to complete this task. {video dynamics description from Qwen3-VL} After the action is completed, the hand stops, with no extra movements.
+
+A.4 Embodiment-Aligned Image Editing 
+
+To improve embodiment alignment, we edit selected frames from the generated human-hand videos and replace the human hand with a realistic robot hand while preserving the original manipula-tion content. In practice, we sparsely sample frames at a fixed interval with a fixed offset, and apply Qwen-Image-Edit to each selected frame independently. The editing is restricted to the hand appear-ance: we keep the original hand pose, position, scale, scene background, and overall composition unchanged, so that the edited frames remain consistent with the original manipulation trajectory. We use Qwen-Image-Edit with Lightning LoRA acceleration, using a small number of editing steps and a low CFG scale for efficient processing. The target robot hand appearance is specified as a realistic dexterous hand with a white back shell, black palm, black fingertips, and a silver robotic forearm. To suppress cartoon-like or synthetic rendering artifacts, we additionally use a negative prompt emphasizing realism. The prompt templates are shown in Tab. A.4. Embodiment-Aligned Image Editing Prompt   
+
+> Positive prompt: Replace the human hand in the image with a realistic robot hand, with a white back shell, black palm, black fingertips, and a silver robotic forearm. Only change the hand appearance and material. Keep the original hand pose, position, proportion, background, and composition unchanged.
+> Negative prompt: cartoon, anime, comic, toy hand, plastic hand, CGI look, stylized, 3d render, illustration, low poly, fake robot hand, deformed fingers, extra fingers, blurry, low quality
+
+A.5 Quality Evaluation 
+
+Figure 8 presents a qualitative visualization of egocentric hand-manipulation videos in the WM-H dataset across a variety of objects and tasks. Each row demonstrates a different manipulation, showing how human or robot hands interact with objects in realistic scenes. The figure highlights the diversity of grasp types, object shapes, and placements captured in WM-H, illustrating its potential to provide rich training supervision for vision-language-action models. We conducted a user study with 72 AI practitioners. As summarized in Table 4, analysis of judgment cues in Part A shows that participants primarily relied on physics- and layout-related cues (45.6%) 17 Part Dimension N Result ∆ from real AAI judged as real 355 37.7% –Judgment cue: visual smoothness / artifacts 710 19.4% –Judgment cue: hand appearance & motion 710 34.9% –Judgment cue: physics, layout & contact 710 45.6% –BObject correctness 1,420 3.97 ± 1.22 1.03 Instruction alignment 1,420 4.18 ± 1.09 0.82 Hand-object interaction 1,420 3.95 ± 1.19 1.05 Physical plausibility 1,420 3.78 ± 1.30 1.22 Training suitability 1,420 3.57 ± 1.31 1.43 C Pose consistency 355 4.30 ± 0.85 –Contact preservation 355 4.25 ± 0.84 –
+
+Table 4: User study results on hand-manipulation videos ( N = 72 ). Part A: 10 videos (5 real + 5 AI); Part B: 20 WM-H synthetic videos; Part C: 5 before/after edit pairs. Part A judgment cues sum to 100%, Part B/C rated on a 5-point Likert scale (1=worst, 5=best). to assess video realism, followed by hand appearance and motion (34.9%), while low-level visual ar-tifacts such as flickering or distortion accounted for only 19.4%. This indicates that even evaluators with AI expertise focus more on semantic consistency, physical plausibility, and hand-object inter-action rather than solely on temporal smoothness or local visual artifacts. Under these higher-level evaluation criteria, 37.7% of AI-generated videos (134/355 trials) were perceived as real recordings, demonstrating that a substantial portion of synthetic samples already exhibits strong realism in scene layout, physical plausibility, and manipulation performance. In Part B, each participant rated 20 synthetic hand-manipulation videos randomly sampled from the WM-H dataset (with randomized sampling and presentation order per session) on five quality dimensions using a 5-point Likert scale. Assuming a real-video ceiling of 5.0 (not directly measured in this study), the average scores for the synthetic videos were 3.97 ± 1.22 (object correctness), 
+
+4.18 ± 1.09 (instruction alignment), 3.95 ± 1.19 (hand–object interaction), 3.78 ± 1.30 (physical plausibility), and 3.57 ± 1.31 (training suitability). These results indicate that the synthetic videos exhibit high quality across all dimensions, particularly in instruction alignment and hand-object interaction, showing that WM-H synthetic videos can provide highly usable training supervision while maintaining good consistency with real manipulation videos in both visual and operational aspects. Part C evaluates hand alignment after video editing. Participants rated pose consistency (C1) and contact preservation (C2) at 4.30 ± 0.85 and 4.25 ± 0.84 , respectively, indicating that edited hands largely preserve the pre-edit pose and interactions. 
+
+A.6 Failure Cases 
+
+Figure 7 illustrates representative failure cases observed in WM-H-generated egocentric manipula-tion data, highlighting common issues that arise during video generation and human-to-robot hand alignment: • Image Editing Errors: Some frames exhibit incorrect object placement, visual artifacts, or cropping issues, which may mislead the policy during training. • Physically Implausible Interactions: Certain actions violate real-world physics, such as hands passing through objects or unrealistic grasp poses, reducing the reliability of the supervision signal. • Inconsistent Pre- and Post-Interaction Visuals: In a few cases, the visual state before and after the interaction is inconsistent, causing key interaction points to appear misaligned or resulting in incoherent action effects. 18 • Invalid Instructions Leading to Unexecutable Actions: Occasionally, assembled instruc-tions lack practical meaning, making it impossible to execute the corresponding actions in the video, leading to operations that do not match the intended task. • Hand Editing Issues: During robot-hand editing, the hand posture may not be preserved, or scene objects may be inadvertently modified, even though only the hand appearance was intended to be edited. These failure modes indicate that, although WM-H provides scalable and diverse supervision data, careful attention is still required to ensure physical plausibility, visual fidelity, pre- and post-interaction consistency, instruction validity, and accurate embodiment alignment when using world-model-generated human-hand data for robot manipulation training. pick the light clock and place it on the metal toaster. 
+
+> Image
+> Editing
+> error
+> Model
+> clipping
+
+grasp the empty crayon. 
+
+> Nonsensical
+> instruction
+
+pick the golden banana. 
+
+> Image
+> Editing
+> error
+> Time
+> inconsistency
+
+grasp the purple cushion.    
+
+> Rough Hand -object Interaction
+> Physically implausible
+
+WM -H w. Embodiment Alignment  
+
+> Hand posture not maintained Accidentally edited the object
+
+Figure 7: Qualitative visualization of representative WM-H failure cases. Each panel highlights typical issues such as image editing errors, physically implausible hand-object interactions, temporal inconsistencies, instruc-tion misalignment, and imperfect robot-hand embodiment alignment. 
+
+## B Policy Training Details 
+
+B.1 Architecture and Conditioning. 
+
+The policy uses a PaliGemma2-3B vision-language backbone to encode the current observation and language instruction. In addition to standard token embeddings, a 2D FoV token is projected via an MLP to the backbone hidden size and included in the input sequence. A separate, learnable cognition token is appended to the input; its final hidden state is extracted as the conditioning feature for the action decoder. The current hand state is represented in the camera frame with wrist translation, Euler angles, and 15-DoF MANO joint rotations for each hand (right-hand is the main focus). The action decoder is a diffusion-based DiT-B network, predicting 16 future steps per chunk with action dimension 102 corresponding to the MANO hand space. 19 B.2 Human-Robot Action Alignment. 
+
+Robot demonstration states and actions are first converted from the robot’s base frame to the camera frame. Wrist rotations are corrected to align with MANO conventions, and robot joint angles are retargeted to the human hand/MANO space. Although the policy internally pads state and action to a unified VITRA space (state dimension 212, action dimension 102), only the human-hand-related dimensions are active. Robot action and state values are normalized using statistics computed from human video data rather than robot-specific normalization. WM-H EA frames (edited WM-H for embodiment alignment) are used as additional supervision signals during training. 
+
+B.3 Optimization and Inference 
+
+During post-training, the vision encoder is frozen, while the remaining backbone and diffusion ac-tion decoder are updated. Training is conducted on 4 NVIDIA H200 GPUs with a per-GPU batch size of 64, giving a total batch size of 256. The learning rate is 1 × 10 −5 for both the backbone and action decoder, with weight decay 0.1, optimizer betas (0 .9, 0.95) , gradient clipping 1.0, and a max-imum of 40k training steps. The diffusion decoder uses 100 diffusion steps with a squared-cosine noise schedule. For each batch, we repeat diffusion training 8 times with independently sampled noise and timesteps. No image augmentation is applied. At inference, the policy is deployed on a single NVIDIA RTX 4090 GPU, using DDIM sampling with 10 steps and classifier-free guidance with scale 5.0. 
+
+B.4 Data Mixture and Sampling Ratios 
+
+Table B.4 summarizes the per-batch sampling ratios for different training setups. Here, R denotes teleoperated robot data, W denotes WM-H, and W -EA denotes embodiment-aligned WM-H. For HOI4D, we follow an episode-level annotation protocol: every 100 frames are grouped as one episode and assigned one language annotation, resulting in 5,511 annotated HOI4D episodes. The VITRA Real Version baseline is then trained with a balanced mixture between teleoperated robot data and these HOI4D episodes. Model / Setting Dataset Sampling Ratio 
+
+π0.5 R = 1 
+
+VITRA R = 1 
+
+VITRA Real Version R : HOI4D = 1 : 1 
+
+w/o scene alignment R : W -EA : W = 0 .28 : 0 .04 : 0 .68 
+
+w/o embodiment alignment R : W = 0 .4 : 1 
+
+WM-H 5k R : W -EA : W = 1 : 0 .06 : 0 .94 
+
+WM-H 25k R : W -EA : W = 0 .28 : 0 .04 : 0 .68 
+
+PaliGemma pretrain , Teleop R = 1 
+
+PaliGemma pretrain , Teleop + WM-H R : W -EA : W = 0 .28 : 0 .04 : 0 .68 
+
+Human pretrain , Teleop R = 1 
+
+Wh0 (50k) R : W -EA : W = 0 .28 : 0 .04 : 0 .68 
+
+Table 5: Training dataset composition for various models and ablations. R denotes teleoperated robot data, W denotes WM-H, and W -EA denotes embodiment-aligned WM-H. 
+
+## C Evaluation Details 
+
+C.1 Real-World Experimental Setup Task suite. We evaluate all methods on a real Unitree G1 humanoid equipped with Inspire dexter-ous hands and an egocentric camera. The benchmark contains 18 real-world dexterous manipulation tasks: (1) grasp the tripod, (2) put the coke can into the black box, (3) touch the robot gripper, (4) put the glove into the orange container, (5) grasp the paper cup, (6) put the water bottle into the blue 20 bowl, (7) put the apple into the orange container, (8) take the apple out of the orange container, (9) grasp the towel, (10) put the teapot into the orange container, (11) wipe the table, (12) put the white-green drink into the drawer, (13) put the coke can into the drawer, (14) grasp the remote controller, (15) grasp the bread, (16) put the tissue into the yellow basket, (17) put the apple into the yellow basket, and (18) grasp the tape measure. All methods are evaluated with the same robot hardware, camera viewpoint, and low-level control interface. We report the mean success rate across all tasks along with the standard deviation to capture performance variability across the 18 tasks. 
+
+Stage-conditioned instruction protocol. For tasks involving multiple manipulation phases, we use stage-conditioned language instructions during evaluation. The instruction is matched to the current hand-object interaction state, such as reaching, grasping, or placing. When the robot com-pletes one manipulation phase and enters the next, the evaluator provides the next instruction only; no manual control or action correction is applied. This protocol follows our data annotation scheme, where demonstrations are labeled according to distinct hand-object states. It allows the evaluation to focus on execution under the given visual observation and language condition, while keeping the protocol consistent across all methods. 
+
+Deployment-time action prior. Dexterous-hand control has a high-dimensional action space, and raw hand predictions can contain short-term noise during deployment. We therefore apply a simple grasping prior during the pre-contact phase: finger joints are constrained to move monotonically toward closure until a stable grasp is reached. This suppresses premature hand-opening motions near the object and improves real-robot stability. The same deployment rule is applied to all evaluated methods. 
+
+C.2 Hand-Object Distance Evaluation 
+
+We use Hand-Object Distance as a proxy metric for language-conditioned object grounding. The evaluation set is constructed by using an LLM to generate unseen manipulation instructions and an image-editing model to synthesize unseen objects. We then estimate the 3D target object position from world-model trajectories. After manually filtering incorrect episodes, the final evaluation set contains around 5k episodes. To obtain the target position, we identify key interaction frames from each world-model trajectory using local minima in hand velocity and changes in grasp/release state. We reconstruct hand motion at these frames and associate the recovered finger positions with the target object location. At test time, we measure the distance between the policy-predicted wrist action and the estimated target object position. Lower distance indicates better instruction-conditioned object grounding. Since this metric does not evaluate finger-level dexterity, it should be viewed as a grounding metric rather than a complete task-success metric: low distance is usually necessary, but not sufficient, for successful manipulation. 
+
+C.3 Robot Execution Results 
+
+Figures 9 and 10 show qualitative rollouts of Wh0 on real-world manipulation tasks. The examples include object grasping, container placement, and table interaction, demonstrating that Wh0 can fol-low language instructions and execute diverse actions reliably. Compared with the baseline VITRA policy, Wh0 produces more consistent hand-object interactions and better task alignment. 21 pick the hard box and place it onto the white clock. 
+
+Pick the leather zebra. 
+
+grasp the flat pants and place it onto the wide mirror. 
+
+grasp the heavy jar. 
+
+grasp the shirt. 
+
+pick the thick glove. 
+
+grasp the red hat and place it into the stove. 
+
+pick the warm pen and place it near the tall pillow. 
+
+pick the plastic mug and place it onto the remote. 
+
+grasp the cracked candle and place it onto the fuzzy umbrella. 
+
+pick the lumpy hammer and place it near the fuzzy cat. Figure 8: Qualitative Visualization of WM-H 
+
+22 put the apple into the yellow basket .
+
+put the apple into the orange container. 
+
+put the coke can into the drawer .
+
+grasp the bread. 
+
+grasp the tape measure. 
+
+put the white -green drink into the drawer .
+
+grasp the remote controller. 
+
+put the teapot into the orange container .
+
+grasp the tape measure. 
+
+wipe the table .Figure 9: Robot execution rollouts of Wh0 across various dexterous manipulation tasks. 
+
+23 put the coke can into the black box .
+
+put the glove into the orange container .
+
+touch the robot gripper. 
+
+grasp the paper cup .
+
+take the apple out of the orange container .
+
+Wh0 rollouts(success): (1) grasp the towel . (2) green -white bottle in container. 
+
+Baseline VITRA rollouts (fail): (1) grasp the towel . (2) green -white bottle in container. 
+
+put the water bottle into the blue bowl .
+
+grasp the tripod .Figure 10: Additional Wh0 rollouts and comparison with baseline VITRA. 
+
+24

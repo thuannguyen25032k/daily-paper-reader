@@ -1,0 +1,288 @@
+Title: Motion-Focused Latent Action Enables Cross-Embodiment VLA Training from Human EgoVideos
+
+URL Source: https://arxiv.org/pdf/2606.18955v1
+
+Published Time: Thu, 18 Jun 2026 00:49:23 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Motion-Focused Latent Action Enables Cross-Embodiment VLA Training from Human EgoVideos 
+
+Runze Xu 1,2, Yiluo Zhang 2, Jian Wang 1, Yu Wang 1, Jincheng Yu ∗1
+
+Abstract — Training generalist Vision-Language-Action (VLA) models typically requires massive, diverse robotic datasets with high-fidelity action annotations. While egocentric human manipulation videos are abundant and capture significant environmental diversity, the absence of action labels makes them difficult to use in conventional training paradigms. To address this, we propose a latent-action-based framework designed to extract general action priors from unlabeled human videos. The architecture features a Hybrid Disentangled VQ-VAE that decouples motion dynamics from environmental backgrounds through physical masks, enabling the construction of a cross-embodiment action codebook. By pre-training on human videos with the codebook, the VLM backbone learns deep representations of action intent. For adaptation to specific embodiments, we introduce an intent-perception decoupling strategy where the VLM predicts the action intent while a separate frozen visual encoder provides state-specific features to the action expert, thereby reducing action hallucinations. Results in simulation and real-world environments show that our method, pre-trained exclusively on unlabeled human videos, performs competitively with state-of-the-art VLA models trained on massive annotated datasets, requiring only ∼ 50 trajectories for downstream adaptation. 
+
+I. INTRODUCTION Recent progress in Vision-Language-Action (VLA) mod-els, ranging from early architectures like RT-2[1] to recent systems such as pi0[2] and RDT[3], has demonstrated the efficacy of using powerful Vision-Language Models (VLMs) for cross-scenario execution. These models achieve high performance by fine-tuning on downstream task datasets. However, training general VLA models remains heavily dependent on large-scale robotic datasets with precise action annotations, such as Open X-Embodiment[4] and AgiBot[5]. Collecting such data is not only prohibitively expensive in terms of time and equipment but also introduces a significant domain gap due to the kinematic and physical differences between robot platforms. This gap necessitates complex alignment algorithms to manage noise and inconsistencies across embodiments. Egocentric human manipulation videos offer a scalable alternative because they are abundant on the internet and capture high environmental diversity. These videos reflect real-world complexities that far exceed those of labora-tory or factory settings. Although recent studies such as EgoMimic[6] and MotionTrans[7] attempt to utilize human data for post-training, and H-RDT[8] explores pre-training    
+
+> 1Department of Electronic Engineering, Tsinghua University
+> 2Tianfu Jiangxi Laboratory
+> ∗Corresponding at: yu-jc@mail.tsinghua.edu.cn
+
+with human videos, these works still rely on explicit hand-motion labels captured by specialized and expensive AR or VR hardware setups . Since the vast majority of internet-scale videos lack such annotations, current VLA models cannot directly leverage the most extensive human visual priors, leaving most human data untapped. Beyond the labeling bottleneck, a fundamental difficulty in utilizing human videos lies in the entanglement of ac-tion representations. Recent approaches[9], [10] typically learn discrete action codebooks via VQ-VAE-style recon-struction objectives, compressing frame transitions into la-tent action tokens. However, these objectives often capture task-irrelevant dynamics, such as background changes or camera shifts. Such noisy representations introduce dis-tractions unrelated to the actual manipulation tasks, which degrades the quality of pre-trained policies[11]. UniVLA[12] attempts to guide the latent action model with linguistic descriptions to focus on task-centric movements. However, the vast complexity and environmental diversity of human recordings make it difficult to achieve precise decoupling through language signals alone, leaving significant room for improvement in human-to-robot transfer performance. To address these issues, we propose a latent action frame-work that extracts universal action priors directly from un-labeled egocentric videos. We treat human videos as natural carriers of action intent rather than mere visual backgrounds. By pre-training VLMs with a discrete action codebook that captures embodiment-agnostic motion primitives disentan-gled from specific robot kinematics, the VLA model can acquire an understanding of action intent before exposure to actual robotic environments. To ensure stable execution, we also introduce an intention-perception decoupling strategy during adaptation that balances high-level VLM intent with objective physical feedback. Consequently, the downstream adaptation phase requires only few robotic trajectories to jointly train the VLM and the action head, achieving per-formance comparable to state-of-the-art VLA models across different embodiments. This work makes several primary contributions.  
+
+> •
+
+First, we establish a pre-training paradigm that lever-ages unlabeled human videos to learn cross-embodiment action priors, enabling a transition from human action intent to robot execution with only ∼ 50 downstream trajectories.  
+
+> •
+
+Second, we introduce a hybrid disentangled VQ-VAE that separates motion dynamics from environmental backgrounds via physical masks, ensuring the latent action space focuses on pure motion patterns.   
+
+> arXiv:2606.18955v1 [cs.CV] 17 Jun 2026 Visual Embedding Action Decoder Actions
+> Proprioception Embedding
+> DINO
+> Noisy Actions
+> VLM Backbone
+> Motion-Focused Codebook
+> Latent Action Tokens
+> supervision
+> Robot Demonstrations
+> “Grab the pot and place it on the towel.”
+> Language Instruction
+> VLM Backbone
+> Motion-Focused Codebook
+> Latent Action Tokens
+> supervision
+> Human EgoVideos
+> “Pick the pink toy from the canvas bag.”
+> Language Instruction
+> Hybrid Disentangled VQ-VAE
+> (Section III-B)
+> Motion-Focused Codebook
+> T = t + 1 T = t
+> Human EgoView Image Pairs
+
+Stage I 
+
+Stage II  Stage III Fig. 1: Method overview. We propose a human-video-driven framework for training vision–language–action models. A hybrid disentangled VQ-VAE first extracts transferable latent action codes from unlabeled human videos. These codes are then used as supervision to pre-train the VLM to infer action intentions from observations and instructions. Finally, with only a small number of robot trajectories, the VLM backbone and action expert are jointly fine-tuned to ground the learned intentions in real robotic execution.  
+
+> •
+
+Finally, we validate the framework across cross-embodiment scenarios, including robot-to-robot and human-to-robot transfers. Experiments show the learned representations maintain high cross-embodiment consis-tency. II. RELATED WORK 
+
+A. Vision-Language-Action models 
+
+Current Vision-Language-Action (VLA) models typically combine a pre-trained VLM backbone with a dedicated action head[13], [3], [2], [14]. In this architecture, the pretrained VLM interprets instructions and visual obser-vations into semantic embeddings, which then condition the action head to generate control sequences. For ac-tion head part, early implementations like OpenVLA[13] utilized autoregressive behavior cloning, and more recent developments[3], [2] have shifted toward generative policies, such as diffusion[15] or flow matching[16], to better repre-sent the multimodal nature of robot actions. However, these systems remain heavily dependent on large-scale, annotated robot trajectories for pre-training. Such data is inherently difficult to collect and standardize across different robotic embodiments compared to internet-scale text or images, creating a bottleneck for the scalability of VLA systems. 
+
+B. Latent Action Representation Learning 
+
+Latent action representation learning extracts generalizable control signals from unlabeled video data. Early frameworks, such as LAPA[9] and IGOR[10], utilize VQ-VAE archi-tectures to compress features from consecutive frames into discrete latent codes. By reconstructing subsequent frames conditioned on these latents, these models learn codebooks that represent essential visual transitions. UniVLA[12] builds on this foundation by introducing a two-stage training strat-egy designed to suppress task-irrelevant variations within frame transitions. Further developments, including villa-x[17], integrate robot-specific states and actions into the self-supervised process to ground latent representations in physical motion patterns, while GO-1[5] and GR00T1[14] incorporate explicit supervision over these latent spaces dur-ing training. A major difficulty remains in isolating motion from complex backgrounds in human videos without robot-side labels. We address this by explicitly decoupling motion from environmental noise using physical masks in our hybrid disentangled VQ-VAE, which distills pure action intent to improve cross-embodiment training. 
+
+C. Using Human Data in VLA Training 
+
+Early efforts to incorporate human data, such as UMI[18], use handheld grippers to collect data, while subsequent works such as EgoMimic[6] and MotionTrans[7] employ AR/VR hardware to extract hand poses as explicit action labels. Although H-RDT[8] extends this by pretraining VLA on human video, it still relies on pre-annotated action se-quences from VR devices, limiting their scalability simi-larly to robot-specific datasets. Furthermore, frameworks like UniVLA still require robot-side trajectories to ground their codebooks, which can lead to weak cross-embodiment gener-alization and diminished effectiveness in complex bimanual tasks. Our work bypasses the need for such annotations by learning action priors directly from unlabeled human videos. Encoder  
+
+> Motion-Focused
+> Codebook
+> DINO v2
+> Decoder
+> Action Code Initialization
+> BG Code Initialization
+> T = t
+> Patches
+> T = t + 1
+> Patches
+> Action Code BG Code
+> T = t+1
+> Action Patches
+> T = t+1
+> BG Patches
+> T = t+1
+> Full Patches
+> T = t
+> Observation
+> T = t + 1
+> Observation
+> Human Videos Dataset
+> Move Right/Left
+
+# … …Camera shifts  
+
+> Standard Reconstruction Disentangled Reconstruction
+
+Fig. 2: Hybrid Disentangled VQ-VAE. The VQ-VAE model decomposes short-term visual changes into discrete action and background latent spaces via a dual-path vector quanti-zation bottleneck. A shared mask-guided decoder enforces semantic separation by reconstructing motion-related and background regions from corresponding latent codes, en-abling the extraction of transferable action intentions from videos. III. METHOD 
+
+A. Overview 
+
+As shown in Fig. 1, our framework learns robot ma-nipulation policies from unlabeled human videos through three main stages. In the first stage, we design a hybrid disentangled VQ-VAE to extract cross-embodiment discrete action codebooks from egocentric human datasets. In the second stage, these codes provide the supervision for VLM pre-training, where a vision-language model learns to map visual observations and language instructions to general ac-tion intentions. Finally, in the downstream adaptation stage, the model is fine-tuned on a target robot platform using a limited set of demonstrations. This stage integrates the distilled action intent with visual feedback from a DINO v2 encoder to generate control commands via flow matching. 
+
+B. Hybrid Disentangled VQ-VAE 
+
+The latent action model uses a hybrid disentangled VQ-VAE to separate the latent spaces of action intent and environmental background changes. As shown in Fig. 2, the architecture consists of a disentangled encoder, a dual-channel quantization bottleneck and a mask-guided decoder. Given a sequence of adjacent video frames V ∈ RT ×C×H×W ,the model learns two independent discrete latent spaces: an action space Zact and a background space Zbg . This decomposition allows the model to partition complex tem-poral visual variations into executable action intent and environmental representations. In our implementation, we use pairs of adjacent frames with a fixed 1-second interval, which allows the model to capture short-term visual changes from physical actions while ignoring long-term scene drift. 
+
+1) Encoder: To extract features that are semantically consistent yet sensitive to geometric variations, a frozen DINO v2 is used to extract high-dimensional spatial rep-resentations F ∈ RT ×N×D. A spatial-temporal transformer models the evolution of these features across consecutive frames. To ensure disentanglement and mitigate interference from camera motion or background noise, the architecture introduces two sets of learnable query latents, Qact and 
+
+Qbg . These queries are concatenated with visual patches and processed by the encoder, which then projects the output into separate latent representations for action and background information. 
+
+2) Dual-path Vector Quantization and Disentangled Bot-tleneck: The bottleneck contains two independent vector quantization layers for action and background information. In the action branch, the continuous features corresponding to action queries are mapped into a discrete latent space using an action codebook of size 16, producing a set of quantized latent codes zact q . Each pair of frames is represented by 4 discrete latent action tokens, which together encode the visual changes from manipulator interaction. Simultaneously, a background codebook of size 16 maps features from back-ground queries to zbg q , capturing environmental information such as scene layout. This dual-path architecture enforces semantic isolation by constraining different feature types into predefined discrete slots. 
+
+3) Mask-guided Reconstruction with Shared Decoder: Ashared spatial-temporal transformer decoder uses ablation-based reconstruction with three input combinations to main-tain latent space purity. The full reconstruction path com-bines zact q , zbg q , and initial frame features to reconstruct the target feature map, which is standard practice in latent action model training. The action ablation path utilizes only zact q and the initial frame features to force the model to reconstruct regions specifically affected by motion. The background ablation path uses only zbg q to focus on environmental recon-struction. During training, external masks provide inductive biases: the action path calculates reconstruction error only for foreground regions, such as the robot arm, while the background path is supervised by the background regions. This asymmetric strategy compels the decoder to reconstruct specific regions based on the latent code type within a shared parameter space. In the implementation stage, We use SAM2[19] to segment the human hand and generate physical foreground masks for the action reconstruction branch. 
+
+4) Optimization Objectives: The total loss function is a weighted sum of reconstruction, vector quantization, and commitment components: 
+
+Ltotal = λrecon Lrecon + λvq Lvq + λcommit Lcommit . (1) The reconstruction loss Lrecon includes mask-guided fore-ground, background, and global feature errors. The vector quantization loss Lvq optimizes codebook vectors by min-imizing the Euclidean distance between encoder outputs and codebook entries, while the commitment loss Lcommit 
+
+enhances training stability by preventing frequent fluctua-tions in encoder outputs. End-to-end optimization enables the unsupervised extraction of disentangled latent action representations. 
+
+C. Pre-training VLM 
+
+Since human video data lacks explicit action labels, joint training with a downstream action expert is not possible during VLM pre-training. To address this, we integrate the discrete action codebook learned by the hybrid disentangled VQ-VAE into the VLM vocabulary following UniVLA. For a given image pair (It , It+T ) and its corresponding language instruction L, we first obtain the target latent action sequence 
+
+zact = {z(1), z(2), . . . , z(K)} via the frozen VQ-VAE encoder, where K = 4 in our implementation. The VLM is trained to predict this sequence auto-regressively. The pre-training objective is to minimize the negative log-likelihood: 
+
+Lpre = −E(L,It ,It+T )∼D
+
+" K
+
+# ∑
+
+> k=1
+
+log Pθ
+
+
+
+z(k) | z(<k), It , L
+
+#
+
+, (2) where z(k) denotes the k-th action token, z(<k) represents the preceding action tokens in the sequence, and θ denotes the trainable parameters of the VLM. By distilling the VQ-VAE’s disentangled latent space into the VLM, the model learns to ground high-level linguistic commands into low-level executable action intentions. In our implementation, we employ Prismatic-7B [20] as the backbone, ensuring a fair comparison with related baseline methods. 
+
+D. Downstream Adaptation 
+
+The adaptation stage transfers action intentions from the pre-trained VLM to specific robotic tasks. We use a transformer-based flow matching decoder as the action ex-pert, which is trained from scratch to map latent intentions to executable control sequences. Given a natural language instruction L and a primary visual observation Imain , the VLM generates a sequence of action tokens that represent the predicted macro-level motion intent, and their corresponding hidden states from the last transformer layer are aggregated as the latent action embedding fact . The VLM is updated via LoRA fine-tuning to achieve efficient specialization while preserving its general-purpose representations. The system constructs a multimodal context Ff ull by concatenating the intent embedding with state features, including DINO v2 fea-tures fobs = DINO (Imain ) and robot proprioception fproprio :
+
+Ff ull = Concat ( fact , fobs , fproprio ). (3) This context informs the transformer blocks of the action expert. Within these blocks, self-attention layers capture temporal dependencies within action chunks, while cross-attention layers integrate the multimodal context into the action sequence prediction. The model generates actions by predicting a vector field vθ through an MLP head, with the flow matching loss: 
+
+L f low = ∥vθ (xt ,t, Ff ull ) − (a − ε)∥2, (4) where a denotes the ground-truth action, ε is standard Gaussian noise, xt is the noisy action at flow step t, and 
+
+vθ is the velocity field predicted by the network. To ensure the VLM accurately captures the specific intention of down-stream demonstrations, we also apply a cross-entropy loss 
+
+Lintent similar to loss in VLM pretraining stage to supervise the latent action token prediction. The final optimization objective is a joint loss that balances the intention prediction and the action execution: 
+
+Ltotal = L f low + λintent Lintent , (5) where λintent is a weighting hyperparameter. We use DINO v2 features as the visual representation instead of VLM visual embeddings to decouple action in-tent from the observed physical state. Directly using VLM embeddings for control often leads to action hallucination, where the model ignores real-time feedback. For instance, a model might attempt to place an object without perceiving that the target container remains closed. Separating the VLM-generated intent from the objective perception provided by DINO v2 mitigates these failures and ensures more grounded execution. IV. E XPERIMENTS 
+
+This section systematically evaluates the proposed frame-work, focusing on whether the motion-focused latent action achieves robust generalization in cross-embodiment scenar-ios. The experimental design is structured around three core dimensions. First, in a robot-to-robot setting, we verify whether action intentions learned solely from single-arm videos generalize to different embodiments. Second, in a human-to-robot setting, we examine whether a dual-arm robot can be controlled using representations learned exclu-sively from ego-centric human videos without action labels. Third, we quantitatively analyze the representation space to determine if the learned latent action codebook maintains a consistent structure across different embodiments, thereby explaining the source of its cross-embodiment generalization capabilities. For all experiments, input images are resized to 224 × 224 pixels, and the DINOv2-ViT-B/14-reg model is utilized as the frozen visual encoder. 
+
+A. Single-Arm Robot to Single-Arm Robot 
+
+This experiment validates whether action intentions learned from third-view robot videos can be transferred to different robotic embodiments for complex tasks. In this setup, we train the hybrid disentangled VQ-VAE and the VLM backbone using only the third-view video data from the BridgeV2 dataset[24], which features a WindowX ma-nipulator, without using any action labels. The complete TABLE I: Task success rates on the LIBERO simulation benchmark (%). Methods marked with * utilize wrist-mounted camera observations when post training.                                                        
+
+> Method Spatial Object Goal Long Average
+> LAPA[9] 73.8 74.6 58.8 55.4 65.7 Diffusion Policy[15] 78.3 92.5 68.3 50.5 72.4 OpenVLA[13] 84.7 88.4 79.2 53.7 76.5 SpatialVLA[21] 88.2 89.9 78.6 55.5 78.1 pi0[2]* 88.0 88.5 87.0 61.0 81.1 pi0-fast[22]* 96.4 96.8 88.6 60.2 85.5 villa-x[17]* 97.5 97.0 91.5 74.5 90.1 UniVLA-Bridge[12] 90.0 86.0 90.5 86.0 88.1 Ours w/o DINO 91.0 81.0 88.5 81.0 85.4
+> Ours 95.5 94.0 93.5 84.0 91.8
+
+VLA model only encounters the Franka manipulator from the LIBERO[25] dataset during the post-training phase for action execution adaptation. During the training of the hybrid disentangled VQ-VAE, we employ RoboEngine[26], a state-of-the-art robot segmentation model, to generate high-quality physical masks that guide the decoupling of motion from the background. The evaluation is conducted on the LIBERO benchmark, which is designed for lifelong robot learning and focuses on knowledge transfer across multiple tasks. The benchmark consists of four task suites, where LIBERO-Spatial evaluates adaptation to layout variations with similar semantic tasks, LIBERO-Object tests the transfer of manipulation skills to unseen objects, LIBERO-Goal assesses the understanding of diverse natural language instructions, and LIBERO-Long targets multi-stage manipulation requiring extended temporal dependencies. Each suite contains 10 tasks, and each task provides 50 human-teleoperated trajectories for post-training. We exclusively utilize the third-person view data from these 50 trajectories. We compare our method against LAPA[9], Diffusion Policy[15], OpenVLA[13], SpatialVLA[21], pi0[2], pi0-fast[22], villa-x[17], and UniVLA[12]. Among these, LAPA, villa-x, and UniVLA utilize latent action representation learning, while OpenVLA, SpatialVLA, and pi0 represent current mainstream VLA models. For pi0, we refer to the performance reported in villa-x. The codebook training and VLM pre-training phases for UniVLA are strictly reproduced on the BridgeV2 dataset. To ensure a fair comparison of latent actions, our method adopts the autoregressive action head used by UniVLA as the action expert. Furthermore, to verify the effectiveness of the decoupling between intention and perception, we substitute DINO v2 features for the visual embeddings output by the VLM. Post-training is conducted for 30k steps with a batch size of 128 for Spatial, Object, and Goal tasks, and 40k steps for Long tasks. Each task is evaluated 20 times. Experimental results in Table I demonstrate that despite using only third-person videos and no action labels during pre-training, our method outperforms all baselines in the average success rate across the four suites. While villa-x and pi0-fast maintain a slight lead in the Spatial and Object suites, their performance is bolstered by wrist-mounted cam-era observations and explicit action labels. Such egocentric feedback and direct supervision facilitate the fine-grained control required for short-range interactions. In contrast, our method excels in Goal and Long-horizon tasks, out-performing villa-x by 2.0% and 9.5% respectively. This performance gap indicates that our extracted latent action in-tentions provide superior guidance for multi-step sequences, effectively endowing the framework with stronger high-level planning capabilities. While villa-x excels in immediate motor precision, it lacks the global perspective necessary to maintain task coherence over extended periods. Our ap-proach ensures that the robot remains focused on the final objective, mitigating the drifting issues common in long-horizon and goal-driven scenarios. Additionally, using DINO features instead of VLM visual embeddings yields superior results, confirming the efficacy of the intention-perception decoupling strategy in robot-to-robot generalization. 
+
+B. Human to Dual-Arm Robot 
+
+This section further investigates whether transferable ac-tion intentions can be learned from human ego-centric videos without action labels and generalized to dual-arm robotic manipulation. We adopt RoboTwin 2.0[27] for simulation experiment. We train the hybrid disentangled VQ-VAE and VLM back-bone using only the video portion of the EgoDex dataset[28]. The VLA model only interacts with data collected from the RoboTwin 2.0 simulation environment during the post-training phase. During codebook training, SAM2 is utilized to generate physical masks for human hands to guide motion region modeling. The RoboTwin 2.0 benchmark includes fifty tasks, from which we select 10 representative tasks. We use the Aloha-Agilex dual-arm robot in clean mode to collect 50 trajectories per task for post-training, with a batch size of 32 and a total of 30k training steps for each task. Due to frequent self-occlusion in the primary camera view caused by the robot arms in RoboTwin 2.0, we introduce an additional wrist-mounted view Iwrist to enhance visual observability. Accordingly, the observation representation in Eq. (3) is reformulated as fobs = DINO ([ Imain , Iwrist ]) .
+
+Baselines include RDT[3], PI0[2], Diffusion Policy[15], ACT[23], and UniVLA[12]. For UniVLA, a flow matching head is used as the action expert to ensure fairness. We also conduct two ablation studies, where one replaces DINO v2 features with VLM visual embeddings to verify the decoupling strategy, and the other freezes the VLM during post-training to examine the importance of latent action embeddings for downstream execution. The results in Table II indicate that our method achieves performance comparable to state-of-the-art VLAs despite re-lying solely on unlabeled human videos for pre-training. The visual feature ablation proves that decoupling intention from state helps the model adjust action intentions based on real-time feedback. Freezing the VLM leads to a drop in success rates, demonstrating that the latent action embeddings output TABLE II: Task success rates on the RoboTwin 2.0 simulation benchmark (%). Despite relying only on unlabeled human videos for pre-training, our method achieves performance comparable to state-of-the-art VLAs trained on large-scale robot datasets with action supervision. Ablation studies analyze the effects of the intention-perception decoupling strategy and examine the importance of latent action embeddings by freezing the VLM during post-training. Bold indicates the best performance, and underline indicates the second best. 
+
+Task RDT[3] pi0[2] ACT[23] DP[15] UniVLA[12] Ours w/o DINO Ours (Freeze) Ours 
+
+Adjust bottle 81 90 97 97 87 87 83 97 
+
+Grab roller 74 96 94 98 80 87 50 90 Place phone stand 15 35 2 13 40 30 8 28 Pick dual bottles 42 57 31 24 58 58 42 52 Place empty cup 56 37 61 37 46 51 48 63 
+
+Move can pot 25 58 22 39 60 52 52 65 
+
+Handover mic 90 98 85 53 82 86 84 92 Open laptop 59 85 56 49 81 81 74 87 
+
+Place object basket 33 16 15 15 18 16 11 25 Place burger fries 50 80 49 72 84 80 72 78 
+
+Average 52.5 65.2 51.2 49.7 63.6 62.8 52.4 67.7 
+
+(a) Robot platform Task A: Place bottle on plate  Task B: Unplug  
+
+> Task C: Fold towel
+
+(b) Three real-world tasks Place bottle on plate Unplug Fold towel  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Success Rate
+> 0.30
+> 0.35
+> 0.50
+> 0.75
+> 0.80
+> 0.75
+> UniVLA
+> Ours
+
+(c) Success rates 
+
+Fig. 3: Real-world experiments. (a) The physical dual-arm robot platform used for evaluation. (b) Three real-world manipulation tasks, including placing a bottle on a plate, unplugging a power cord, and folding a towel. (c) Task success rates compared with UniVLA, showing improved transfer of action intentions from human videos to the real robot. Notably, the “Place Bottle” task shows a lower success rate. The bottle’s high center of gravity makes it prone to toppling, which results in irreversible failure within a trial, while the other tasks allow corrective retries. by the VLM are critical for downstream performance, as clear intentions guide the action expert. However, even with a frozen VLM, our model maintains a success rate close to RDT, which suggests that the VLM pre-training is highly effective. The action intentions extracted from human videos generalize directly to the robotic embodiment, as the latent action embeddings contain highly transferable information that guides control sequences even without further updates. For real-world experiments, we verify the transferability of intentions to a physical dual-arm platform. The training setup mirrors the simulation, using only EgoDex for pre-training. The physical platform utilizes an ARX X5 leader arm to teleoperate an ARX R5 follower arm. Visual observations are provided by two wrist-mounted RGB fisheye cameras and one 20Hz first-person RGB camera. The model is deployed on the ARX R5 (Fig. 3a) at a 60Hz frequency. We evaluate three tasks (Fig. 3b) : placing a bottle on a plate (single-arm), unplugging a power cord (dual-arm, rigid interaction), and folding a towel (dual-arm, deformable interaction). Each task uses 50 real-world trajectories for post-training with a batch size of 32 for 20k steps. Results in Fig. 3c demonstrate that our method surpasses UniVLA in transferring intentions from human video data to the physical robot. Given the identical post-training data used across methods, these performance gains suggest that our framework extracts clearer action intentions, providing more explicit guidance for the action decoder and substantially improving downstream learning efficiency. Notably, UniVLA achieves a relatively low success rate on the “Place Bottle” task due to the bottle’s high center of gravity, which makes it susceptible to irreversible toppling upon minor contact. Unlike the other two tasks, where failed attempts still allow for subsequent correction and retrying, errors in this task often result in terminal failure. VLM Backbone         
+
+> Latent Action
+> Hidden States
+> 76824631Latent Action Code
+> CKA Analysis
+> Hybrid Disentangled VQ-VAE
+> Motion-Focused Codebook
+> supervision
+> Bridge V2
+> Bridge V2
+> Furniture
+> Bench
+> Franka Window X
+
+Stage I 
+
+Stage II (a) Latent Action Alignment Evaluation Overview 0.84 0.86 0.88 0.90 0.92 0.94  
+
+> CKA Value
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> Counts  0.9139±0.0099
+> 0.8659±0.0064
+> Motion-Focused Latent Action
+> UniVLA Latent Action
+> Motion-Focused Latent Action Mean±Std
+> UniVLA Latent Action Mean±Std
+
+(b) Latent Action CKA Analysis 
+
+Fig. 4: Comparison of latent action alignment consistency. The proposed Motion-Focused latent action outperforms UniVLA in CKA metrics, indicating a more coherent cross-embodiment action space. 
+
+C. Latent Action Evaluation 
+
+To explain the observed generalization performance at the representation level, we design an alignment analy-sis method based on domain subspace elimination. This approach quantitatively assesses the alignment of motion-focused latent actions in cross-embodiment scenarios and compares it with UniVLA. Specifically, as shown in Fig. 4a, we first generate a discrete action codebook using a latent action model trained exclusively on BridgeV2 dataset. This codebook serves as pseudo-labels for pre-training the VLM on a mixed dataset of BridgeV2 (WindowX Robot) and FurnitureBench[29] (Franka robot). We then extract feature embeddings corresponding to each action token from the hidden layers of different datasets for analysis. To ensure objectivity, 20,000 image pairs are randomly sampled from both datasets. Since different environments and embodiments introduce domain bias, we employ an iterative domain subspace strip-ping strategy. A logistic regression classifier is trained to predict the domain source. If the accuracy exceeds chance, the features still contain domain-specific information. We then identify the principal component directions with the highest variance via PCA and treat them as the domain-related subspace. The original features are projected onto the orthogonal complement of this subspace to filter out domain-sensitive components. This process repeats until the classifier can no longer distinguish between data sources. Following bias removal, we use the Centered Kernel Alignment (CKA) metric[30] to compare latent action repre-sentations between BridgeV2 and FurnitureBench. For statis-tical robustness, we introduce a bootstrap sampling strategy based on token centroids. For each token appearing in both datasets, we collect its sample indices and, in each sampling round, randomly draw half of the samples to compute a temporary centroid. After 50 rounds, we calculate the CKA EgoDex  
+
+> Bridge
+> 1, 12, 1, 3: Move Forward
+> Bridge
+> EgoDex
+> 6, 9, 9, 4: Move Right
+> Bridge
+> EgoDex
+> 2, 9, 6, 7: Lift Object
+
+Fig. 5: Latent Action Visualization. Image pairs from different datasets with same latent codes. Despite different morphologies, robot arms and human hands are assigned the same action tokens. values between the resulting feature matrices. The results (Fig. 4b) show that UniVLA exhibits lower consistency with a mean CKA of 0.8659, whereas our Motion-Focused Latent Action achieves a significantly higher alignment with a mean CKA of 0.9139. Both methods show minimal standard deviations, indicating robust results. This quantitative analysis confirms that our motion-focused latent action suppresses domain bias from environment and embodiment differences. 
+
+D. Latent Action Analysis 
+
+Finally, to visualize cross-embodiment consistency, we train the hybrid disentangled VQ-VAE on a mixed BridgeV2 and EgoDex dataset and visualize the latent action codes for identical actions. As shown in Fig. 5, robot arms and human hands are mapped to the same action tokens when performing the same behavioral patterns, further validating that the learned representations possess a highly consistent semantic structure across different embodiments. V. CONCLUSION AND LIMITATION In this paper, we introduce a latent action pre-training framework that connects unlabeled human video data with robotic control. By leveraging a hybrid disentangled VQ-VAE and an intention-perception decoupling strategy, our model achieves great performance with extremely high data efficiency. Despite these advancements, the proposed method has certain limitations. Although the discrete action code-book captures high-level intentions effectively, its represen-tation capacity remains insufficient for fine-grained manip-ulation tasks requiring high-precision control. Future work will investigate multi-scale latent representations to improve the performance of VLA models in complex and delicate interaction scenarios. ACKNOWLEDGEMENT This research was supported by National Natural Sci-ence Foundation of China (62325405), Tsinghua University Initiative Scientific Research Program, Tsinghua-Efort Joint Research Center for EAI Computation and Perception and SunRisingAI Lab, Beijing National Research Center for In-formation Science, Technology (BNRist), Beijing Innovation Center for Future Chips, and State Key laboratory of Space Network and Communications. REFERENCES [1] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid et al. , “Rt-2: Vision-language-action models transfer web knowledge to robotic control,” in Conference on Robot Learning . PMLR, 2023, pp. 2165–2183. [2] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter et al. , “ pi 0: A vision-language-action flow model for general robot control,” arXiv preprint arXiv:2410.24164 , 2024. [3] S. Liu, L. Wu, B. Li, H. Tan, H. Chen, Z. Wang, K. Xu, H. Su, and J. Zhu, “Rdt-1b: a diffusion foundation model for bimanual manipulation,” arXiv preprint arXiv:2410.07864 , 2024. [4] A. O’Neill, A. Rehman, A. Maddukuri, A. Gupta, A. Padalkar, A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain et al. , “Open x-embodiment: Robotic learning datasets and rt-x models: Open x-embodiment collaboration 0,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 6892–6903. [5] Q. Bu, J. Cai, L. Chen, X. Cui, Y. Ding, S. Feng, S. Gao, X. He, X. Hu, X. Huang et al. , “Agibot world colosseo: A large-scale manipulation platform for scalable and intelligent embodied systems,” arXiv preprint arXiv:2503.06669 , 2025. [6] S. Kareer, D. Patel, R. Punamiya, P. Mathur, S. Cheng, C. Wang, J. Hoffman, and D. Xu, “Egomimic: Scaling imitation learning via egocentric video,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 13 226–13 233. [7] C. Yuan, R. Zhou, M. Liu, Y. Hu, S. Wang, L. Yi, C. Wen, S. Zhang, and Y. Gao, “Motiontrans: Human vr data enable motion-level learning for robotic manipulation policies,” arXiv preprint arXiv:2509.17759 ,2025. [8] H. Bi, L. Wu, T. Lin, H. Tan, Z. Su, H. Su, and J. Zhu, “H-rdt: Human manipulation enhanced bimanual robotic manipulation,” arXiv preprint arXiv:2507.23523 , 2025. [9] S. Ye, J. Jang, B. Jeon, S. Joo, J. Yang, B. Peng, A. Mandlekar, R. Tan, Y.-W. Chao, B. Y. Lin et al. , “Latent action pretraining from videos,” 
+
+arXiv preprint arXiv:2410.11758 , 2024. [10] X. Chen, J. Guo, T. He, C. Zhang, P. Zhang, D. C. Yang, L. Zhao, and J. Bian, “Igor: Image-goal representations are the atomic con-trol units for foundation models in embodied ai,” arXiv preprint arXiv:2411.00785 , 2024. [11] C. Zhang, T. Pearce, P. Zhang, K. Wang, X. Chen, W. Shen, L. Zhao, and J. Bian, “What do latent action models actually learn?” 2025. [Online]. Available: https://arxiv.org/abs/2506.15691 [12] Q. Bu, Y. Yang, J. Cai, S. Gao, G. Ren, M. Yao, P. Luo, and H. Li, “Univla: Learning to act anywhere with task-centric latent actions,” 
+
+arXiv preprint arXiv:2505.06111 , 2025. [13] M. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn, “Openvla: An open-source vision-language-action model,” 
+
+arXiv preprint arXiv:2406.09246 , 2024. [14] NVIDIA, :, J. Bjorck, F. Casta˜ neda, N. Cherniadev, X. Da, R. Ding, L. J. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, J. Jang, Z. Jiang, J. Kautz, K. Kundalia, L. Lao, Z. Li, Z. Lin, K. Lin, G. Liu, E. Llontop, L. Magne, A. Mandlekar, A. Narayan, S. Nasiriany, S. Reed, Y. L. Tan, G. Wang, Z. Wang, J. Wang, Q. Wang, J. Xiang, Y. Xie, Y. Xu, Z. Xu, S. Ye, Z. Yu, A. Zhang, H. Zhang, Y. Zhao, R. Zheng, and Y. Zhu, “Gr00t n1: An open foundation model for generalist humanoid robots,” 2025. [Online]. Available: https://arxiv.org/abs/2503.14734 [15] C. Chi, Z. Xu, S. Feng, E. Cousineau, Y. Du, B. Burchfiel, R. Tedrake, and S. Song, “Diffusion policy: Visuomotor policy learning via action diffusion,” The International Journal of Robotics Research , vol. 44, no. 10-11, pp. 1684–1704, 2025. [16] Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel, and M. Le, “Flow matching for generative modeling,” 2023. [Online]. Available: https://arxiv.org/abs/2210.02747 [17] X. Chen, H. Wei, P. Zhang, C. Zhang, K. Wang, Y. Guo, R. Yang, Y. Wang, X. Xiao, L. Zhao et al. , “Villa-x: enhancing latent action modeling in vision-language-action models,” arXiv preprint arXiv:2507.23682 , 2025. [18] C. Chi, Z. Xu, C. Pan, E. Cousineau, B. Burchfiel, S. Feng, R. Tedrake, and S. Song, “Universal manipulation interface: In-the-wild robot teaching without in-the-wild robots,” in Proceedings of Robotics: Science and Systems (RSS) , 2024. [19] A. Kirillov, E. Mintun, N. Ravi, H. Mao, C. Rolland, L. Gustafson, T. Xiao, S. Whitehead, A. C. Berg, W.-Y. Lo, P. Doll´ ar, and R. Gir-shick, “Segment anything,” arXiv:2304.02643 , 2023. [20] S. Karamcheti, S. Nair, A. Balakrishna, P. Liang, T. Kollar, and D. Sadigh, “Prismatic vlms: Investigating the design space of visually-conditioned language models,” in Forty-first International Conference on Machine Learning , 2024. [21] D. Qu, H. Song, Q. Chen, Y. Yao, X. Ye, Y. Ding, Z. Wang, J. Gu, B. Zhao, D. Wang et al. , “Spatialvla: Exploring spatial representations for visual-language-action model,” arXiv preprint arXiv:2501.15830 ,2025. [22] K. Pertsch, K. Stachowicz, B. Ichter, D. Driess, S. Nair, Q. Vuong, O. Mees, C. Finn, and S. Levine, “Fast: Efficient action tokenization for vision-language-action models,” arXiv preprint arXiv:2501.09747 ,2025. [23] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn, “Learning fine-grained bimanual manipulation with low-cost hardware,” arXiv preprint arXiv:2304.13705 , 2023. [24] H. Walke, K. Black, A. Lee, M. J. Kim, M. Du, C. Zheng, T. Zhao, P. Hansen-Estruch, Q. Vuong, A. He, V. Myers, K. Fang, C. Finn, and S. Levine, “Bridgedata v2: A dataset for robot learning at scale,” in 
+
+Conference on Robot Learning (CoRL) , 2023. [25] B. Liu, Y. Zhu, C. Gao, Y. Feng, Q. Liu, Y. Zhu, and P. Stone, “Libero: Benchmarking knowledge transfer for lifelong robot learn-ing,” Advances in Neural Information Processing Systems , vol. 36, pp. 44 776–44 791, 2023. [26] C. Yuan, S. Joshi, S. Zhu, H. Su, H. Zhao, and Y. Gao, “Roboengine: Plug-and-play robot data augmentation with semantic robot segmen-tation and background generation,” arXiv preprint arXiv:2503.18738 ,2025. [27] T. Chen, Z. Chen, B. Chen, Z. Cai, Y. Liu, Z. Li, Q. Liang, X. Lin, Y. Ge, Z. Gu et al. , “Robotwin 2.0: A scalable data generator and benchmark with strong domain randomization for robust bimanual robotic manipulation,” arXiv preprint arXiv:2506.18088 , 2025. [28] R. Hoque, P. Huang, D. J. Yoon, M. Sivapurapu, and J. Zhang, “Egodex: Learning dexterous manipulation from large-scale egocentric video,” 2025. [Online]. Available: https://arxiv.org/abs/2505.11709 [29] M. Heo, Y. Lee, D. Lee, and J. J. Lim, “Furniturebench: Reproducible real-world benchmark for long-horizon complex manipulation,” in 
+
+Robotics: Science and Systems , 2023. [30] S. Kornblith, M. Norouzi, H. Lee, and G. Hinton, “Similarity of neural network representations revisited,” in International conference on machine learning . PMlR, 2019, pp. 3519–3529.

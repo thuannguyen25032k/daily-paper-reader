@@ -1,0 +1,699 @@
+Title: A Scalable Embodied Intelligence Platform for Seamless Real-to-Sim-to-Real Transfer of Household Mobile Manipulation Tasks
+
+URL Source: https://arxiv.org/pdf/2606.18646v1
+
+Published Time: Thu, 18 Jun 2026 00:25:51 GMT
+
+Number of Pages: 35
+
+Markdown Content:
+# A Scalable Embodied Intelligence Platform for Seamless Real-to-Sim-to-Real Transfer of Household Mobile Manipulation Tasks 
+
+Kui Yang 1†, Xianlei Long 1†, Haoxuan Li 1, Yan Ding 3* ,Chao Chen 1* 
+
+> 1
+
+School of Computer Science, Chongqing University, No. 55 Daxuecheng South Road, Shapingba District, Chongqing, 401331, Chongqing, China. 
+
+> 3
+
+R&D Department, Lumos Robotics Technology (Suzhou) Co., Ltd, No. 345 Baodai East Road, Wuzhong District, Suzhou, 215128, Jiangsu, China. *Corresponding author(s). E-mail(s): yding25@binghamton.edu; cschaochen@cqu.edu.cn; Contributing authors: yangkui1127@gmail.com; xianlei.long@cqu.edu.cn; 20214707@cqu.edu.cn; 
+
+> †
+
+These authors contributed equally to this work. 
+
+Abstract 
+
+Mobile manipulation is a fundamental capability in embodied intelligence robotics. The growing demand for robust and generalizable manipulation in unstructured household environments has driven rapid progress in embodied intelligence platforms. However, achieving a seamless transfer across the real-to-sim-to-real cycle faces three key challenges, including costly high-fidelity simulation scenes reconstruction, the complexity of systematic strategy evalua-tion in simulation, and incompatible real-world deployments. To address these challenges, we develop BestMan , a scalable and seamless real-to-sim-to-real platform that bridges the gap between the simulation and the real world, enabling effective strategy development, integration, and deployment for household mobile manipulation. Specifically, we design a novel Automated Scene Generation (ASG) module to reconstruct realistic simulations from real observations. Then, we 
+
+1
+
+> arXiv:2606.18646v1 [cs.RO] 17 Jun 2026
+
+propose a simulation-guided task formalization and skill learning architecture that supports the flexible integration and large-scale evaluations of hybrid skill strategies in simulation . Finally, to enhance the real-world scalability, we develop a Hardware-agnostic and Unified Middleware (HUM) to ensure seamless and compatible sim-to-real transfer across heterogeneous mobile manipulators for 
+
+real deployments. Experimental results demonstrate the superior performance of our proposed platform in establishing standardized benchmarks and facilitating promising research in the field of mobile manipulation.  
+
+> Keywords: Embodied Intelligence, Mobile manipulation, Real-to-Sim-to-Real, Household Environments
+
+# 1 Introduction 
+
+Embodied Intelligence (EI) has emerged as a promising paradigm for developing autonomous systems that perceive, reason, and act within the real world [1–4]. Among various embodied agents, mobile manipulators are representatives, combin-ing mobility and dexterous manipulation to perform complex interactions in diverse settings [5, 6]. In everyday household environments such as kitchens, mobile manipu-lation enables agents to follow natural language instructions, e.g., “Pick up the Cola from the refrigerator and place it inside the cabinet” . Robustly executing such tasks under diverse real-world scenarios requires the integration of different functional sys-tems [7], including coordinate perception [8], task planning [9], motion control [10], and object manipulation across multiple stages. However, deploying and testing these systems directly on physical robots remains costly and inefficient, due to hardware costs, lengthy experimentation cycles, safety concerns, and poor generalization across scenes [2, 11]. These limitations highlight the critical role of simulation in developing and scaling mobile manipulation capabilities. Recent research on EI platforms for mobile manipulation is in a stage of rapid growth. Several general-purpose simulators have been developed [12–14], serving as the foundation for the task-oriented simulation framework building [15–18]. While these platforms have accelerated algorithmic development in simulation, they often 2rely on manual or procedural scene generation and lack an automated reconstruc-tion pipeline for accurately reflecting real-world disturbances to improve robustness, which underscores the importance of real-to-sim transfer. In contrast, existing real-world platforms [19, 20] are typically built on the Robot Operating System (ROS) [21] to explore the deployment performance. However, they are often tightly coupled with specific hardware, making it difficult to connect simulations for rapid, large-scale testing and requiring huge reconfigurations and transfer to heterogeneous robotic hardware [22]. Although some platforms attempt to integrate both simulation and real-world deployments [23, 24], they are often tailored to specific tasks, lacking the generality and scalability required for the complex mobile manipulation. In summary, these limitations reveal a critical need for a scalable real-to-sim-to-real platform that seamlessly bridges scene reconstruction, strategy learning, and real-world deployments. Despite its promise, building a scalable and seamless platform for household mobile manipulation in unstructured environments faces several key challenges. First, accu-rate and scalable real-to-sim scene reconstruction remains a bottleneck. Manually constructing simulation environments using scanned 3D assets [25, 26] is labor-intensive and not scalable, limiting the quality and quantity of data usable for training. Second, the long-horizon nature of household tasks introduces significant difficulties in perception, planning, and control [27–29]. These tasks involve multi-stage objectives, cluttered environments, and fine-grained object interactions, but lack standardized decomposition and evaluation protocols. Third, achieving reliable and seamless sim-to-real deployments is hindered by mismatches between simulation frameworks and real-world hardware interfaces, as well as by the diversity of robot platforms and con-trol APIs [30]. These factors make it difficult to deploy learned policies across diverse real-world platforms, limiting the reusability and scalability of mobile manipulation systems. 3indoor RGB images of household scenes       
+
+> RGBD images of mobile manipulator s[optional ]
+> Real -to -Sim
+> Transfer
+
+…
+
+…
+
+…
+
+…
+
+…     
+
+> Articulated
+> Objects
+> Asset
+> Dataset
+> Mobile
+> Manipulators
+> Rigid Objects
+> Sim -to -Real
+> Deployments
+> Hybrid Strategy
+> Find_Obj Navigatio n
+> Approach Manipulation Placement
+> Skill
+> Sub -Task
+> Open / Pick / Place Grasp_Est
+> Real -World Experimental Scene
+> Perception Example
+> Receptacle / Object
+> label+mask affordance best grasp pose
+
+… 
+
+> (a) ASG: Automated Real -to -Sim
+> Scene Generation
+> (b) Simulation -Guided and Modularized
+> Task Formalization and Skill Learning
+> (c) HUM: Sim -to -Real Deployments via
+> Hardware -agnostic Unified Middleware
+
+Fig. 1 Overview of the developed BestMan (Real-to-Sim-to-Real) platform, consisting of three primary modules: (a) ASG for real-to-sim transfer; (b) simulation-guided and modularized task for-malization and skill learning; (c) HUM for sim-to-real deployments. Together, these modules facilitate 
+
+BestMan ’s scalable algorithmic developments and seamless real-world deployments for complex household mobile manipulation tasks and environments. 
+
+To address above-mentioned challenges, in this study, we propose and develop 
+
+BestMan , a scalable and seamless mobile manipulation platform that integrates real-to-sim scene reconstructions, algorithm developments, and deployments across heterogeneous platforms. Specifically, to overcome limitations of the manual simula-tion setup, we propose an Automated real-to-sim Scene Generation (ASG) module that reconstructs articulated and semantically aligned simulation scenes directly from real-world images. Second, to support systematic algorithm development, we establish the Transferable Household Mobile Manipulation (THMM) benchmark, which leverages a modular Sense-Plan-Act (SPA) architecture to decompose long-horizon tasks into reusable perception and planning skills, enabling standardized task formalization and evaluation. Then, to ensure wide hardware compatibility, a Hardware-agnostic Uni-fied Middleware (HUM) that bridges simulations and real-world systems is proposed, supporting scalable sim-to-real deployments across heterogeneous robots. Finally, extensive experimental results verify the scalability and seamlessness of the developed platform in several typical household mobile manipulation tasks. We substantially extends our preliminary short-paper work [31], which intro-duced a foundational, simulation-centric modular architecture. To address its limi-tations—specifically the absence of formalized evaluation benchmark and real-world 4deployment capabilities—the present study establishes a comprehensive real-to-sim-to-real pipeline. Our novel contributions are explicitly summarized as follows: 
+
+• We develop a scalable and seamless real-to-sim-to-real platform, BestMan , which is a unified and extensible platform for the mobile manipulation that integrates real-world scene understanding, skill-based task formalization, and sim-to-real transfer capabilities, supporting the end-to-end deployments of task-specific algorithms. 
+
+• We develop the ASG for real-to-sim transfer, which reconstructs articulated and semantically grounded simulation scenes directly from real-world images, enabling data-efficient training and evaluation. 
+
+• We build the THMM benchmark in a modular integration manner, which formal-izes long-horizon mobile manipulation tasks using a Sense-Plan-Act structure and supports reusable skill modules for perception and planning. 
+
+• We design the HUM for sim-to-real deployments that bridge simulation and real systems, enabling scalable and compatible operation on heterogeneous robots. 
+
+# 2 The BestMan platform 
+
+2.1 Overview 
+
+An overview of the developed BestMan platform is illustrated in Figure 1. Our goal is to enable seamless real-to-sim-to-real transfer for mobile manipulation tasks. It consists of three primary modules: (1) ASG for real-to-sim transfer, as shown in Figure 1-(a), where geometrically and semantically realistic simulation environments are automatically reconstructed from real-world images; (2) Simulation-guided and modularized task formalization and skill learning is shown in Figure 1-(b), where household mobile manipulation tasks are formalized as language-guided tasks, decom-posed into sequential sub-tasks, and solved using a modularized skill architecture; (3) HUM for sim-to-real deployments, as illustrated in Figure 1-(c), where optimized 5RGB Image     
+
+> GPT Grounded
+> SAM
+> Depth Anything
+> CLIP
+> Top -K
+> asset
+> categories
+> Asset
+> Dataset
+> Success
+> URDFormer
+> RGBD Images
+> Camera Intrinsic /
+> Extrinsic Params
+> 3D point cloud
+> URDF
+> Model
+> Input
+> Output
+> Depth map
+> Object labels
+> Object masks
+> object
+> robotic arm
+> Success
+> AutoURDF
+> (a) Real -World Extraction (b) Simulated Scene Generation
+> Match
+> optional Generate
+
+Fig. 2 Overview of the ASG, which comprises two steps: (a) Real-World Perception and Extrac-tion, which extracts relevant object-level information using off-the-shelf visual models, along with constructing robot point clouds based on camera parameters; (b) Simulated Scene and Asset Gen-eration, in which each detected object is matched to a digital asset from the asset dataset based on the semantic and geometric similarity. If no suitable match is claimed, it will be generated by the URDFormer model. Simultaneously, the robot’s URDF model is constructed from point clouds using AutoURDF. All assets are then integrated into a physically consistent simulated scene. 
+
+hybrid strategies are transferred to the real world, enabling robust execution across heterogeneous mobile manipulators. To achieve this, we integrate a high-fidelity simulation framework using PyBullet for physics [32] and Blender for rendering [33], together with a unified real-world robotic system that supports deployments across heterogeneous hardware. 
+
+2.2 ASG: Automated real-to-sim scene generation 
+
+To address the challenge of accurately extracting and recovering semantic information from raw real-world observations, we propose ASG to construct geometrically and semantically realistic simulated scenes. Our real-to-sim pipeline is designed at the part-level granularity, enabling fully-interactive and physically-plausible simulations, rather than generating a single globally-unified geometry or a locally manipulable subset. To achieve this, it requires (1) the extraction of accurate semantic information from real-world images of indoor environments, and (2) the generation of interactive joint structures and physical parameters for the objects. To this end, we break down the real-to-sim process into two steps: the first is a real-world extraction step, in which relevant objects and the robot information are extracted from the raw camera image; 6and the second is a digital asset generation step, in which URDF models are generated to form a complete digital scene. An overview of the ASG is provided in Figure 2. 
+
+2.2.1 Real-World perception and extraction 
+
+The first step requires a single-view RGB image X1 of the environment and multi-view whole-body RGBD images X2 of the robot, captured by a calibrated camera with intrinsic matrix K. To extract the object masks for X1, we first prompt GPT-4 to retrieve all object labels Li = {l1, l 2, ..., l i}, i ∈ { 1, 2, ..., n }. Then labels are passed to Grounded-SAM-v2 [34] as text prompts to generate object masks M =
+
+{m1, m 2, ..., m i}, i ∈ { 1, 2, ..., n }. Due to the potential degradation of the depth cam-era performance caused by reflections in the scene, we use the Depth-Anything-v2 [35] model to extract the depth map D from X1. We then obtain the scene point cloud 
+
+P and leverage the individual object mask mi to generate a point subset Pi. Simul-taneously, we perform point cloud fusion to extract the complete robot point cloud from multi-view RGBD images, which is optional since more accurate models can be obtained from the manufacturer and is only used when the full configuration is unavailable. 
+
+2.2.2 Simulated scene generation 
+
+Based on the previously extracted object point cloud Pi, we perform hierarchical retrieval from the 3D simulation asset dataset by selecting the top k most similar categories, determined by the CLIP score [36] between the object label li and all asset categories. Given the selected categories, the closest digital asset is identified by computing the DINOv2 feature embedding distance [37] between the object xi
+
+and each candidate asset. If the computed distance exceeds a predefined threshold, indicating the absence of a functionally similar object, we employ URDFormer [38] to model the object’s accurate articulated structure. Similarly, if no suitable robot model is available, AutoURDF [39] is employed to construct its articulated structure. Finally, 7Fig. 3 Overview of the asset dataset. From top to bottom, encompasses rigid objects, articulated objects, part-level manipulable environments, and various modular mobile manipulators. 
+
+the generated assets are integrated into a simulation scene, aligned with the extracted spatial information to ensure physical consistency. The final simulation scene is shown in the right part of Figure 2. 
+
+2.2.3 Asset dataset 
+
+As illustrated in Figure 3, our asset library comprises high-fidelity object models and modular robotic components designed for seamless real-to-sim integration. To ensure diverse and realistic interactions, we incorporate several large-scale scanned datasets, including rigid objects from YCB [40], IPA-3D1K [41], and Google Scanned Objects [25], alongside articulated models from PartNet-Mobility [42]. These datasets encompass a wide array of categories—ranging from small tools to household appli-ances—providing high-quality, multi-view 3D geometries and part-level kinematic information. This extensive repository enables our pipeline to generate simulated scenes that accurately reflect real-world geometry and articulation, thereby facilitating effective manipulation training and validation. 8Beyond static objects, we have pre-integrated a comprehensive suite of Unified Robot Description Format (URDF) models to support the synthesis of mobile manip-ulators. These models are designed with a modular architecture, allowing for rapid hardware assembly and configuration without requiring structural modifications. The robot assets are categorized as follows: 
+
+• Mobile Bases: Multiple locomotion platforms are supported, including the Segbot and the omnidirectional Ranger Mini. 
+
+• Robotic Arms: The library includes over ten industrial and collaborative arms, such as the Realman RML, Franka Emika Panda, Universal Robots UR5, Flexiv Rizon, UFactory xArm, and the Elephant Robotics myCobot series. 
+
+• End Effectors: A variety of interchangeable tools, including vacuum grippers and parallel-jaw grippers (e.g., Robotiq 2-Finger Adaptive Gripper 85 and DH Robotics AG95), are provided with standardized mounting interfaces. 
+
+2.3 Simulation-Guided task formalization and skill learning 
+
+Leveraging the generated simulation environments, we introduce a simulation-guided module for task formalization and skill acquisition. We first establish the THMM Benchmark, which decomposes language-conditioned instructions into structured sub-task sequences following the Sense–Plan–Act paradigm. Central to this framework is a modular skill architecture that encapsulates diverse robotic capabilities into reusable, hardware-agnostic primitives, enabling the system to handle both basic mobility and complex articulation manipulation. To support robust execution, a multimodal per-ception layer provides semantic scene understanding through the flexible integration of various vision backbones. Furthermore, a hybrid planning strategy combines symbolic task reasoning with continuous motion planning to ensure reliable operation in clut-tered environments. Finally, a hierarchical management architecture orchestrates these 9# Load modules related to the task                                             
+
+> from SLAM import GMapping
+> from Perception import LangSAM, AnyGrasp
+> from Navigation import AStarPlanner
+> from Manipulation import OMPL_Planner
+> # Initialization
+> cfg =load_config( “Config/task 1.yaml ”)
+> client =Client(cfg.client)
+> Client .create_scene(scene_path)
+> robot = Realman_Ranger_AG 95 (cfg.robot)
+> # Navigation: SLAM+Path Planning
+> map =GMapping (client)
+> path =AStarPlanner .plan(map, stand_pos )
+> robot.navigate_base (path )
+> # Task Planning: NLU+Task Planning
+> # Determines subsequent calling modules
+> action_sequence =LLM_P (instructions, skills)
+> for action in action_sequence:
+> result =module.step(action)
+> action_sequence.adjust(result)
+> Module :SLAM, Algorithm : GMapping, Return :GridMap
+> Module :Perception, Algorithm : LangSAM, Return :Box and Mask
+> Module :Perception, Algorithm : AnyGrasp, Return : Grasp Pose Candidates
+> Module :Navigation, Algorithm : A*, Return : Collision Free Path
+> Module :Manipulation, Algorithm : BIT*, Return : Trajectory Path
+> a)
+> b)
+> c)
+> d)
+> e)
+
+…… 
+
+……  # Manipulation:        
+
+> Perception+Trajectory Planning
+> object_mask =LangSAM (rgbd)
+> grasp_pose =AnyGrasp (rgbd, object_mask)
+> manip_path =OMPL_Planner .plan(grasp_pose)
+> robot.execute(manip_path)
+
+Fig. 4 Overview of the THMM task execution pipeline. The workflow illustrates the transition from high-level natural language instructions to low-level robotic execution, encompassing semantic task decomposition, scene-aware planning, and real-time trajectory generation for mobile manipulation. 
+
+components, ensuring scalable and conflict-free integration for complex, long-horizon mobile manipulation tasks. 
+
+2.3.1 THMM benchmark and task formalization 
+
+Complex household mobile manipulation tasks are typically driven by natural language instructions from humans, and their long-horizon nature poses significant challenges in terms of formalization and systematic evaluation. To address this, we propose the Transferable Household Mobile Manipulation (THMM) benchmark, which adopts the Sense–Plan–Act paradigm to decompose language-guided tasks into sequential sub-tasks that involve several fundamental robotic skills, with particular emphasis on perception and planning. To further illustrate this process, we present several task cases in Figure 4. Given the diversity of the required skills, our modular skill architec-ture emerges as an effective solution for handling multi-layer integration. This paper focuses on a representative task format for experimental evaluation, with detailed descriptions provided in Section 3.1. 10 Realman  RML 63 -6F + Ranger Mini 3       
+
+> UR5e + SegBot
+> MyCobot Pro 630
+> Before Rendering After Rendering
+> Real World Simulated World
+> Flexiv Rizon 4
+> OWL -ViT
+> Pose Estimator
+> Object Detector
+
+Perception 
+
+> Semantic
+> Segmentation
+
+…
+
+> Affordance
+> Recognition
+> AnyGrasp
+> LangSAM Locate
+
+[a] 
+
+> AutoURDF
+> RoboTwin
+
+Digital Twin  
+
+> URDFormer Articulated Object
+> ACDC Rigid Object
+> Robot Modeling
+> Digital Cousins
+
+[i]
+
+> Robot Asset
+> Scene Asset
+
+Asset [f] 
+
+Controller 
+
+> PID
+> Motor
+> Control
+
+[h] 
+
+> Mobile Base
+> Legged -Related
+> Wheeled -Related
+> Sensor
+
+Unified Sim -to -Real Robotics API 
+
+> Robotic Arm
+> 6-Axis -Related
+> 7-Axis -Related
+> End Effector
+> Dexterous Hand -Related
+> Parallel Gripper -Related
+
+[k] 
+
+Sensor  
+
+> LIDAR
+> Visual
+> Camera RGB
+> RGBD
+> fisheye
+> Force Sensor
+
+[j] 
+
+Task Planning 
+
+> Local Planner
+> Global Planner
+
+Navigation   
+
+> Classical
+> Task Planner PDDL
+> LLM -Based
+> Task Planner LLM+P
+> A*
+> DWA
+> Sampling -Based
+> Collision Detection
+
+Manipulation 
+
+… 
+
+> Learning -Based
+> BITstar
+> Imitation
+> Learning
+> SLAM Gmapping
+
+…
+
+> FCL
+> Built -in
+> RRT
+
+[b] 
+
+[d]  [e] 
+
+> Blender -Plugin
+> Customized renderer
+
+Visualization [g] 
+
+Config  Default.yaml 
+
+[c] Fig. 5 Overview of BestMan ’s modular skill architecture. The platform comprises eleven top-level modules (highlighted in blue and red): (a) Perception, (b) Task Planning, (c) Config, (d) Naviga-tion, (e) Manipulation, (f) Asset, (g) Visualization, (h) Controller, (i) Digital Twin, (j) Sensor, and (k) Robotics API. Each module contains several submodules (highlighted in yellow), where various algorithms or contents (highlighted in green) can be implemented. The unified sim-to-real robotics API module is constructed based on the controller and sensor modules, while other modules are inde-pendent of these robotics API. The right panel illustrates the platform’s applicability across various simulated and real-world mobile manipulators and environments. 
+
+2.3.2 Modular skill architecture 
+
+Figure 5 shows the modular skill architecture of BestMan , consisting of eleven top-level modules covering core functionalities such as perception, planning, con-trol, and more. Each module contains submodules supporting different algorithms or functions. The unified sim-to-real robotics API connects the controller and sensor mod-ules, enabling smooth transfer across various robotic platforms. This design promotes flexibility and scalability for both simulation and real-world mobile manipulation tasks. Beyond these core modules, BestMan also includes valuable supplementary mod-ules like visualization, control, collision detection, and SLAM, which enhance system usability and adaptability. To overcome rendering limitations of the Bullet engine, 11 the platform integrates the Blender engine via dedicated plugins (Figure 5-g), sig-nificantly improving visual fidelity. The controller module (Figure 5-h) incorporates classic algorithms such as PID, MPC, and adaptive controllers for precise and stable motion control. Other supplementary modules likewise provide standard algorithms and extensible templates, allowing users to easily customize or extend functionalities for task-specific needs. SIM   
+
+> (a) Initial View (b) AnyGrasp Proposals
+> (d) Best Pose (c) LangSAM Filtering
+
+REAL  
+
+> Fig. 6 Examples of combining LangSAM and AnyGrasp algorithms to obtain optimal grasp pose from simulated and real-world RGBD images.
+
+2.3.3 Multimodal perception for skill execution 
+
+In response to the cross-modal environmental perception challenge posed by sub-tasks, we design a multimodal perception layer that supports task-oriented sensory process-ing and semantic understanding, facilitating the flexible integration of state-of-the-art perception backbones. This layer connects perceptual inputs with the decision-making process, realizing the mapping P : S × M → O , where S represents the observation space, M denotes the semantic reasoning methods, and O refers to the structured envi-ronmental representations. As shown in Figure 6, the perception module facilitates a robust grasping pipeline that processes environment data through several key stages. This workflow demonstrates how BestMan maintains consistency between simulation 12 and real world domains, allowing for seamless transition and high-precision execution in physical environments. Each perception sub-module targets a specific aspect of envi-ronmental understanding: the object segmentation module utilizes LangSAM [43] and Grounded-SAM [34] to obtain masks and bounding boxes; the grasp pose estimation module integrates AnyGrasp [44] and Contact-GraspNet [45] to predict actionable grasp poses. The affordance detection module employs Locate [46] to identify the functional properties, among others. Ensembling all these sub-modules forms a coher-ent perception system that provides essential semantic support for the downstream planning and action process. 
+
+2.3.4 Hybrid planning in cluttered environments 
+
+Motivated by the challenge of robust planning in cluttered environments, we imple-ment a hybrid planning manner that integrates task and motion planning, providing a robust solution for both structured and unstructured environments. For task planning, we integrate symbolic reasoning with large language models (LLMs), enabling effective generation of sub-tasks, even under ambiguous instruc-tions, by leveraging the LLM’s ability to handle complex, context-dependent tasks. We formalize this method into the following mathematical formulation: 
+
+P = Γsymb (S)
+
+| {z }
+
+> Symbolic Planner
+
+◦ ΦLLM (I)
+
+| {z }
+
+> LLM Interpreter‘
+
+, (1) where Γsymb is the symbolic planner, which generates constraint-satisfaction problem solutions, S = {si}ni=1 is the PDDL-defined state space, ΦLLM is the LLM-based semantic parser, and I is the natural language instruction. The operator ◦ is defined as: 
+
+x ◦ y =
+
+
+
+x ⊕ y if V(x, y ) ≥ θ, 
+
+Replan (f eedback ) otherwise ,
+
+(2) 13 Trajectory Output 
+
+> Call
+
+Task 
+
+Planning  
+
+> Config
+> Submodule
+> down Low -level
+
+Navigation  
+
+> Config
+> Submodule
+> down Low -level
+
+Grasp Pose 
+
+Estimator 
+
+> Config
+> Submodule
+> down
+> Low -level
+> manage
+
+Virtual Runtime Env 
+
+LLM+P PDDLStream  Global Planner  Local Planner  AnyGrasp  Contact GraspNet 
+
+> Goal Input
+> manage
+
+Subprocess Toolkit 
+
+……           
+
+> •max gripper width
+> manage
+> A*
+> PRM
+> RRT DWA MPC
+> TEB
+> Params setting x:
+> •sampling rate
+> ……
+> •z range
+> Params setting x:
+> •filter grasps
+> ……
+> •method
+> Params setting x:
+> •time limit
+> ……
+> •algorithm
+> Params setting x:
+> •constraints
+> ……
+
+Task Process  High -level     
+
+> Config
+> Module
+> Top
+> ➢Init Scene / Robot
+> ➢Task Planning
+> ➢Navigate to goal
+> ➢Grasp object
+> Load
+> ……
+> Execute
+
+Fig. 7 The hierarchical architecture for configuration and dependency management: 1) the top-level configuration module adopts a hierarchical structure to centrally manage the lower-level sub-modules, 2) the developed sub-process toolkit leverages containerization and virtual-environment technologies to isolate runtime dependencies. 
+
+where ⊕ is the consensus-driven fusion process, V is the function that evaluates plan-semantic consistency and constraint satisfaction, and θ is the predefined threshold. Then, we divide motion planning into navigation and manipulation, leveraging both classical and learning-based methods to meet task and environment complexity: (1) For navigation, we use global path planning algorithms such as A*, RRT, and PRM to find optimal paths in known environments. For dynamic or partially observable spaces, we use local methods like DWA and model predictive control (MPC) for real-time trajectory refinement. (2) For manipulation, we combine sampling-based methods from OMPL [47] (e.g., RRT, RRT*, and BIT*) with reinforcement learning and imitation learning methods to enable adaptive grasping and object interaction across varied scene configurations. 14 2.3.5 Hierarchical management and modular integration 
+
+As the platform scales, modular integration presents a critical challenge in managing configuration complexity and dependency conflicts, thereby threatening platform sta-bility. To address this, we introduce a hierarchical architecture for configuration and dependency management, as illustrated in Figure 7. Each functional module is paired with a dedicated configuration sub-module for algorithm-specific parameter tuning. A global configuration module coordinates high-level settings across modules, providing a centralized interface for inspection, modification, and synchronization, thus reducing manual configuration errors. Subsequently, to resolve dependency conflicts, we adopt a hybrid strategy combining containerization and virtual environments. Each module is encapsulated within an isolated runtime with on-demand execution, while the hier-archical communication mechanism ensures reliable data exchange. The hierarchical architecture facilitates scalable and conflict-free integration for our modular platform. 
+
+2.4 HUM: Sim-to-Real deployments via unified middleware 
+
+As shown in Figure 8, we introduce the HUM for seamless sim-to-real deploy-ments, focusing on the mobile manipulator API design and the compatibility with heterogeneous hardware. 
+
+2.4.1 Unified api for mobile manipulators 
+
+To overcome the interface discrepancies and enhance transfer robustness between the simulation framework and the real-world robotic system, we introduce HUM which provides an abstracted, aligned Python API architecture, as shown in Figure 8. This middleware establishes a bijective mapping between the simulated and real-world domains, formalized as: Csim ↔ C real , where C = {ci | ci ∈ SE(3) × Rn},which enables both indirect algorithmic invocation and direct control over the mobile base, robotic arm, end effector, and sensor, without concern for the underlying 15 Robotic Arm 
+
+> Mobile Base
+> ( Ranger MINI 3.0 )
+> ( Realman RML 63-6F )
+> End-Effector: Parallel Gripper
+> ( DH-Robotics AG-95 Gripper )
+> Sensor: LiDAR
+> Sensor: RGB-D Head Camera
+> Wrist Camera
+> ( Realsense D435i)
+
+Real-World Robotic System   
+
+> Robotic Arm Mobile Base
+> End Effector Sensor
+> Physics Engine
+> Renderer
+> Control API Visualization API
+
+HUM 
+
+Simulation Framework 
+
+Interface 
+
+Python ROS Package  
+
+> Other Package
+> Hardware API
+> Bullet
+> Blender Fig. 8 The HUM for sim-to-real deployments. It consists of two main parts: the unified APIs for mobile manipulators and the cross-platform compatibility and deployments. Each hardware compo-nent is sourced from a different manufacturer and features its own distinct interface library.
+
+implementation interfaces. It maintains consistent high-level commands, whether for simple base movements like move forward() or complex robotic arm control, such as 
+
+move eef to goal pose() . Our design ensures seamless sim-to-real transfer without extensive modifications to accommodate ROS-based hardware-specific drivers, com-munication protocols, and safety mechanisms. By investing minimal effort to align with the middleware, extensive efforts are avoided to adapt the underlying system. 
+
+2.4.2 Cross-Platform Compatibility and Deployments 
+
+Another challenge lies in the limited compatibility with heterogeneous robotic hard-ware, caused by the tight coupling between real-world robotic systems (e.g., ROS) and 16 specific simulation frameworks. To address this, our proposed HUM exhibits strong decoupling, making the platform both simulator- and hardware-agnostic. Such capa-bility enables real-to-real transfer, allowing researchers to quickly deploy algorithms to their hardware without needing to set up identical hardware again, significantly improving the real-world reproducibility of mobile manipulation algorithms. What is more, it facilitates the exploration of algorithm robustness across various hardware setups. 
+
+# 3 Experiments and analysis 
+
+Our experiments aim to answer the following questions: 
+
+• Q1: Can the real-to-sim ASG module accurately generate high-quality simulated scenes from input images? 
+
+• Q2: Is the modular design more effective than non-modular methods for complex tasks and environments? 
+
+• Q3: Can HUM reduce errors and improve efficiency in sim-to-real deployments, and enhance compatibility of transferring to heterogeneous hardware? 
+
+• Q4: Can BestMan efficiently complete mobile manipulation tasks based on the real-to-sim-to-real pipeline? 
+
+3.1 Experimental settings 
+
+We formulate the THMM task as a language-guided instruction: “Move the object from the start receptacle to the goal receptacle” . The object is a small household rigid item (e.g., a can of cola or a bowl), and the receptacle is a large articulated piece of furniture where the object can either be placed on the surface or inside the container, with the robot positioned at a random initial pose. We decompose the THMM task into three key sub-tasks: (1) Approach , in which the robot detects and navigates towards the target object; (2) Manipulation , in which the robot interacts with the start receptacle 17 Table 1  Qualitative comparison among  BestMan  and other robotic platforms, grouped into four categories from top to bottom: simulators, simulation frameworks, real-world platforms, and our proposed  BestMan . Compared to several platforms, our  BestMan  offers versatile functions, enables automated scene generation, provides flexible configurations, supports multiple tasks, and provides better scalability and adaptability. Platform  Scene Generation 1
+
+> Physics Backends 2
+> Hardware Reconfiguration 3
+> Tasks 4 Modular Scalability 7
+> Sim2Real API Consistency Hardware Adaptability 8
+> V. Nav. Manip. 5 MRC Long-H. Cust. 6
+> Gazebo [12]  ✖ O, B, S, D  ✖ ✖ ✖ Obj  ✖ ✖ ✖ ✖ ✖ ✖
+> PyBullet [32]  ✖ B ✖ ✖ ✖ Obj  ✖ ✖ ✖ ✖ ✖ ✖
+> MuJoCo [13]  ✖ Custom  ✖ ✖ ✖ Obj  ✖ ✖ ✖ ✖ ✖ ✖
+> SAPIEN [14]  ✓ P ✖ ✖ ✖ Part  ✖ ✖ ✖ ✖ ✖ ✖
+> V-REP [48]  ✖ O, B, V, N  ✖ ✖ ✖ Obj  ✖ ✖ ✖ ✖ ✖ ✖
+> AI2-THOR [49]  ✓ Unity  ✖ ✔ ✔ Obj  ✔ ✖ ✖ ✖ ✖ ✖
+> VirtualHome [15]  ✓ Unity  ✖ ✔ ✔ Obj  ✖ ✖ ✖ ✖ ✖ ✖
+> RLBench [50]  ✓ B ✖ ✔ ✖ Obj  ✖ ✖ ✔ ✖ ✖ ✖
+> Habitat [16]  ✓ B ✖ ✔ ✔ ✖ ✖ ✔ ✖ ✖ ✖ ✖
+> robosuite [24]  ✓ Mujoco  ✓ ✖ ✖ Obj  ✔ ✖ ✔ ✖ ✖ ✖
+> iGibson [18]  ✓ B ✖ ✖ ✔ Obj  ✔ ✔ ✔ ✖ ✖ ✖
+> Orbit [23]  ✓ P ✓ ✖ ✔ Part  ✖ ✔ ✔ ✖ ✖ ✖
+> ManiSkill [51]  ✓ SAPIEN  ✖ ✔ ✖ Part  ✔ ✖ ✖ ✖ ✖ ✖
+> RoboCasa [17]  ✓ Mujoco  ✓ ✖ ✖ Part  ✖ ✔ ✔ ✔ ✖ ✖
+> Kitchen Worlds [26]  ✓ B ✖ ✖ ✔ Part  ✖ ✔ ✖ ✖ ✖ ✖
+> HomeRobot [19]  ✓ Habitat  ✖ ✔ ✔ Obj  ✖ ✖ ✖ ✔ ✔ ✖
+> OK-Robot [20]  ✖ ✖ ✖ ✔ ✔ Obj  ✖ ✖ ✖ ✔ ✔ ✖
+> BestMan (ours)  ✔ Dynamic  ✔ ✔ ✔ Part  ✔ ✔ ✔ ✔ ✔ ✔✖ Not available  ✓ Partial available  ✔ Fully available
+> 1 ✓means rule-based procedural scene generation, while  ✔means automated real-to-sim scene generation.
+> 2 O for  ODE,  B for  Bullet,  S for  Simbody,  D for  DART,  P for  PhysX,  V for  Vortex,  N for  Newton.
+> 3 ✓means limited to predefined assemblies;  ✔allows free hardware replacement and reconfiguration.
+> 4 V.: Vision; Nav.: Navigation; Manip.: Manipulation; MRC: Multi-Robot Collaboration; Long-H.: Long-horizon; Cust.: Customizable.
+> 5 Obj means only object-level interaction is supported. Part means part-level interaction is supported.
+> 6 Tasks can be customized beyond predefined categories to suit specific user requirements.
+> 7 Modular Scalability means rapidly integrating new algorithms or modules into the platform’s task pipelines.
+> 8 Hardware Adaptability refers to the ability to transfer strategies across heterogeneous hardware.
+
+18 and grasps the object; and (3) Placement , in which the robot transports the object to the goal receptacle and places it at the specific location. These sub-tasks require 6 fundamental skills, including Find , Navigation , Grasp Estimation , Open , Pick , and 
+
+Place . We further define three levels of task difficulty: (1) Easy , the initial and target locations are both on the surface of receptacles; (2) Medium , the initial and target locations are inside receptacles that are already open; and (3) Hard , the initial and target locations are inside closed receptacles. For the experimental scenes, building upon the outputs of the real-to-sim pipeline, we created more than 100 interactive simulated scenes by applying serveral augmen-tation techniques, including visual, physics, kinematic (scale and pose), and instance randomization. Additionally, real-world experiments were conducted in a single-room environment styled as a kitchen, as shown in Figure 1, featuring a refrigerator, oven, cabinets, table, and other elements. For real-world experiments, we employ multiple mobile manipulator setups. The primary setup, as shown in Figure 8, consists of a Ranger MINI 3.0 mobile base, a Realman RML 63-6F robotic arm, and a DH-Robotics AG-95 parallel gripper. The sensory suite includes a LiDAR and two Intel RealSense D435i RGB-D cameras (wrist-mounted and head-mounted). Computational tasks are handled by an onboard workstation equipped with an NVIDIA RTX 3090 GPU to ensure high-performance real-time processing. Notably, while our primary experiments leverage high-end hard-ware, the platform’s minimum recommended specification is an NVIDIA RTX 2080 Ti GPU, ensuring broad accessibility for various research deployment scenarios. 
+
+3.2 Qualitative analysis 
+
+Table 1 provides a qualitative comparison between BestMan and several repre-sentative robotic frameworks. In contrast to existing systems, BestMan delivers comprehensive support for diverse environmental assets, various physics backends, and 19 Table 2 Accuracy analysis of real-to-sim ASG. We list three scenes transferred using ASG: bedroom, living room, and kitchen. The metrics evaluate object structure accuracy (Category, Modeling, Joint), pose errors (L2 Distance, Orientation Difference), and scale errors (Bounding Box IOU, Center IoU). C. Score is a composite score based on human evaluation.                                                                            
+
+> Scene Type Simulation Image Input Real-World Image Input
+> Cat. ↑Mod. ↑Joint. ↑L2 Dist. (cm) ↓Ori. Diff. (rad) ↓Bbox IoU ↑Cen. IoU ↑Cat. ↑Mod. ↑C. Score ↑
+> Bedroom 100% 94% 90% 5.20 ±2.85 0.07 ±0.06 0.68 ±0.19 0.75 ±0.15 100% 91% 90% Living Room 100% 93% 91% 6.45 ±3.90 0.06 ±0.05 0.71 ±0.18 0.76 ±0.14 100% 88% 85% Kitchen 100% 92% 88% 4.85 ±2.60 0.05 ±0.04 0.72 ±0.20 0.78 ±0.16 100% 86% 89%
+
+Table 3 Comparison of articulated scene generation methods. Input images are sourced from both simulation and the real world. The metrics evaluate object joint accuracy, pose error,(combining L2 distance and orientation difference), and center IoU. ASG outperforms URDFormer and ACDC in both inputs, with more accurate and stable generation. Method Input Joint. ↑ Pose Err. ↓ Cen. IOU ↑
+
+URDFormer Sim 88% 7.65 ± 3.18 0.65 ± 0.18 Real 81% 9.24 ± 4.55 0.58 ± 0.14 ACDC Sim 78% 5.21 ± 2.16 0.71 ± 0.15 Real 75% 6.13 ± 2.78 0.68 ± 0.12 
+
+ASG (Ours) Sim 90% 3.11 ± 1.54 0.80 ± 0.06 
+
+Real 85% 4.02 ± 1.40 0.72 ± 0.04 
+
+modular robot assembly. Beyond these technical features, our platform distinguishes itself through its capacity for automated scene generation and flexible configuration across a wide range of task categories. As illustrated in Table 1, these attributes underscore the superior scalability and adaptability of BestMan , making it a robust foundation for advanced research in mobile manipulation. 
+
+3.3 Accuracy analysis of ASG 
+
+To rigorously assess the performance of ASG module in sim-to-sim scenarios, we employ a comprehensive suite of quantitative metrics. Geometric and semantic fidelity are measured by Categorization (Cat.) and Modeling (Mod.) Accuracy, which evalu-ate object identification and reconstruction quality, respectively. Spatial precision is 20 quantified via L2 Distance, Orientation Difference, and 3D Bounding Box Intersec-tion over Union (Bbox IoU), alongside Center-aligned IoU (Cen. IoU) to isolate shape overlap from localization errors. Furthermore, Joint Accuracy (Joint.) evaluates the structural integrity of articulated components, including joint types, motion ranges, and connectivity. Finally, a composite Pose Error, defined as Epose = α · d + β · θ,provides a unified assessment by weighting translation d and rotation θ through coef-ficients α and β.For real-to-sim evaluation, we conducted a human study involving five domain experts who performed blind assessments of reconstructed scenes. Evalu-ators assigned scores (0–100) based on three standardized criteria: object recognition accuracy, geometric completeness, and joint structure fidelity. To answer Q1 , we analyze the accuracy of the ASG module. Table 2 shows that 
+
+BestMan achieves superior scene reconstruction performance across three types. For simulation inputs, it attains perfect category accuracy (100%), modeling accuracy (up to 94%), joint accuracy of 90%, and precise geometric alignment, with lower errors, bounding box IoU, and center IoU. In more challenging real-world inputs, we fur-ther report a rubric-based human evaluation (denoted as C. Score). Unlike simulation inputs where ground-truth 3D scene geometry and articulated structures are fully accessible for quantitative metrics, real-world images do not provide such complete 3D annotations. Therefore, C. Score is used to capture semantic fidelity and perceptual plausibility from the perspective of human raters. Human evaluation confirms high semantic fidelity, with category accuracy remaining at 100% and modeling accuracy above 85%, and a composite score exceeding 89%. As shown in Table 3, comparative results demonstrate that our module signifi-cantly outperforms baselines such as URDFormer [38] and ACDC [52], particularly in joint modeling and pose estimation. This superiority is largely attributed to our hier-archical structural parsing approach and refined modeling of articulated parameters, 21 ES EC MS MC HS HC 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)
+
+RL BC BestMan Fig. 9 Comparison between BestMan ’s modular architecture and non-modular baselines, includ-ing Reinforcement Learning (RL) and Behavior Cloning (BC). The evaluation covers three tasks in two environments. E/M/H denote task difficulty levels (Easy, Medium, Hard), and S/C represent environment complexity (Simple, Complex). 
+
+which enhance stability in complex scenes. However, error analysis reveals that chal-lenges persist in scenarios involving multi-layer occlusions and texture homogeneity. Future work will aim to mitigate these issues by integrating multi-view fusion and incorporating richer prior knowledge to further improve reconstruction robustness. 
+
+3.4 Effectiveness of modular design 
+
+To answer Q2 , we evaluate the effectiveness of our modular design across six set-tings in ASG-generated simulated scenes, with 10 trials per scene type. As shown in Figure 9, it consistently outperforms Reinforcement Learning and Behavior Cloning baselines across all settings. The performance gap increases with task difficulty and environmental complexity; notably, in the hardest setting (HC), our method achieves 22 Table 4 Efficiency comparison between our HUM middleware and ROS for sim-to-real transfer on two robotic hardware setups (RH1, RH2), evaluated by transfer time (TT), response time (RT), and task success rate (SR). Framework TT (min) ↓ RT (ms) ↓ SR (%) ↑                 
+
+> RH1 RH2 RH1 RH2 RH1 RH2 ROS 65 78 5.8 6.2 47.5 47.8
+> HUM (Ours) 14 18 4.5 5.3 45.2 49.0
+
+a 42.3% success rate, compared to 32.8% for RL and 27.5% for BC. These results demonstrate the superiority of modular design for complex tasks and environments. 
+
+3.5 Efficiency comparison of HUM 
+
+To answer Q3 , this section evaluates the efficiency and compatibility of our HUM for sim-to-real deployments across heterogeneous robotic hardware. Specifically, the transfer time (TT) encompasses the cumulative duration required for environment configuration, dependency resolution, driver compilation, and node initialization. As shown in Table 4, our HUM significantly reduces sim-to-real deployment time, achiev-ing a 3 × to 5 × improvement over ROS (14 min vs. 65 min on RH1, and 18 min vs. 78 min on RH2). It also consistently exhibits lower response latency, with reductions of 1.3 ms and 0.9 ms on RH1 and RH2, respectively, which can be attributed to its lightweight nature. While the success rate remains comparable to ROS on RH1, our HUM slightly outperforms ROS on RH2 (49.0% vs. 47.8%). These results indicate that the proposed HUM module enhances the efficiency of the sim-to-real deployments while maintaining competitive task performance in real-world deployments. 
+
+3.6 Overall verification of BestMan on real-world tasks 
+
+To answer Q4 , this section presents quantitative results of different skill strategies on the THMM task. The heuristic baseline uses off-the-shelf models and heuristic poli-cies, the fine-tuned baseline adapts pre-trained models with collected simulated data, 23 Table 5 Results on the THMM Benchmark in simulation and real-world settings, where 
+
+BestMan executes three sub-tasks, including Approach, manipulation, and placement. Six skills are grouped into four categories, each using a strategy type: H (heuristic), F (fine-tuned), or R (reinforcement learning). Metrics include sub-task success rate (SR), average sub-task success rate (ASR), overall success rate (OSR), and average time steps (ATS) to complete each task.                                                                           
+
+> Environment Skill Strategy Sub-task SR (%) ↑ASR (%) ↑OSR (%) ↑ATS ↓
+> Approach Manipulation Placement
+> Simulation
+> H - H - H - H 71.2 58.3 48.3 59.3 38.5 186 F - H - F - H 80.5 60.1 53.9 64.8 45.6 179
+> H - R - H - R 83.3 72.2 56.8 70.8 50.3 195 F - R - F - R 88.7 75.5 65.2 76.5 60.7 189 F - R - R - R 87.4 80.9 72.4 80.2 66.2 201
+> Real World
+> H - H - H - H 67.4 51.2 30.7 49.8 23.4 209 F - H - F - H 75.6 55.9 38.5 56.7 30.3 204
+> H - R - H - R 70.2 65.7 48.1 61.3 42.5 215 F - R - F - R 80.1 72.2 57.3 69.9 52.2 210 F - R - R - R 80.7 63.2 45.3 63.1 39.8 226
+
+and the RL baseline learns policies through direct interaction in simulation. Table 5 indicates that hybrid strategies integrating prior knowledge through fine-tuning with adaptive policy learning via reinforcement (e.g., F-R-F-R) consistently outperform purely heuristic method and exhibit greater reliability than RL-only strategies. These findings suggest that the BestMan platform leverages complementary strengths, enabling scalable, robust deployments and systematic refinement in complex real-world tasks. Figure 10 illustrates the complete real-to-sim-to-real cycle enabled by the Best-Man platform. As shown in the upper part of the figure, it first seamlessly maps the real-world environments into a high-fidelity simulated scene using the ASG module, which reconstructs accurate geometry, articulated structures, and physical parame-ters. Within this reconstructed scene, different hybrid strategies integrating multiple skills for mobile manipulation can be rapidly composed, evaluated, and optimized across diverse tasks and environments. Once the strategies are learned, as shown in the bottom part, they are seamlessly deployed back to the physical robot, achiev-ing superior performance in the original real-world environment. This bidirectional mapping enables the mobile manipulator to execute language-guided tasks effectively, 24 Initial Scene 
+
+Grasp Object 
+
+Nav . to Start Rec. 
+
+Nav . to Goal Rec. 
+
+Open Fridge 
+
+Task Finish 
+
+Initial Scene 
+
+Grasp Object 
+
+Nav . to Start Rec. 
+
+Nav . to Goal Rec. 
+
+Open Fridge 
+
+Task Finish 
+
+Real -World  Move the apple inside the fridge to the drawer 
+
+Simulation  object 
+
+Real -to -Sim  Sim -to -Real 
+
+Move the apple inside the fridge to the drawer Fig. 10 Real-to-sim-to-real pipeline of the BestMan platform. Real-world environments are first mapped into a high-fidelity simulation using the ASG module. Once the skills are learned, they are seamlessly deployed back to the physical robot operating in the original real-world environment. 
+
+demonstrating BestMan ’s capability for efficient skill learning and robust real-world generalization. 25 4 Application 
+
+Building on BestMan ’s strengths, researchers can explore and apply it in the following areas: 
+
+• Visual Navigation : The BestMan ’s sensor, perception, and control module sup-ports the mobile manipulator in acquiring environmental information and navigating in real time in complex scenarios. 
+
+• Long-horizon Tasks : Tasks such as cleaning, item sorting, and handling are bro-ken down into a series of subtasks by BestMan ’s efficient task planning module, which ensures task consistency at all stages and executes them through dedicated submodules. 
+
+• Rearrange Tasks : ORLA* [53] explores object rearrangement tasks in local envi-ronments based on BestMan . The diverse and numerous asset supports researchers in testing the generalization of rearrangement algorithms. 
+
+• Sim2Real Transfer : BestMan supports more efficient verification of algorithm deployment based on the unified sim-to-real middleware. 
+
+• Multi-agent Collaboration : MHRC [54] enables decentralized multi-heterogeneous robot collaboration with LLM based on BestMan . Researchers can efficiently test and optimize the performance of multi-agent systems in collaborative tasks in our BestMan framework. Beyond the aforementioned domains, BestMan demonstrates strong generaliz-ability across mobile manipulation paradigms. Researchers can systematically extend its capabilities through configurable task templates (Table 1) based on their specific needs. 26 5 Conclusions 
+
+In this paper, we introduce BestMan , a scalable real-to-sim-to-real platform designed to enable seamless transfer for household mobile manipulation tasks. Our platform offers high-quality articulated scene reconstruction, scalable skill strategy for large-scale simulation testing, and efficient real-world deployments. We utilize the ASG to generate diverse, fully interactive, and physically plausible scenes. Furthermore, we construct a modular skill architecture that facilitates flexible algorithmic integration and propose an HUM that supports unified and compatible sim-to-real deployments. Experimental results demonstrate that BestMan outperformed existing methods and provides efficient solutions for complex tasks and environments. Notably, our platform can be applied to a wide range of diverse mobile manipulation tasks in unstructured environments. 
+
+Funding This work was supported by the National Natural Science Foundation of China under Grant 62322601. 
+
+# 6 Declarations 
+
+Conflict of interest The authors have no relevant financial or nonfinancial interests to disclose. 
+
+Open-source Code https://github.com/AutonoBot-Lab/BestMan 
+
+# References 
+
+[1] Duan, J., Yu, S., Tan, H.L., Zhu, H., Tan, C.: A survey of embodied ai: From simu-lators to research tasks. IEEE Transactions on Emerging Topics in Computational Intelligence 6(2), 230–244 (2022) https://doi.org/10.1109/TETCI.2022.3141105 [2] Liu, Y., Chen, W., Bai, Y., Liang, X., Li, G., Gao, W., Lin, L.: Aligning cyber space with physical world: A comprehensive survey on embodied ai. IEEE/ASME 27 Transactions on Mechatronics 30 (6), 7253–7274 (2025) https://doi.org/10.1109/ TMECH.2025.3574943 [3] Tian, Y., Shi, M., Zhang, X., Zhang, B., Wang, M., Shi, Y.: Assisting embodied ai: a survey of 3d segmentation models for medical ct images. CCF Transactions on Pervasive Computing and Interaction, 1–22 (2025) [4] Wang, R., Mou, X., Wo, T., Zhang, M., Liu, Y., Wang, T., Liu, P., Yan, J., Liu, X.: Acbot: an iiot platform for industrial robots. Frontiers of Computer Science 
+
+19 (4), 194203 (2025) [5] Thakar, S., Srinivasan, S., Al-Hussaini, S., Bhatt, P.M., Rajendran, P., Jung Yoon, Y., Dhanaraj, N., Malhan, R.K., Schmid, M., Krovi, V.N., Gupta, S.K.: A survey of wheeled mobile manipulation: A decision-making perspective. Journal of Mechanisms and Robotics 15 (2), 020801 (2022) https://doi.org/10. 1115/1.4054611 [6] Honerkamp, D., B¨ uchner, M., Despinoy, F., Welschehold, T., Valada, A.: Language-grounded dynamic scene graphs for interactive object search with mobile manipulation. IEEE Robotics and Automation Letters 9(10), 8298–8305 (2024) https://doi.org/10.1109/LRA.2024.3441495 [7] Liu, Y., Liang, J.C., Tang, R., Lee, Y., Rabbani, M., Dianat, S., Rao, R., Huang, L., Liu, D., Wang, Q., et al. : Re-imagining multimodal instruction tuning: A rep-resentation view. In: 13th International Conference on Learning Representations, ICLR 2025, pp. 102827–102850 (2025). International Conference on Learning Representations, ICLR [8] Su, H., Xie, M., Cao, N., Ding, Y., Shao, B., Long, X., Gu, F., Chen, C.: Ova-fields: Weakly supervised open-vocabulary affordance fields for robot operational 28 part detection. In: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 6385–6395 (2025) [9] Wang, J., Cao, N., Ding, Y., Xie, M., Gu, F., Chen, C.: Ske-layout: Spatial knowl-edge enhanced layout generation with llms. In: Proceedings of the Computer Vision and Pattern Recognition Conference, pp. 19414–19423 (2025) [10] Shao, B., Cao, N., Ding, Y., Wang, X., Gu, F., Chen, C.: MoMa-Pos: An Efficient Object-Kinematic-Aware Base Placement Optimization Framework for Mobile Manipulation (2024). https://arxiv.org/abs/2403.19940 [11] Zhang, C., Chen, J., Geng, Y., Ge, J., Wang, D., Li, N., Zhang, Q., Zhang, T., Ji, M., Fu, T.: A global collaborative scheduling method for embedded artificial intelligence task offloading in a multi-cloud environment. CCF Transactions on Pervasive Computing and Interaction, 1–16 (2025) [12] Koenig, N., Howard, A.: Design and use paradigms for gazebo, an open-source multi-robot simulator. In: 2004 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) (IEEE Cat. No.04CH37566), vol. 3, pp. 2149–21543 (2004). https://doi.org/10.1109/IROS.2004.1389727 [13] Todorov, E., Erez, T., Tassa, Y.: Mujoco: A physics engine for model-based control. In: 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems, pp. 5026–5033 (2012). https://doi.org/10.1109/IROS.2012.6386109 [14] Xiang, F., Qin, Y., Mo, K., Xia, Y., Zhu, H., Liu, F., Liu, M., Jiang, H., Yuan, Y., Wang, H., Yi, L., Chang, A.X., Guibas, L.J., Su, H.: Sapien: A simulated part-based interactive environment. In: 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 11094–11104 (2020). https://doi. org/10.1109/CVPR42600.2020.01111 29 [15] Puig, X., Ra, K., Boben, M., Li, J., Wang, T., Fidler, S., Torralba, A.: Vir-tualhome: Simulating household activities via programs. In: 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 8494–8502 (2018). https://doi.org/10.1109/CVPR.2018.00886 [16] Puig, X., Undersander, E., Szot, A., Cote, M.D., Yang, T.-Y., Partsey, R., Desai, R., Clegg, A., Hlavac, M., Min, S.Y., Vondruˇ s, V., Gervet, T., Berges, V.-P., Turner, J.M., Maksymets, O., Kira, Z., Kalakrishnan, M., Malik, J., Chaplot, D.S., Jain, U., Batra, D., Rai, A., Mottaghi, R.: Habitat 3.0: A co-habitat for humans, avatars, and robots. In: The Twelfth International Conference on Learning Representations (2024). https://openreview.net/forum?id=4znwzG92CE 
+
+[17] Nasiriany, S., Maddukuri, A., Zhang, L., Parikh, A., Lo, A., Joshi, A., Man-dlekar, A., Zhu, Y.: Robocasa: Large-scale simulation of everyday tasks for generalist robots. In: RSS 2024 Workshop: Data Generation for Robotics (2024). 
+
+https://openreview.net/forum?id=mHxHdTaRLa 
+
+[18] Li, C., Xia, F., Mart´ ın-Mart´ ın, R., Lingelbach, M., Srivastava, S., Shen, B., Vainio, K.E., Gokmen, C., Dharan, G., Jain, T., et al. : igibson 2.0: Object-centric sim-ulation for robot learning of everyday household tasks. In: Conference on Robot Learning, pp. 455–465 (2022). PMLR [19] Yenamandra, S., Ramachandran, A., Yadav, K., Wang, A.S., Khanna, M., Gervet, T., Yang, T.-Y., Jain, V., Clegg, A., Turner, J.M., et al. : Homerobot: Open-vocabulary mobile manipulation. In: Conference on Robot Learning, pp. 1975– 2011 (2023). PMLR [20] Liu, P., Orru, Y., Paxton, C., Shafiullah, N.M.M., Pinto, L.: OK-Robot: What really matters in integrating open-knowledge models for robotics. arXiv preprint arXiv:2401.12202 (2024) 30 [21] Quigley, M., Conley, K., Gerkey, B., Faust, J., Foote, T., Leibs, J., Wheeler, R., Ng, A.Y., et al. : Ros: an open-source robot operating system. In: ICRA Workshop on Open Source Software, vol. 3, p. 5 (2009). Kobe [22] Zhi, P., Zhang, Z., Zhao, Y., Han, M., Zhang, Z., Li, Z., Jiao, Z., Jia, B., Huang, S.: Closed-loop open-vocabulary mobile manipulation with gpt-4v. In: 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 4761–4767 (2025). IEEE [23] Mittal, M., Yu, C., Yu, Q., Liu, J., Rudin, N., Hoeller, D., Yuan, J.L., Singh, R., Guo, Y., Mazhar, H., et al. : Orbit: A unified simulation framework for interactive robot learning environments. IEEE Robotics and Automation Letters 8(6), 3740– 3747 (2023) [24] Zhu, Y., Wong, J., Mandlekar, A., Mart´ ın-Mart´ ın, R., Joshi, A., Lin, K., Mad-dukuri, A., Nasiriany, S., Zhu, Y.: robosuite: A Modular Simulation Framework and Benchmark for Robot Learning (2025). https://arxiv.org/abs/2009.12293 [25] Downs, L., Francis, A., Koenig, N., Kinman, B., Hickman, R., Reymann, K., McHugh, T.B., Vanhoucke, V.: Google scanned objects: A high-quality dataset of 3d scanned household items. In: 2022 International Conference on Robotics and Automation (ICRA), pp. 2553–2560 (2022). IEEE [26] Yang, Z., Garrett, C., Fox, D., Lozano-P´ erez, T., Kaelbling, L.P.: Guiding Long-Horizon Task and Motion Planning with Vision Language Models (2024). https: //arxiv.org/abs/2410.02193 [27] Sermanet, P., Ding, T., Zhao, J., Xia, F., Dwibedi, D., Gopalakrishnan, K., Chan, C., Dulac-Arnold, G., Maddineni, S., Joshi, N.J., et al. : Robovqa: Multimodal long-horizon reasoning for robotics. In: 2024 IEEE International Conference on 31 Robotics and Automation (ICRA), pp. 645–652 (2024). IEEE [28] Han, C., Wang, Q., Cui, Y., Cao, Z., Wang, W., Qi, S., Liu, D.: E2vpt: An effective and efficient approach for visual prompt tuning. In: 2023 IEEE/CVF International Conference on Computer Vision (ICCV), pp. 17445–17456 (2023). https://doi.org/10.1109/ICCV51070.2023.01604 [29] Han, C., Wang, Q., Dianat, S.A., Rabbani, M., Rao, R.M., Fang, Y., Guan, Q., Huang, L., Liu, D.: Amd: Automatic multi-step distillation of large-scale vision models. In: European Conference on Computer Vision, pp. 431–450 (2024). Springer [30] Neary, C., Ellis, C., Samyal, A.S., Lennon, C., Topcu, U.: A multifidelity sim-to-real pipeline for verifiable and compositional reinforcement learning. In: 2024 IEEE International Conference on Robotics and Automation (ICRA), pp. 4349– 4355 (2024). IEEE [31] Yang, K., Cao, N., Shao, B., Wang, X., Ding, Y., Chen, C.: Bestman: a modular mobile manipulator platform for embodied ai with unified simulation-hardware apis. Frontiers of Computer Science 19 (9), 1–3 (2025) [32] Coumans, E., Bai, Y.: Pybullet, a python module for physics simulation for games, robotics and machine learning (2016) [33] Blender - a 3D modelling and rendering package. https://www.blender.org. Accessed: 2025-02-20 (2023) [34] Ren, T., Liu, S., Zeng, A., Lin, J., Li, K., Cao, H., Chen, J., Huang, X., Chen, Y., Yan, F., Zeng, Z., Zhang, H., Li, F., Yang, J., Li, H., Jiang, Q., Zhang, L.: Grounded SAM: Assembling Open-World Models for Diverse Visual Tasks (2024) 32 [35] Yang, L., Kang, B., Huang, Z., Zhao, Z., Xu, X., Feng, J., Zhao, H.: Depth anything v2. Advances in Neural Information Processing Systems 37 , 21875– 21911 (2024) [36] Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al. : Learning transferable visual models from natural language supervision. In: International Conference on Machine Learning, pp. 8748–8763 (2021). PmLR [37] Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., et al.: Dinov2: Learning robust visual features without supervision. Transactions on Machine Learning Research Journal, 1–31 (2024) [38] Chen, Q., Memmel, M., Fang, A., Walsman, A., Fox, D., Gupta, A.: URDFormer: Constructing interactive realistic scenes from real images via simulation and generative modeling. In: Towards Generalist Robots: Learning Paradigms for Scalable Skill Acquisition @ CoRL2023 (2023). 
+
+https://openreview.net/forum?id=bcjpfb6Bh9 
+
+[39] Lin, J., Zhang, L., Lee, K., Ning, J., Goldfeder, J., Lipson, H.: Autourdf: Unsu-pervised robot modeling from point cloud frames using cluster registration. In: Proceedings of the Computer Vision and Pattern Recognition Conference, pp. 27628–27637 (2025) [40] Calli, B., Singh, A., Bruce, J., Walsman, A., Konolige, K., Srinivasa, S., Abbeel, P., Dollar, A.M.: Yale-cmu-berkeley dataset for robotic manipulation research. The International Journal of Robotics Research 36 (3), 261–268 (2017) [41] Lindermayr, J., Odabasi, C., Jordan, F., Graf, F., Knak, L., Kraus, W., Bormann, 33 R., Huber, M.F.: IPA-3D1K: a large retail 3d model dataset for robot picking. In: 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), pp. 11404–11411 (2023). IEEE [42] Mo, K., Zhu, S., Chang, A.X., Yi, L., Tripathi, S., Guibas, L.J., Su, H.: Partnet: A large-scale benchmark for fine-grained and hierarchical part-level 3d object under-standing. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 909–918 (2019) [43] Lang Segment Anything. https://github.com/luca-medeiros/ lang-segment-anything. Accessed: 2025-02-20 (2022) [44] Fang, H.-S., Wang, C., Fang, H., Gou, M., Liu, J., Yan, H., Liu, W., Xie, Y., Lu, C.: Anygrasp: Robust and efficient grasp perception in spatial and temporal domains. IEEE Transactions on Robotics 39 (5), 3929–3945 (2023) [45] Sundermeyer, M., Mousavian, A., Triebel, R., Fox, D.: Contact-graspnet: Efficient 6-dof grasp generation in cluttered scenes. In: 2021 IEEE International Conference on Robotics and Automation (ICRA), pp. 13438–13444 (2021). IEEE [46] Li, G., Jampani, V., Sun, D., Sevilla-Lara, L.: Locate: Localize and transfer object parts for weakly supervised affordance grounding. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 10922–10931 (2023) [47] Sucan, I.A., Moll, M., Kavraki, L.E.: The open motion planning library. IEEE Robotics & Automation Magazine 19 (4), 72–82 (2012) [48] Rohmer, E., Singh, S.P., Freese, M.: V-REP: A versatile and scalable robot sim-ulation framework. In: 2013 IEEE/RSJ International Conference on Intelligent Robots and Systems, pp. 1321–1326 (2013). IEEE 34 [49] Kolve, E., Mottaghi, R., Han, W., VanderBilt, E., Weihs, L., Herrasti, A., Deitke, M., Ehsani, K., Gordon, D., Zhu, Y., et al.: Ai2-thor: An interactive 3d environment for visual ai. arXiv preprint arXiv:1712.05474 (2017) [50] James, S., Ma, Z., Arrojo, D.R., Davison, A.J.: Rlbench: The robot learning benchmark & learning environment. IEEE Robotics and Automation Letters 5(2), 3019–3026 (2020) [51] Tao, S., Xiang, F., Shukla, A., Qin, Y., Hinrichsen, X., Yuan, X., Bao, C., Lin, X., Liu, Y., Chan, T.-k., et al.: Maniskill3: Gpu parallelized robotics simulation and rendering for generalizable embodied ai. arXiv preprint arXiv:2410.00425 (2024) [52] Dai, T., Wong, J., Jiang, Y., Wang, C., Gokmen, C., Zhang, R., Wu, J., Fei-Fei, L.: Automated creation of digital cousins for robust policy learning. In: Conference on Robot Learning, pp. 4912–4943 (2025). PMLR [53] Gao, K., Ding, Y., Zhang, S., Yu, J.: ORLA*: Mobile manipulator-based object rearrangement with lazy a. arXiv preprint arXiv:2309.13707 (2023) [54] Yu, W., Peng, J., Ying, Y., Li, S., Ji, J., Zhang, Y.: MHRC: Closed-loop decentral-ized multi-heterogeneous robot collaboration with large language models. arXiv preprint arXiv:2409.16030 (2024) 35

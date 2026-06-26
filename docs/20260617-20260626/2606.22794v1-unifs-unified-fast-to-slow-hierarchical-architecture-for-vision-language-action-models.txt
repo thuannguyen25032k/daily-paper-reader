@@ -1,0 +1,580 @@
+Title: UniFS: Unified Fast-to-Slow Hierarchical Architecture for Vision-Language-Action Models
+
+URL Source: https://arxiv.org/pdf/2606.22794v1
+
+Published Time: Tue, 23 Jun 2026 02:35:36 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# UniFS: Unified Fast-to-Slow Hierarchical Architecture for Vision-Language-Action Models 
+
+Lin Sun 1,2, Zhiwei Guan 1, Conglin Wang 1, Zihong Chen 1, Jianhai Yu 1,Zongsheng Li 1, Boyong He 1, Tao Sun 3, Jiale Cao 2∗, and Lige Liu 1∗ 
+
+> 1
+
+JD.com, China  
+
+> 2
+
+Tianjin University, China  
+
+> 3
+
+Yiwu Research Institute of Fudan University, China 
+
+{sunlin.112, wangconglin.11, liulige.neo}@jd.com connor@tju.edu.cn 
+
+Abstract. Mainstream Fast-Slow dual system vision-language-action models decouple a high-frequency action expert from a low-frequency vision-language model for efficiency, yet they face a fundamental fre-quency dilemma: large update gaps cause semantic drift from stale con-text, while small gaps erode the intended computational savings. More-over, because the action expert receives only the VLM’s final-layer rep-resentation at a single fixed frequency, rich intermediate features are dis-carded, limiting both information coupling and manipulation precision. Inspired by multi-timescale neural processing in the human brain, we introduce UniFS, a unified fast-to-slow architecture that resolves these challenges through three key designs. First, we stratify the VLM lay-ers into groups with progressively decreasing update frequencies, en-abling shallow layers to capture fast-changing dynamics while deeper layers cache stable semantic context. Second, a latent vector inversion mechanism re-routes the interaction order between multi-scale VLM fea-tures and the action expert, aligning fast-varying representations with fine-grained action decoding and slow-varying ones with coarse plan-ning. Third, a multi-level supervision strategy enforces a coarse-to-fine learning hierarchy across temporal scales. Together, these designs en-able richer cross-frequency information transfer within a single backbone, while the low-frequency pathways additionally preserve temporal context across steps. Experiments on LIBERO show that UniFS achieves state-of-the-art performance ( 98 .3% average success rate, a 2.5% gain over VLA-Adapter baseline) while reducing average inference latency from 
+
+36 .5 ms to 17 .8 ms ( 2.1x speedup). Real-robot experiments on a Franka platform further validate its practical applicability. Code is opensourced at https://github.com/linsun449/UniFS .
+
+Keywords: VLA · Fast-to-Slow System · Multi-timescale Representa-tion  
+
+> 0
+
+* Corresponding authors. 
+
+> arXiv:2606.22794v1 [cs.RO] 22 Jun 2026
+
+2 L Sun et al. Slowest Latent           
+
+> Vectors
+> Vision -
+> Language
+> Model
+> Action
+> Expert
+> Slow
+> Latent
+> Vectors
+> System 2
+> System 1
+> Vision -
+> Language
+> Model
+> Action
+> Expert
+> Fastest Latent
+> Vectors
+> (a )
+> Vision -Language
+> Model
+> RGB &Task Fast Sensory Inputs Fast Sensory Inputs RGB &Task All input
+> Action
+> Expert
+> (b )(c )
+
+Fig. 1: Motivation and Architecture Overview. (a) The separate-module paradigm transmits only slow latent vectors from the VLM to action expert. (b) The embedded paradigm integrates the action expert directly within the VLM layers. (c) Mainstream methods suffer from rigid hard-linking between separate modules. Our approach unifies these dynamics via multi-frequency latent vector for seamless coordination. 
+
+## 1 Introduction 
+
+Vision-Language-Action (VLA) models [3, 4, 18, 21–23, 35, 41, 48, 52, 54, 56] have emerged as a cornerstone for generalist Embodied AI, offering remarkable zero-shot generalization for complex manipulation tasks. Recent works, including 
+
+π0 [4], π0.5 [16], Hume [39], CogVLA [22], Deer-VLA [48], and GraspVLA [12], further advance this paradigm by moving to continuous action generation for fine-grained control. However, they inherit a critical bottleneck from their large-scale Vision-Language Model (VLM) backbones, which already introduce sub-stantial latency for a single forward pass [28, 45, 48], resulting in end-to-end control frequencies of only 1–10 Hz, far below the levels typically required for stable closed-loop real-time control in dynamic environments [8, 10, 15]. To mitigate this latency, recent works have explored dual-system architec-tures [3, 7, 11, 14, 23, 39], decoupling high-level planning from low-level control at different frequencies. As illustrated in Fig. 1(a), one line of works, represented by GR00T-N1 [3], maintains the VLM and action expert as separate modules, where the VLM periodically transmits slow latent representations to guide the fast action expert. Another line of works, represented by Fast-in-Slow [7], em-beds the action expert directly within the VLM, as shown in Fig. 1(b), enabling tighter coupling between the two systems. Despite their architectural differences, both paradigms impose significant constraints on the VLM-action expert interac-tion: the action expert relies on the final-layer latent representation, discarding rich multi-scale semantic features, while the fixed exchange frequency further undermines adaptive responses to dynamic task demands [11]. To address these challenges, we draw inspiration from the multi-timescale processing of the human brain [2, 19], where communication between the cere-bral cortex and cerebellum leverages multiple frequency bands (e.g., 30–150 Hz gamma waves for sensory information and 13–30 Hz beta waves for higher-level cognitive processing) to transmit and integrate information simultaneously. Mo-tivated by this principle, we visualize how the latent representations at each UniFS 30 5 10 15 20 25                     
+
+> Time Steps
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> cosine  distance
+> (b)Temporal Feature Dynamics of VLA -Adapter (a) Temporal Feature Dynamics of of π0
+> 0510 15 20 25
+> Time Steps
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> cosine  distance
+> Shallow layer deep layer
+
+Fig. 2: Cosine distance between layer-wise latent representations over time. (a) Layer-wise feature evolution in the π0 model over time steps. (b) Corresponding tem-poral feature dynamics in the VLA-Adapter. The curves represent different network layers, illustrating how feature stability varies across the depth of the models. 
+
+layer in π0 and the VLA-Adapter change over time, as shown in Figure 2, and find that the magnitude of these changes differs substantially across layers, a phenomenon that aligns with the brain’s multiple temporal scales. These observations and neurobiological perspective motivates a design prin-ciple that instead of tying frequency to specific modules, we vary it smoothly across the whole model. In this way, we introduce UniFS, as shown in Figure 1(c), a novel unified fast-to-slow architecture that directly generates multi-timescale latent representations from the VLM. These multi-timescale latent representa-tions further support the action expert in generating actions. This unified design integrates fast and slow dynamics within a single VLM, leading to more efficient parameter utilization. By feeding multi-frequency latent features produced by the VLM into the action expert, the proposed design sub-stantially improves the alignment of representation spaces between the VLM and the action expert, thereby effectively alleviating the insufficient information cou-pling between them. Moreover, by establishing multi-frequency pathways from the VLM to the action expert, the proposed architecture helps mitigate the fre-quency dilemma that commonly arises in mainstream fast–slow dual systems. During inference, slow-frequency latent representations do not need to be up-dated at every step and can be cached, enabling substantial acceleration of the overall inference process without sacrificing performance. In addition, the slow-frequency pathways endow the model with an implicit memory mechanism that intrinsically preserves historical dependencies without requiring explicit mem-ory buffers, a capability that is fundamentally absent in mainstream fast–slow systems. Our contributions are summarized as follows: 
+
+– We propose a novel unified fast-to-slow hierarchical architecture that di-rectly provides multi-timescale latent representations to the action expert from a single VLM, thereby addressing the frequency dilemma in main-stream fast–slow dual systems and improving the alignment between visual, language and action representations. 4 L Sun et al. 
+
+– We demonstrate that this architecture achieves substantial inference-time acceleration without sacrificing performance, while simultaneously endowing the model with implicit memory capabilities. In particular, UniFS achieves a 2.5% performance improvement on LIBERO while reducing the average inference latency from 36.5 ms to 17.8 ms. 
+
+– We conduct extensive experiments to validate the effectiveness of UniFS in terms of efficiency and robustness. The code will be released to facilitate further research. 
+
+## 2 Related Work 
+
+2.1 The Rise of Large-Scale VLAs and Efficiency Challenges 
+
+Recent advances in Embodied AI have been driven by VLA models, which lever-age internet-scale pretraining to achieve unprecedented zero-shot generalization. Seminal works like RT-2 [56] and OpenVLA [21] have demonstrated the power of unifying natural language reasoning with robotic control, while newer sys-tems (e.g. π0.5 [16], X-VLA [54], MemoryVLA [35]) have further enhanced pre-cision by shifting from discrete tokens to continuous action spaces via iterative decoding (e.g. diffusion [44] or flow matching [3, 16] ). However, this surge in capability introduces a critical efficiency bottleneck. The massive computational overhead of large VLM backbones (typically 7B+ parameters), compounded by the multi-step sampling required for continuous action generation, restricts in-ference frequencies to merely 5–10 Hz. This falls drastically short of the >50 Hz threshold required for stable real-time control in dynamic environments. Con-sequently, the architecture of these VLAs has become a fundamental barrier to their practical deployment, necessitating novel architectural paradigms that can decouple computational complexity from control frequency. 
+
+2.2 Fast-Slow Dual-Systems 
+
+To address the efficiency bottleneck imposed by large-parameter VLA models, the Fast-Slow Dual-System paradigm has emerged as the mainstream solution for real-time control. Inspired by Kahneman’s Dual-Process Theory [19], this approach leverages frequency differentiation to balance semantic reasoning with real-time execution. Representative works, such as HiRT [51], RoboDual [5], and OpenHelix [11], employ asynchronous strategies where a large VLM serves as a low-frequency Slow System (1–5 Hz) for high-level planning, while a lightweight policy acts as a high-frequency Fast System (20–50 Hz) for reactive motor con-trol. While effective in reducing average computational load, these explicit dual-module implementations suffer from inherent structural limitations. Specifically, reliance on rigid hard-coupling strategies with fixed synchronization rates creates a critical trade-off: large frequency gaps induce semantic drift due to outdated context, whereas small gaps negate acceleration benefits. Furthermore, the dis-joint nature of these architectures hinders true end-to-end optimization, as gradi-ents cannot flow seamlessly between independent planning and control modules, UniFS 5
+
+often leading to suboptimal feature alignment. Additionally, existing methods typically employ shallow fusion mechanisms (e.g., simple concatenation) at mod-ule boundaries, failing to capture rich multi-scale temporal dependencies within the latent space. 
+
+2.3 Towards Bio-Inspired Multi-Frequency Latent Fusion 
+
+These structural flaws point towards a need for unified architectures. Neuro-science offers a compelling blueprint: the brain processes multi-timescale infor-mation not via segregated modules, but through multi-frequency neural oscilla-tions coexisting within unified circuits [17, 34, 36, 38]. While some AI works have explored bio-inspired designs [27, 33], few have translated this into frequency-aware latent fusion for end-to-end VLAs [47, 50]. Most existing strategies treat latents as static features, ignoring their spectral properties. In contrast, our work proposes UniFS which embeds frequency-specific pathways directly into a single Transformer backbone. This enables deep fusion of fast dynamics and slow semantics within the latent space, overcoming the fragmentation of explicit dual-systems while preserving the generalization of large foundation models. 
+
+## 3 Method 
+
+3.1 Problem Formulation 
+
+VLA models enable robots to generate action sequences by reasoning jointly over environmental observations and natural language instructions. Specifically, given a language instruction L and a set of visual observations Ovis ∈ RH×W ×3, the VLA policy πθ generates an action chunk A ∈ RT ×D for robotic manipulation, denoted as: 
+
+A = [ a1, a2, . . . , aT ] = πθ (Ovis , Ltask ) (1) where T denotes the chunk length, D represents the action dimension of the specific robot, and each action step ai ∈ RD serves as a control command. In our implementation, we utilize a 7-DoF action representation: 
+
+ai = [ ∆x, ∆y, ∆z, ∆ϕ, ∆θ, ∆ψ, g ]⊤ (2) where ∆x, ∆y, ∆z denote the relative end-effector translation offsets, ∆ϕ, ∆θ, ∆ψ 
+
+denote the rotation changes (roll, pitch, yaw), and g ∈ { 0, 1} indicates the grip-per state (open/closed). Accordingly, the action dimension is D = 7 .The conventional fast-slow dual system implements the policy πθ by decom-posing the process into two distinct frequency. At the slow-frequency scale fslow ,visual observations and language instructions are processed by the VLM to pro-duce a slow latent representation vslow , formulated as: 
+
+vslow = πVLM (Ovis , L). (3) 6 L Sun et al. KV  
+
+> KV
+> KV
+> KV
+> 8fHz
+
+Attention 
+
+Attention 
+
+Attention 
+
+Attention 
+
+> Initial Action Chunks
+
+Action 
+
+expert    
+
+> fHz
+> 4fHz
+> 16f Hz
+
+VLM        
+
+> Images Text States
+> 𝑡 !𝑡 "𝑡 #𝑡 $𝑡 %𝑡 "& '
+
+Transformer Blocks 
+
+Transformer Blocks 
+
+Transformer Blocks 
+
+Transformer Blocks 
+
+> …
+
+(a) 
+
+(b) 
+
+(c) 
+
+Transformer Blocks 
+
+Attention                   
+
+> Inverse  Zone
+> KV
+> 𝑰 𝒏𝒑𝒖𝒕 𝒕 𝟏 𝟔
+> 𝑶 𝒖𝒕𝒑𝒖𝒕 𝒕 𝟏 𝟔
+> 𝑰 𝒏𝒑𝒖𝒕 𝒕 𝟎
+> 𝑶 𝒖𝒕𝒑𝒖𝒕 𝒕 𝟎
+> VLM  Action  expert
+> Layers passed
+> time
+> Layers not passed
+> 𝑩𝒂𝒕𝒄𝒉 𝟎 𝒃𝒂𝒕𝒄𝒉 𝟏𝟓
+> Replacement Strategy
+> Origin batch output
+> From VLM
+> 2f Hz
+> Multi -timescale batch
+> output to action exper t
+> Layer  blocks
+> Layer  blocks
+> Origin batch output
+> Copy the data from blue
+> block to gray block
+> 𝑩𝒂𝒕𝒄𝒉 𝟎 𝒃𝒂𝒕𝒄𝒉 𝟏𝟓
+
+Fig. 3: Overview of our proposed UniFS. In (a) We divide the VLM into multiple frequency groups, with each group operating at a fixed frequency. In (b), we illustrate how a batch performs temporal substitution under VLA parallel training. In (c), we intuitively illustrate the execution frequencies of different layers in one inference loop, showing a theoretical speedup of about 2.6×.
+
+At the fast-frequency scale ffast , this latent representation vslow is held fixed for multiple steps and combined with fast sensory inputs Osen and proprioceptive states Oprop for action execution, denoted by: 
+
+A = πExpert (vslow , Osen , Oprop ). (4) In contrast, our objective is to learn a policy that enables the VLM to generate multi-timescale latent vectors, which directly guide the action expert to produce actions. We formulate this as: 
+
+Vf2s = πVLM (Ovis , Ltask , Osen , Oprop ), (5) 
+
+A = πExpert (Vf2s ). (6) Here, the multi-timescale latent vectors Vf2s spans slow-to-fast features, repre-sented as a set {vk}K−1
+
+k=0 , where K denotes the number of distinct temporal scales integrated within the unified backbone. 
+
+3.2 Framework Overall Architecture. To realize the policy formulation outlined in Section 3.1, we employ a hierarchical architecture aligned with mainstream VLA models [3, 5, 13, 14, 24, 25]. In this framework, the action expert leverages latent represen-tations from each layer of the VLM, thereby guaranteeing it receives sufficiently UniFS 7
+
+rich information. Inspired by OpenVLA [21] and VLA-Adapter [43], we utilize DINOv2 [29] and SigLIP [49] as visual encoders to generate patch embeddings. These are subsequently concatenated with tokenized text instructions and pro-cessed by a pre-trained Large Language Model, such as LLaMA2 [42] or Qwen [1], to achieve efficient multimodal encoding. Specifically, we extract hidden states from all intermediate layers of the LLM, serving as latent vectors with different frequencies that guide the action expert. Our action expert comprises a stack of transformer blocks that process noisy action priors as input. As these queries propagate through the network, they fuse with the corresponding latent vectors via a cross-attention mechanism. Finally, a lightweight MLP head projects the refined query representations into executable action chunks, enabling precise robot manipulation. 
+
+Fast-to-Slow Architecture Design. Standard VLM forward passes do not inherently support multi-timescale latent vectors. To address this, we propose a Fast-to-Slow Architecture (FSA), an asynchronous layer-wise execution mech-anism illustrated in Figure 3. Specifically, we stratify the VLM layers into K
+
+groups, each assigned a distinct update frequency. Formally, let the k-th layer group be updated once every nk timesteps, where 
+
+n1 < n 2 < · · · < n K
+
+i.e. , nk increases with the network depth. Concretely, we set n1 = 1 , for the first layer group to ensure fastest-frequency perception, whereas the last group is assigned the maximum interval nK = N , implying an update rate of once per N timesteps. Let h(t) 
+
+> k
+
+denote the output features of the k-th layer group at timestep t, and let Fk(·) be the transformation implemented by this group. Then the temporal update rule is given by 
+
+h(t) 
+
+> k
+
+=
+
+
+
+Fk
+
+ h(t)
+
+> k−1
+
+, if t ≡ 0 (mod nk),h(t−1)  
+
+> k
+
+, otherwise . (7) Formally, at timestep t the k-th group is recomputed only if t is divisible by nk.Otherwise, its output is retained from the most recent valid update, avoiding redundant computation. And we can obtain the multi-timescale latent vector 
+
+V(t) 
+
+> f2s
+
+=  h(t) 
+
+> k
+
+| k ∈ K ,
+
+at timestep t, where K mean the set of all layer index. 
+
+Latent Vector Inversion. Empirical results in Figure 2 reveal that hidden state representations in deeper layers exhibit significantly higher temporal fre-quencies. We attribute this phenomenon to the fast-frequency supervision of ground-truth actions, as deeper layers are inherently closer to the fast-frequency action output. However, this trend conflicts with the requirements of our fast-to-slow architecture which necessitates progressively slower update frequencies for deeper layers to cache previous hidden state representation. To achieve this, we introduce a latent vector inversion mechanism as shown in Figure 3. Our analysis 8 L Sun et al. 
+
+Algorithm 1 Temporal Batch Sampling                                                             
+
+> Require: Trajectory τ={(ot,at)}Tt=1 , sub-trajectory length K, effective window size
+> Wmax
+> Ensure: Temporally-ordered subset τsub of size K
+> 1: if T < K then
+> 2: I ← [1 ,2, . . . , T, T, . . . , T
+> |{z }
+> K−Ttimes
+> ]padding 3: return {(ot,at)|t∈ I}
+> 4: end if
+> 5: W←min( T, W max )Effective window size 6: tstart ←Uniform (0 , T −W)Random window start 7: C ← { tstart , t start + 1 , . . . , t start +W−1}Candidate indices 8: Irand ←RandomSample (C, K )Draw Kindices without replacement 9: I ← Sort (Irand )Restore temporal order 10: return {(ot,at)|t∈ I}
+
+indicates that such rapid variations stem from the iterative refinement process near the action generation. Consequently, we propose inverting the interaction sequence of latent vectors between the LLM and the action expert. Specifically, initial noisy action proposals interact with deeper features, while refined action outputs interact with shallower latent vectors. This re-routing shifts the high-frequency dynamics to the shallower layers, allowing the deeper layers to remain stable and cacheable without compromising action responsiveness. 
+
+3.3 Training Temporal Batch. To enable stable training of our asynchronous layer-wise exe-cution, we introduce a temporal batch sampling strategy that preserves temporal coherence within each batch, while keep random across batches. The procedure is detailed in Algorithm 1. Given a trajectory of length T , we first randomly se-lect a contiguous temporal window from the full trajectory. Within this window, we randomly sample K timesteps and sort them by time, so that the resulting sequence preserves causal dependencies while still introducing stochasticity for robustness. For trajectories shorter than K, we apply causal padding by repeat-ing the final observation–action pair to keep the batch dimensions consistent. The sampled temporal data are then assembled into a training batch for train-ing asynchronous layer-wise execution. 
+
+Frequency Feature Replacement Strategy. A naive implementation of Asyn-chronous Layer-wise Execution would process timesteps sequentially within a batch: at timestep t, only the layers whose update frequency divides t are re-computed, while all other layers simply reuse their cached features from pre-vious timesteps. However, this design disables parallel computation, severely under-utilizing GPUs and increasing training time by orders of magnitude. In addition, dynamically skipping layer computation breaks the static computa-tion graph assumed by modern deep learning frameworks, introducing consid-UniFS 9
+
+Algorithm 2 Frequency Feature Replacement Strategy                                                                 
+
+> Require: Hidden states H∈RT×F×N×C, timescales f∈NF
+> Ensure: Replaced hidden states H′∈RT×F×N×C
+> 1: Initialize H′with the same shape as H
+> 2: for i= 0 to F−1do timescale index 3: f←f[i]
+> 4: for t= 0 to T−1do time index 5: k←tf
+> ×flatest time ≤twhere this timescale is updated 6: H′[t, i, :,:] ←H[k, i, :,:]
+> 7: end for
+> 8: end for
+> 9: return H′
+
+erable engineering complexity, hurting reproducibility, and making integration with standard training pipelines difficult. To overcome these challenges, we propose Frequency Feature Replacement (FFR), a training-time feature replacement strategy that decouples computation parallelism from update asynchrony. The key idea is to first compute all layer features for all timesteps within a batch using a standard, fully parallel for-ward pass, and then retrospectively align each feature to its prescribed update frequency via a differentiable indexing operation. As illustrated in Figure 3(b), where rows correspond to outputs of different layers and columns represent batch elements ordered in time, the original fully computed feature map (top panel) is transformed into a multi-timescale output (bottom panel). This transformation is performed by grouping consecutive timesteps into blocks, highlighted by the red boxes, within which features are shared. Concretely, for a layer with update frequency f , the feature at the start of each block is copied to the subsequent 
+
+f −1 timesteps; for example, if f = 4 , the feature at t = 0 is reused for t = 1 , 2, 3.In this way, slower layers effectively update less frequently, while preserving the structure required for fully parallel computation. Formally, let H ∈ RT ×F ×N ×C denote the hidden states across T timesteps and F layers. Given timescales f ∈ NF of all layer, we compute the aligned features H′ as: 
+
+H′[t, f, :, :] = H⌊t/f ⌋ × f, f, :, : , ∀t ∈ [0 , T ), f ∈ [0 , F ). (8) FFR enables efficient training of asynchronous layer-wise execution by main-taining full batch parallelism during the forward pass while achieving frequency-aware update patterns through a lightweight post-processing step, without sac-rificing model expressiveness or gradient fidelity. 
+
+Multi-Level Supervision. The model may learn shortcuts through fast-frequency components introduced by the inversion operation. To mitigate this, we adopt multi-level supervision, where the loss is applied not only at the final layer but also as auxiliary losses on each frequency group within the action expert. For lower-frequency groups, whose hidden states are cached and updated less often, this means they receive identical features but different ground-truth 10 L Sun et al. 
+
+actions across timesteps. This encourages them to ignore high-frequency noise and instead learn stable, coarse-grained plans over longer horizons, while higher-frequency groups focus on fine-grained, immediate motor corrections. The total training objective is defined as the average of losses over all fre-quency levels 
+
+Ltotal = 1
+
+K
+
+> K−1
+
+X
+
+> k=0
+
+LL1 (f (hk), Agt ),
+
+where hk denotes the hidden state after the k-th frequency group in the action expert, and f is a shared lightweight mlp to decode the action. This uniform averaging enforces a coarse-to-fine learning hierarchy across temporal scales. 
+
+3.4 Inference 
+
+During inference, we fully exploit the computational benefits of our asynchronous design by caching latent vectors in both the VLM and the Action Expert as shown in Figure 3 (c). Because the model has been trained to produce consistent predictions when features are reused across timesteps, the inference remains exactly aligned with training distribution, avoiding any train–test discrepancy. For the VLM backbone, layers assigned to lower frequency groups are com-puted only once every fk timesteps, with their hidden states cached and reused at intermediate steps. This reduces the per-timestep transformer computation proportionally to the update frequency. The action expert inference is further accelerated through latent vector inver-sion. Slowly varying latent vectors that encode relatively stable semantic context are injected into early layers, while rapidly varying latent vectors that represent fine-grained sensory details are injected into later layers. As a result, the early layers, driven by slowly updating semantic inputs, can operate at a reduced update frequency, whereas only the final layers, which integrate high-frequency latent vectors with proprioceptive feedback, must be executed at every timestep. Consequently, both the VLM and the action expert achieve coordinated accel-eration, yielding an overall theoretical speedup of about 2.6× while maintaining action quality and temporal responsiveness. 
+
+## 4 Experiments 
+
+4.1 Simulation Experiments on LIBERO LIBERO Benchmark. As shown in Figure 4 (right), we evaluate our model on the LIBERO [26], a comprehensive lifelong robotic learning benchmark with 130 tasks spanning four suites: (1) LIBERO-Spatial (a, b) evaluates spatial rea-soning by varying camera viewpoints and object positions while keeping task semantics constant; (2) LIBERO-Object (c, d) tests object generalization by in-troducing diverse object instances with similar affordances; (3) LIBERO-Goal (e, f) assesses goal-conditioned learning by requiring different end states under UniFS 11  
+
+> Fig. 4: Visualization of tasks from the four LIBERO benchmark suites and three Real-World Franka scenarios.
+
+similar initial configurations; and (4) LIBERO-10 (g, h), also called LIBERO-Long, is a challenging sequential multi-task suite requiring agents to master 10 distinct manipulation skills without catastrophic forgetting. This simulation en-vironment is built on robosuite [55] with a Franka Panda robot model, designed to evaluate lifelong learning capabilities in manipulation tasks. 
+
+Implementation Details. We adopt Qwen2.5-0.5B as the language backbone, while the action expert is randomly initialized. All experiments are conducted on 4 NVIDIA A100 GPUs using Distributed Data Parallel training. We use a per-GPU mini-batch size of 16, resulting in a global batch size of 64. We divide the VLM into 5 groups with time scales 1, 2, 4, 8, 16 and an effective window size of 128. The model is optimized with AdamW using a constant learning rate of 1 × 10 −5. For data loading, we utilize TensorFlow Datasets TFDS with a shuffle buffer size of 10000 . On LIBERO benchmark, the model takes as input both a third-person image and a wrist-mounted camera image together with the proprioceptive state of the robot, and outputs an action chunk of length 8 at each prediction step. 
+
+Main Results. We report the success rate in Table 1. Our UniFS achieves state-of-the-art results with an average success rate of 98 .3% . For each task, UniFS obtains 99 .6% , 99 .6% , 98 .1% , and 95 .6% on LIBERO-Spatial, LIBERO-Object, LIBERO-Goal, and LIBERO-Long, respectively. Compared with the baseline VLA-Adapter † (modified to match our settings, e.g. , temporal batch size), training with the proposed frequency feature replacement strategy yields 12 L Sun et al. 
+
+a 2.5% improvement and is also more efficient, demonstrating the effectiveness of our fast-to-slow architecture. 
+
+Table 1: Performance on the LIBERO benchmark. Success rates (%) are re-ported across four suites. Bold is the best performance                                                                                                                          
+
+> Architecture Method Spatial Object Goal Long Avg.
+> Non-VLA Diffusion Policy †[9] –78.3 92.5 68.3 72.4 UniAct [53] 77.0 87.0 77.0 70.0 74.0 Standard VLA
+> π0[4] 96.8 98.8 95.8 85.2 94.2
+> π0.5[4] 98.0 97.8 95.6 85.8 94.3 EO-1 [31] 99.7 99.8 99.2 94.8 98.2 X-VLA [54] 98.2 98.6 97.8 97.6 98.1 OpenVLA [21] 84.7 88.4 79.2 53.7 76.5 Enhanced VLA CoT-VLA [52] 87.5 91.6 87.6 69.0 81.1 WorldVLA [6] 87.6 96.2 83.4 60.0 81.8 MemoryVLA [35] 98.4 98.4 96.4 93.4 96.5 CogVLA [22] 98.5 98.8 96.5 95.2 97.4 OpenVLA-OFT [20] 96.2 98.3 96.2 94.5 95.3 SmolVLA [37] 93.0 94.0 91.0 77.0 88.8 GraspVLA [12] –94.1 91.2 82.0 89.1 SpatialVLA [32] 88.2 89.9 78.6 55.5 78.1 Fast-Slow VLA
+> π0-FAST [30] 96.4 96.8 88.6 60.2 85.5 VLA-Cache [46] 98.3 97.5 98.3 95.4 97.4 PD-VLA [40] 95.5 96.7 94.9 91.7 94.7 GR00T N1 [3] 94.4 97.6 93.0 90.6 93.9 SP-VLA [23] 84.4 85.6 75.4 74.9 80.1 VLA-Adapter [43] †97.2 98.8 93.4 93.6 95.8
+> Ours UniFS 99.6 99.6 98.2 95.6 98.3
+
+Efficiency Experiment. UniFS runs faster than baselines as its asynchronous layer-wise execution. Table 2 compares with OpenVLA, OpenVLA-OFT, and VLA-Adapter. Our UniFS achieves an average latency of only 17 .8 ms, which is much faster than VLA-Adapter. 
+
+4.2 Ablation Studies Ablation study on effectiveness. We firstly investigate the contribution of each proposed component within UniFS. Starting from the base model, we incre-mentally introduce three key components: (1) Fast-to-Slow Architecture ( e.g. ,FSA); (2) Latent Vector Inversion ( e.g. , LVI); and (3) Multi-Level Supervision (e.g. , MLS). The success rates are reported in Table 3. With all components enabled, UniFS achieves an overall improvement of 2.5% , demonstrating the effectiveness of our proposed fast-to-slow architecture. 
+
+Baseline. The baseline builds upon VLA-Adapter [43] which already achieves an average of 95 .8% , providing a reliable foundation for subsequent analysis. UniFS 13 
+
+Table 2: Efficiency comparison of OpenVLA, OpenVLA-OFT, VLA-Adapter, and UniFS running with lowest latency of 12 .3 ms and largest latency of 32 .6 ms. In a whole period, UniFS achieves an average latency of 17 .8 ms. 
+
+Metric OpenVLA OpenVLA-OFT VLA-Adapter UniFS (Ours) 
+
+Fastest Mean Slowest Throughput (Hz) ↑ 4.2 109.7 219.2 650.4 449.4 245.4 Latency (ms) ↓ 239.6 72.9 36.5 12.3 17.8 32.6 
+
+Table 3: Ablation study of UniFS components, including (1) Fast-to-Slow Layer; (2) Latent Vector Inversion and (3) Multi-Level Supervision. With all three components, we achieve the best results of 98 .3% success rate with 17 .8 ms latency. 
+
+Components Success Rate (%) Latency (ms) FSA LVI MLS Spatial Object Goal Long Avg. Avg. 
+
+× × × 97.2 98.8 93.4 93.6 95.8 36.5 
+
+✓ × × 83.4 93.2 76.0 28.4 70.3 22.6 
+
+✓ ✓ × 98.8 98.8 88.4 91.0 94.3 17.8 
+
+✓ ✓ ✓ 99.6 99.6 98.2 95.6 98.3 17.8 
+
++FSA. When only enabling the FSA, causes a performance drop to 70 .3% ,especially drop from 93 .6% to 28 .0% on LIBERO-10. We attribute this instability to a frequency mismatch between the multi-scale latent vectors and the action expert, which directly limits the effectiveness of modeling the fast-to-slow layer. 
+
++LVI. When we invert the multi-scale latent vectors to make them align with the action expert, the average success rate increases to 94 .3% , which is comparable to baseline. This shows the crucial role of LVI in fast-to-slow layer. 
+
++MLS. As mentioned above, inverting the latent vectors may create short-cuts that prevent the shadow layer from being properly trained. Introducing multi-layer supervision, UniFS achieves better results across all tasks. [1,1,1,1,1]             
+
+> [1,2,2,4,4]
+> [1,2,4,8,8]
+> [1,2,4,8,16]
+> [1,3,6,12,24]
+> [1,3,9,18,36]
+> [1,4,16,32,64]
+> [1,4,16,48,92]
+> [1,8,32,64,128]
+> Configuration
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)
+> 99.4% 99.6% 99.4% 99.6% 99.6% 95.2% 93.6% 89.5%
+> 65.8%
+> Success Rate
+> Mean Latency
+> 15.0
+> 17.5
+> 20.0
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> 32.5
+> 35.0
+> Mean Latency (ms)
+> 30.5ms
+> 20.7ms
+> 18.2ms 17.8ms
+> 16.7ms 15.9ms 15.6ms 15.3ms 15.1ms
+> Success Rate (%) vs. Mean Latency (ms)
+
+Fig. 5: Ablation study on sampling fre-quency configurations. 
+
+Ablation study on efficiency. Ben-efiting from the temporal batch sam-pling strategy with random tem-poral sampling, the frequency for each group can also be customized during inference, although it is fixed to half that of the preced-ing group during training. We char-acterize each configuration by the maximum-to-minimum sampling fre-quency ratio across groups, rang-ing from 1× (e.g. , [1 , 1, 1, 1, 1] ) to 
+
+128 × (e.g. , [1 , 8, 32 , 64 , 128] ). The re-sults on LIBERO-Spatial are shown in Figure 5. As illustrated, when the maximum-to-minimum sampling fre-14 L Sun et al. 
+
+quency ratio does not exceed 24 ×, there is negligible impact on performance. Beyond this threshold, larger ratios lead to performance degradation, yet offer only marginal latency gains. This demonstrates that UniFS is robust to vary-ing frequency configurations that differ from the training setup; notably, even uniform sampling ( i.e. , no frequency) works without performance degradation. 
+
+4.3 Deployment on Real Robot Environment Setup. To validate the real-world applicability of UniFS, we de-ploy it on a Franka Research 3 (FR3) platform, as shown in Figure 4(d). The system comprises a 7-DOF collaborative arm equipped with two complementary perception modules: an Orbbec RGB-D camera for scene-level understanding and an Intel RealSense camera mounted at the end-effector for precise manipu-lation perception. We evaluate UniFS on three tasks of increasing complexity, as illustrated in Figure 4(a)–(c): (a) Pick, a fundamental object grasping task; (b) Stack, requiring precise spatial reasoning for object placement; and (c) Exchange Boxes, a short-horizon memory-aware task that requires the robot to reason over prior actions and object states. 
+
+Pick and Stack. For these two foundational manipulation tasks, UniFS achieves success rates of 75% and 60% , respectively in pick and stack, which are compa-rable to our baseline model without frequency. 
+
+Exchange Boxes. This task presents a significantly greater challenge, requiring the robot to exchange two cubes between separate containers. It necessitates short-term memory capabilities, as the correct action is ambiguous in many states when relying solely on the current observation. Despite this complexity, UniFS achieves a 50% success rate. 
+
+## 5 Conclusion 
+
+In this work, we introduced UniFS, a novel unified fast-to-slow architecture bi-ologically inspired by multi-timescale processing mechanism of human brain to overcome the frequency dilemma and integration challenges in mainstream Fast-Slow Dual System VLA models. Through Fast-to-Slow Architecture, La-tent Vector Inversion, and Multi-Level Supervision, UniFS resolves these limita-tions through a unified architecture that produces multi-frequency latent vectors from the VLM, facilitates effective information transfer to the action expert, and inherently provides the system with implicit short-term memory. Extensive ex-periments on the LIBERO benchmark demonstrate that UniFS achieves state-of-the-art performance and speed with an average success rate of 98.3%, with only 17 .8 ms latency. 
+
+Limitations and Future Work. Despite the substantial inference accelera-tion, UniFS still has several limitations. The training process does not benefit from computational speedup, as the Frequency Feature Replacement strategy requires full parallel forward passes to maintain GPU utilization. Stabilizing multi-frequency learning further demands relatively large batch sizes to ensure UniFS 15 
+
+sufficient temporal diversity within each update. In addition, the fast-to-slow architecture and latent vector inversion introduce distribution shifts that may interfere with the semantic knowledge encoded in pre-trained backbones, ne-cessitating careful fine-tuning to avoid performance degradation. In future, we will first extend UniFS to more advanced backbone architectures ( e.g. , π0), and then systematically study how such adaptations affect the underlying pre-trained representations. Building on these insights, we will further integrate UniFS into state-of-the-art foundation models and conduct large-scale pre-training to better preserve, and potentially enhance, their semantic capacity. 
+
+## References 
+
+1. Bai, J., Bai, S., Chu, Y., Cui, Z., Dang, K., Deng, X., Fan, Y., Ge, W., Han, Y., Huang, F., et al.: Qwen technical report. arXiv preprint arXiv:2309.16609 (2023) 72. Behrouz, A., Razaviyayn, M., Zhong, P., Mirrokni, V.: Nested learning: The illusion of deep learning architectures. arXiv preprint arXiv:2512.24695 (2025) 2 3. Bjorck, J., Castañeda, F., Cherniadev, N., Da, X., Ding, R., Fan, L., Fang, Y., Fox, D., Hu, F., Huang, S., et al.: Gr00t n1: An open foundation model for generalist humanoid robots. arXiv preprint arXiv:2503.14734 (2025) 2, 4, 6, 12 4. Black, K., Brown, N., Driess, D., Esmail, A., Equi, M., Finn, C., Fusai, N., Groom, L., Hausman, K., Ichter, B., et al.: π0: A vision-language-action flow model for general robot control. arXiv preprint arXiv:2410.24164 (2024) 2, 12 5. Bu, Q., Li, H., Chen, L., Cai, J., Zeng, J., Cui, H., Yao, M., Qiao, Y.: Towards synergistic, generalized, and efficient dual-system for robotic manipulation. arXiv preprint arXiv:2410.08001 (2024) 4, 6 6. Cen, J., Yu, C., Yuan, H., Jiang, Y., Huang, S., Guo, J., Li, X., Song, Y., Luo, H., Wang, F., et al.: Worldvla: Towards autoregressive action world model. arXiv preprint arXiv:2506.21539 (2025) 12 7. Chen, H., Liu, J., Gu, C., Liu, Z., Zhang, R., Li, X., He, X., Guo, Y., Fu, C.W., Zhang, S., et al.: Fast-in-slow: A dual-system foundation model unifying fast ma-nipulation within slow reasoning. arXiv preprint arXiv:2506.01953 (2025) 2 8. Chen, L., Zhao, H., Liu, T., Bai, S., Lin, J., Zhou, C., Chang, B.: An image is worth 1/2 tokens after layer 2: Plug-and-play inference acceleration for large vision-language models. In: European Conference on Computer Vision. pp. 19–35. Springer (2024) 2 9. Chi, C., Xu, Z., Feng, S., Cousineau, E., Du, Y., Burchfiel, B., Tedrake, R., Song, S.: Diffusion policy: Visuomotor policy learning via action diffusion. The International Journal of Robotics Research 44 (10-11), 1684–1704 (2025) 12 10. Chignoli, M., Kim, D., Stanger-Jones, E., Kim, S.: The mit humanoid robot: De-sign, motion planning, and control for acrobatic behaviors. In: 2020 IEEE-RAS 20th International Conference on Humanoid Robots (Humanoids). pp. 1–8. IEEE (2021) 2 11. Cui, C., Ding, P., Song, W., Bai, S., Tong, X., Ge, Z., Suo, R., Zhou, W., Liu, Y., Jia, B., et al.: Openhelix: A short survey, empirical analysis, and open-source dual-system vla model for robotic manipulation. arXiv preprint arXiv:2505.03912 (2025) 2, 4 16 L Sun et al. 12. Deng, S., Yan, M., Wei, S., Ma, H., Yang, Y., Chen, J., Zhang, Z., Yang, T., Zhang, X., Zhang, W., et al.: Graspvla: a grasping foundation model pre-trained on billion-scale synthetic action data. arXiv preprint arXiv:2505.03233 (2025) 2, 12 13. Du, Z., Liu, B., Liang, Y., Shen, Y., Cao, H., Zheng, X., Feng, Z., Wu, Z., Yang, J., Jiang, Y.G.: Himoe-vla: Hierarchical mixture-of-experts for generalist vision-language-action policies. arXiv preprint arXiv:2512.05693 (2025) 6 14. Han, B., Kim, J., Jang, J.: A dual process vla: Efficient robotic manipulation leveraging vlm. arXiv preprint arXiv:2410.15549 (2024) 2, 6 15. Hu, Y., Xie, Q., Jain, V., Francis, J., Patrikar, J., Keetha, N., Kim, S., Xie, Y., Zhang, T., Fang, H.S., et al.: Toward general-purpose robots via foundation models: A survey and meta-analysis. arXiv preprint arXiv:2312.08782 (2023) 2 16. Intelligence, P., Black, K., Brown, N., Darpinian, J., Dhabalia, K., Driess, D., Esmail, A., Equi, M., Finn, C., Fusai, N., et al.: π0.5: a vision-language-action model with open-world generalization. arXiv preprint arXiv:2504.16054 (2025) 2, 417. Jerath, R., Beveridge, C., Jensen, M.: On the hierarchical organization of oscilla-tory assemblies: layered superimposition and a global bioelectric framework. Fron-tiers in human neuroscience 13 , 426 (2019) 5 18. Jiang, T., Jiang, X., Ma, Y., Wen, X., Li, B., Zhan, K., Jia, P., Liu, Y., Sun, S., Lang, X.: The better you learn, the smarter you prune: Towards efficient vision-language-action models via differentiable token pruning. arXiv preprint arXiv:2509.12594 (2025) 2 19. Kahneman, D.: Thinking, fast and slow. macmillan (2011) 2, 4 20. Kim, M.J., Finn, C., Liang, P.: Fine-tuning vision-language-action models: Opti-mizing speed and success. arXiv preprint arXiv:2502.19645 (2025) 12 21. Kim, M.J., Pertsch, K., Karamcheti, S., Xiao, T., Balakrishna, A., Nair, S., Rafailov, R., Foster, E., Lam, G., Sanketi, P., et al.: Openvla: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 (2024) 2, 4, 7, 12 22. Li, W., Zhang, R., Shao, R., He, J., Nie, L.: Cogvla: Cognition-aligned vision-language-action model via instruction-driven routing & sparsification. arXiv preprint arXiv:2508.21046 (2025) 2, 12 23. Li, Y., Meng, Y., Sun, Z., Ji, K., Tang, C., Fan, J., Ma, X., Xia, S., Wang, Z., Zhu, W.: Sp-vla: A joint model scheduling and token pruning approach for vla model acceleration. arXiv preprint arXiv:2506.12723 (2025) 2, 12 24. Li, Y., Deng, Y., Zhang, J., Jang, J., Memmel, M., Yu, R., Garrett, C.R., Ramos, F., Fox, D., Li, A., et al.: Hamster: Hierarchical action models for open-world robot manipulation. arXiv preprint arXiv:2502.05485 (2025) 6 25. Li, Z., Hu, B., Shao, R., Chen, G., Jiang, D., Xie, P., Hao, J., Nie, L.: Global prior meets local consistency: Dual-memory augmented vision-language-action model for efficient robotic manipulation. arXiv preprint arXiv:2602.20200 (2026) 6 26. Liu, B., Zhu, Y., Gao, C., Feng, Y., Liu, Q., Zhu, Y., Stone, P.: Libero: Benchmark-ing knowledge transfer for lifelong robot learning. Advances in Neural Information Processing Systems 36 , 44776–44791 (2023) 10 27. Liu, J., Shi, X., Nguyen, T.D., Zhang, H., Zhang, T., Sun, W., Li, Y., Vasilakos, A.V., Iacca, G., Khan, A.A., et al.: Neural brain: a neuroscience-inspired framework for embodied agents. arXiv preprint arXiv:2505.07634 (2025) 5 28. Ma, Y., Song, Z., Zhuang, Y., Hao, J., King, I.: A survey on vision-language-action models for embodied ai. arXiv preprint arXiv:2405.14093 (2024) 2 UniFS 17 29. Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., et al.: Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 (2023) 7 30. Pertsch, K., Stachowicz, K., Ichter, B., Driess, D., Nair, S., Vuong, Q., Mees, O., Finn, C., Levine, S.: Fast: Efficient action tokenization for vision-language-action models. arXiv preprint arXiv:2501.09747 (2025) 12 31. Qu, D., Song, H., Chen, Q., Chen, Z., Gao, X., Ye, X., Lv, Q., Shi, M., Ren, G., Ruan, C., et al.: Eo-1: Interleaved vision-text-action pretraining for general robot control. arXiv preprint arXiv:2508.21112 (2025) 12 32. Qu, D., Song, H., Chen, Q., Yao, Y., Ye, X., Ding, Y., Wang, Z., Gu, J., Zhao, B., Wang, D., et al.: Spatialvla: Exploring spatial representations for visual-language-action model. arXiv preprint arXiv:2501.15830 (2025) 12 33. Sapkota, R., Cao, Y., Roumeliotis, K.I., Karkee, M.: Vision-language-action (vla) models: Concepts, progress, applications and challenges. arXiv preprint arXiv:2505.04769 (2025) 5 34. Senkowski, D., Engel, A.K.: Multi-timescale neural dynamics for multisensory in-tegration. Nature Reviews Neuroscience 25 (9), 625–642 (2024) 5 35. Shi, H., Xie, B., Liu, Y., Sun, L., Liu, F., Wang, T., Zhou, E., Fan, H., Zhang, X., Huang, G.: Memoryvla: Perceptual-cognitive memory in vision-language-action models for robotic manipulation. arXiv preprint arXiv:2508.19236 (2025) 2, 4, 12 36. Shine, J.M.: Neuromodulatory influences on integration and segregation in the brain. Trends in cognitive sciences 23 (7), 572–583 (2019) 5 37. Shukor, M., Aubakirova, D., Capuano, F., Kooijmans, P., Palma, S., Zoui-tine, A., Aractingi, M., Pascal, C., Russi, M., Marafioti, A., et al.: Smolvla: A vision-language-action model for affordable and efficient robotics. arXiv preprint arXiv:2506.01844 (2025) 12 38. Snyder, A.C.: Resonant hierarchies: a multiscale framework for oscillatory dynam-ics in the brain. Frontiers in Psychology 17 , 1704370 (2026) 5 39. Song, H., Qu, D., Yao, Y., Chen, Q., Lv, Q., Tang, Y., Shi, M., Ren, G., Yao, M., Zhao, B., et al.: Hume: Introducing system-2 thinking in visual-language-action model. arXiv preprint arXiv:2505.21432 (2025) 2 40. Song, W., Chen, J., Ding, P., Zhao, H., Zhao, W., Zhong, Z., Ge, Z., Li, Z., Wang, D., Wang, L., et al.: Pd-vla: Accelerating vision-language-action model integrated with action chunking via parallel decoding. In: 2025 IEEE/RSJ International Con-ference on Intelligent Robots and Systems (IROS). pp. 13162–13169. IEEE (2025) 12 41. Tan, X., Yang, Y., Ye, P., Zheng, J., Bai, B., Wang, X., Hao, J., Chen, T.: Think twice, act once: Token-aware compression and action reuse for efficient inference in vision-language-action models. arXiv preprint arXiv:2505.21200 (2025) 2 42. Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bash-lykov, N., Batra, S., Bhargava, P., Bhosale, S., et al.: Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 (2023) 7 43. Wang, Y., Ding, P., Li, L., Cui, C., Ge, Z., Tong, X., Song, W., Zhao, H., Zhao, W., Hou, P., et al.: Vla-adapter: An effective paradigm for tiny-scale vision-language-action model. arXiv preprint arXiv:2509.09372 (2025) 7, 12 44. Wen, J., Zhu, M., Zhu, Y., Tang, Z., Li, J., Zhou, Z., Li, C., Liu, X., Peng, Y., Shen, C., et al.: Diffusion-vla: Generalizable and interpretable robot foundation model via self-generated reasoning. arXiv preprint arXiv:2412.03293 (2024) 4 45. Wen, J., Zhu, Y., Li, J., Zhu, M., Tang, Z., Wu, K., Xu, Z., Liu, N., Cheng, R., Shen, C., et al.: Tinyvla: Towards fast, data-efficient vision-language-action models for robotic manipulation. IEEE Robotics and Automation Letters (2025) 2 18 L Sun et al. 46. Xu, S., Wang, Y., Xia, C., Zhu, D., Huang, T., Xu, C.: Vla-cache: Towards efficient vision-language-action model via adaptive token caching in robotic manipulation. arXiv e-prints pp. arXiv–2502 (2025) 12 47. Yu, Z., Wang, B., Zeng, P., Zhang, H., Zhang, J., Gao, L., Song, J., Sebe, N., Shen, H.T.: A survey on efficient vision-language-action models. arXiv preprint arXiv:2510.24795 (2025) 5 48. Yue, Y., Wang, Y., Kang, B., Han, Y., Wang, S., Song, S., Feng, J., Huang, G.: Deer-vla: Dynamic inference of multimodal large language models for efficient robot execution. Advances in Neural Information Processing Systems 37 , 56619–56643 (2024) 2 49. Zhai, X., Mustafa, B., Kolesnikov, A., Beyer, L.: Sigmoid loss for language im-age pre-training. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 11975–11986 (2023) 7 50. Zhang, D., Sun, J., Hu, C., Wu, X., Yuan, Z., Zhou, R., Shen, F., Zhou, Q.: Pure vision language action (vla) models: A comprehensive survey. arXiv preprint arXiv:2509.19012 (2025) 5 51. Zhang, J., Guo, Y., Chen, X., Wang, Y.J., Hu, Y., Shi, C., Chen, J.: Hirt: Enhancing robotic control with hierarchical robot transformers. arXiv preprint arXiv:2410.05273 (2024) 4 52. Zhao, Q., Lu, Y., Kim, M.J., Fu, Z., Zhang, Z., Wu, Y., Li, Z., Ma, Q., Han, S., Finn, C., et al.: Cot-vla: Visual chain-of-thought reasoning for vision-language-action models. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 1702–1713 (2025) 2, 12 53. Zheng, J., Li, J., Liu, D., Zheng, Y., Wang, Z., Ou, Z., Liu, Y., Liu, J., Zhang, Y.Q., Zhan, X.: Universal actions for enhanced embodied foundation models. In: Proceed-ings of the Computer Vision and Pattern Recognition Conference. pp. 22508–22519 (2025) 12 54. Zheng, J., Li, J., Wang, Z., Liu, D., Kang, X., Feng, Y., Zheng, Y., Zou, J., Chen, Y., Zeng, J., et al.: X-vla: Soft-prompted transformer as scalable cross-embodiment vision-language-action model. arXiv preprint arXiv:2510.10274 (2025) 2, 4, 12 55. Zhu, Y., Wong, J., Mandlekar, A., Martín-Martín, R., Joshi, A., Lin, K., Mad-dukuri, A., Nasiriany, S., Zhu, Y.: robosuite: A modular simulation framework and benchmark for robot learning. arXiv preprint arXiv:2009.12293 (2020) 11 56. Zitkovich, B., Yu, T., Xu, S., Xu, P., Xiao, T., Xia, F., Wu, J., Wohlhart, P., Welker, S., Wahid, A., et al.: Rt-2: Vision-language-action models transfer web knowledge to robotic control. In: Conference on Robot Learning. pp. 2165–2183. PMLR (2023) 2, 4 UniFS 1
+
+## A Detailed Architecture 
+
+As shown in Table 4, in our implementation, we find that the vision encoder is more time-consuming than LLM , so both vision encoder and LLM backbone are structured as fast-to-slow architecture. Table 5 presents the comprehensive configuration settings for our UniFS, which is built on VLA-Adapter. The visual inputs are processed by both DINOv2 and SigLIP encoders, where the hidden states are extracted at relative frequencies of 16 f , 8 f and 4 f , where 
+
+f means the base frequency in UniFS. The outputs of vision encoders are pro-cessed by Qwen2.5 along with language instruction, where the hidden states are extracted at relative frequencies of 4 f , 2 f and f . Notably, the frequency of 4 f
+
+applies to both vision encoder and LLM backbone.           
+
+> Table 4: Inference time of each module in UniFS.
+> Module Time (ms) Ratio (%)
+> Vision Encoder 13.5 41.4 LLM 9.6 29.4 Action Expert 9.5 29.2
+> Total 32.6 100.0
+
+The action expert of UniFS consists of 24 transformer layers and selects a total of 24 hidden states from specific layers across the vision encoder and LLM backbone to serve as fast-to-slow latent vectors to guide action generation. Table 5a outlines the layer-wise frequency assignments, while Table 5b spec-ifies the feature selection strategy for the action expert. Specifically, we extract output features from the terminal layers within each frequency group. Addition-ally, we incorporate features from intermediate LLM layers, as empirical evidence suggests they contribute significantly to representation quality and overall per-formance. This selection ensures that the action expert receives a rich mixture of fast-to-slow features. 
+
+## B More Analysis 
+
+Layer-wise temporal dynamics. To quantify the temporal variability of hid-den states, we compute the cosine distance between consecutive time steps for each LLM layer of our proposed UniFS. Specifically, for a hidden state ht at time 
+
+t, the cosine distance is defined as 1 − ht·ht+1  
+
+> ∥ht∥∥ ht+1 ∥
+
+, measuring angular differences in the latent space where smaller values indicate more stable representations. Figure 2(a) (b) show the model without fast-to-slow architecture, where deeper layers demonstrate greater temporal variability with frequent fluctua-tions, while shallower layers maintain greater stability. We also show this vari-ability of UniFS with the fast-to-slow architecture in Figure 6(a) and quantify in Figure 6(b), showing the distribution of cosine distances for each layer across 2 L Sun et al. 
+
+Table 5: Model Configuration and Latent Vector Selection Strategy. (a) Relative frequency configuration of layers for both vision encoders and LLM backbone. A higher relative frequency indicates more frequent hidden state updating. (b) Hidden states of specific layers with different frequency selected to the action expert module. 
+
+(a) Relative frequency per layer of both vision encoder and LLM backbone. 
+
+Module Model Layer Range Frequency 
+
+Vision DINO v2 Layers 0–11 16 f
+
+Layers 12–17 8f
+
+Layers 18–23 4f
+
+SigLIP Layers 0–11 16 f
+
+Layers 12–17 8f
+
+Layers 18–27 4f
+
+LLM Qwen2.5 Layers 0–2 4f
+
+Layers 3–11 2f
+
+Layers 12–23 f
+
+(b) hidden states of selected layers with specific frequency for action expert 
+
+Module Selected Layers Frequency 
+
+Vision Layers 7–11 16 f
+
+Layers 13–17 8f
+
+LLM Layers 0–2 4f
+
+Layers 8–11 2f
+
+Layers 12–15, 21–23 f
+
+all time steps. Each box plot summarizes temporal variation via median, in-terquartile range, and spread. Within UniFS shows an opposite observation. the shallower layers exhibit wider distributions with higher medians, indicating sensitivity to visual changes, while deeper layers show compact distributions, indicating stable semantic features. We argue that this phenomenon is due to the latent vector inversion de-scribed in Section 3.2. Specifically, shallower layers are closer to high-frequency, fine-grained actions, thereby requiring high-frequency features to adjust. This requirement directly supports our fast-to-slow architecture, which is designed to enable faster variations in shallow layers to match these high-frequency dy-namics. With this design, we can reuse features and update them only at their corresponding frequencies, thereby accelerating inference. 0 5 10  15  
+
+> Time Steps
+> 20 25
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> cosine distance
+> (a) Temporal Feature Dynamics
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> Layer
+> (b) Layer-wise Distribution
+> 0.20
+> distribution
+> L1 L2
+> L3 L4
+> L5 L6
+> L7 L8
+> L9 L10
+> L11 L12
+> L13 L14
+> L15 L16
+> L17 L18
+> L19 L20
+> L21 L22
+> L23 L24
+
+Fig. 6: Layer-wise temporal feature dynamics of UniFS. (a) Cosine distance between consecutive time steps per layer, with colors indicating layer depth (blue: shallow, red: deep). shallower layers fluctuate more while deeper layers remain stable. (b) Per layer distribution of cosine distances across time steps. Decreasing variance and medians from shallower to deeper layers align with our fast-to-slow architecture. UniFS 3𝑡 0 𝑡 2 𝑡 4 𝑡 6 𝑡 8 𝑡 10  𝑡 12  𝑡 14      
+
+> Time Step
+> 𝑡 15
+> 30
+> 0
+> 15
+> 25
+> 20
+> 10
+> 5
+> Time ( ms )
+> Inference time of VLA -Adapter
+> Average inference time of UniFS
+> 𝐵𝑙𝑜𝑐𝑘1 (16𝑓 )
+> 𝐵𝑙𝑜𝑐𝑘2 (8𝑓 )
+> 𝐵𝑙𝑜𝑐𝑘3 (4𝑓 )
+> 𝐵𝑙𝑜𝑐𝑘4 (2𝑓 )
+> 𝐵𝑙𝑜𝑐𝑘5 (𝑓 )
+> 𝑇𝑖𝑚𝑒 𝑠𝑎𝑣𝑒𝑑
+
+Fig. 7: Timing analysis. We visualize the inference time of UniFS across continuous timesteps in Libero-Spatial suite. 
+
+Timing analysis. In Figure 7, we present the per-step inference time for Libero-Spatial, revealing how the fast-to-slow scheduling strategy of UniFS achieves computational efficiency. Block1 (16 f ) executes at every step with minimal in-ference time (13.3 ms), where f denotes the base inference frequency, establishing a consistent shallow baseline. To improve prediction accuracy within the time budget, Block2 –Block5 (8 f , 4 f , 2 f , f ) are selectively activated, with each layer addition contributing approximately 4–5 ms. This selective activation pattern is evident in the figure, which t0 activates all layers to perform full inference (reaching 32 ms), while others activate some part blocks, maintaining fast in-ference. Across a complete inference cycle ( t0–t15 ), the average inference time is 17.8 ms, substantially lower than the full layer inference time of 32 ms. 
+
+## C Visualization of Results 
+
+Figure 8 presents qualitative visualizations of our UniFS on both the LIBERO benchmark and real-world Franka robot experiments. These visualizations demon-strate that our approach consistently achieves precise and robust manipulation performance. Specifically, in the task of Figure 8(g), there is ambiguity in many states during inference. For instance, after the robot picks the cube from the lower container to the higher container, the robot would be confused about exchanging which cube to the lower container based solely on current observa-tions without historical context. However, compared with VLA-Adapter without reusing features, UniFS achieves a higher success rate on this task by reusing historical, low-frequency hidden states. This superior performance demonstrates that UniFS equips more robust implicit memory capabilities. 4 L Sun et al. (a) LIBERO -spatial: pick up the black bowl between the plate and the ramekin and place it on the plate 
+
+(b) LIBERO -object: pick up the alphabet soup and place it in the basket 
+
+(c) LIBERO -goal: open the middle drawer of the cabinet 
+
+(d) LIBERO -long: pick up the book and place it in the back compartment of the caddy 
+
+(e) Pick the chip in bowl 
+
+(g) Exchange the two pink boxes 
+
+(f) Stack the green block on pink block 
+
+Fig. 8: Qualitative visualizations of our proposed UniFS on both LIBERO and real-world experiments.

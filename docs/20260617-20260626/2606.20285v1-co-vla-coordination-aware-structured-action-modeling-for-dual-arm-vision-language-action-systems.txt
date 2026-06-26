@@ -1,0 +1,350 @@
+Title: Co-VLA: Coordination-Aware Structured Action Modeling for Dual-Arm Vision-Language-Action Systems
+
+URL Source: https://arxiv.org/pdf/2606.20285v1
+
+Published Time: Fri, 19 Jun 2026 01:13:18 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Co-VLA: Coordination-Aware Structured Action Modeling for Dual-Arm Vision–Language–Action Systems 
+
+Yandong Wang 1,2, Jiaqian Yu 2, Xiongfeng Peng 2, Lu Xu 2, Yamin Mao 2, Weiming Li 2,Jaewook Yoo 3, Dongwook Lee 3, Daehyun Ji 3, Mingbo Zhao 1, Chao Zhang 2
+
+Fig. 1: Overview of our dual-arm VLA system. We design a Structured Action Expert (SAE) that interprets the hidden states from the VLM backbone into a structured latent space, then produces decomposed actions through separate projection heads. At deployment time, a Latent-Aware Controller (LAC) interprets the learned coordination representations to refine joint-level commands for accurate, synchronized, smooth, and safe execution. 
+
+Abstract — Vision–language–action (VLA) models have re-cently demonstrated strong capabilities in both single-arm and dual-arm robotic manipulation. Prior works have shown that coordinated bimanual behaviors can emerge from end-to-end learning frameworks, highlighting the expressive power of large vision–language backbones combined with continuous action prediction. However, as bimanual tasks become more tightly coupled and execution constraints become more critical, implicit coordination alone may be insufficient to ensure reliable, interpretable, and deployment-stable behavior. In this work, we propose Co-VLA, a coordination-aware bimanual manipulation framework that introduces explicit structural priors into VLA models. Specifically, we instantiate our method on a state-of-the-art vision-language backbone by replacing its monolithic action head with a Structured Action Expert (SAE) explicitly designed for bimanual coordination. In particular, we introduce explicit structure at the action generation level together with a modular coordination-aware loss design that shapes shared and residual latents according to task-specific bimanual coordination struc-tures. The shared latent encodes task-level coordination intent, while residual latents capture residual execution adjustments for each arm. At deployment, we introduce a Latent-Aware Controller (LAC) that interprets the learned coordination representations to modulate synchronization strength, execution asymmetry, motion smoothness, and safety constraints in real time. LAC operates at the joint-command level and remains compatible with standard robot control pipelines, without requiring force or impedance control. Experimental results 
+
+> 1Yandong Wang and Mingbo Zhao is with Donghua University, Shanghai, China
+> 2Yandong Wang, Jiaqian Yu, Xiongfeng Peng, Lu Xu, Yamin Mao, Weiming Li, and Chao Zhang are with Samsung R&D Institute China-Beijing (SRCB), China
+> 3Jaewook Yoo, Dongwook Lee, and Daehyun Ji are with Samsung AI Center, DS Division, South Korea
+
+across simulation and real-world benchmarks demonstrate that Co-VLA significantly outperforms monolithic VLA baselines, achieving a 27% success rate gain in tight-coordination tasks and more than doubling performance in out-of-distribution (OOD) real-world scenarios (from 13% to 27%), and reducing task completion time by up to 25%. 
+
+I. INTRODUCTION Vision–language–action (VLA) models enable robots to map visual observations and language instructions directly to continuous actions, achieving strong results in single-arm manipulation and encouraging progress in bimanual settings [1], [2], [4]. Prior works show that coordinated bimanual behaviors can emerge from end-to-end learning without explicit collaboration modeling [8], [9], [7], suggest-ing that large-capacity architectures can implicitly resolve inter-arm coordination in many cases. However, as bimanual tasks become more tightly coupled, implicit collaboration alone may be insufficient. Bimanual manipulation often requires precise temporal synchroniza-tion, asymmetric role assignment, and strict execution-level constraints such as collision avoidance and motion smooth-ness, spanning multiple coordination regimes with distinct structural patterns in action space. In existing VLA systems, actions for both arms are generated via direct regression from a shared representation without separating task-level coor-dination intent from residual execution details. This places the full burden of resolving collaboration trade-offs on the learned model, leaving synchronization strength, execution asymmetry, and safety behavior implicit and difficult to interpret or adjust at deployment time. 
+
+> arXiv:2606.20285v1 [cs.RO] 18 Jun 2026
+
+Our work is motivated by a key observation: collaboration in bimanual manipulation is not an action itself, but a structure over actions. Both arms often share a common task-level intent, such as jointly transporting an object or synchronizing a handover, while requiring distinct execution strategies at the joint level. Representing bimanual actions as a monolithic vector conflates these fundamentally different sources of variation, limiting generalization and making it difficult to diagnose collaboration failures. Our VLA system introduces explicit structure into both action generation and execution for bimanual manipulation. Our approach builds upon existing VLA frameworks and augments them with three key components. First, we design a Structured Action Expert (SAE) that decomposes action pre-diction into a shared latent and arm-specific residual latents. The shared latent represents task-level synchronization in-tent, while the residual latents encode asymmetric execution details for each manipulator. This structured decomposition provides a strong inductive bias for learning coordinated be-haviors and enables more interpretable latent representations. In addition, we introduce task-adaptive coordination losses that enforce semantically meaningful separation between shared and residual components. Second, we introduce a Latent-Aware Controller (LAC) that operates at deployment time to interpret the learned coordination representations. LAC modulates synchronization strength, execution asym-metry, motion smoothness, and safety constraints in real time, refining predicted joint commands before execution. This design separates learning from execution shaping and safety enforcement, allowing reliable deployment without re-quiring specialized hardware or low-level impedance control. Third, we additionally explore a Co-Motion demonstration paradigm for data collection, in which both robot arms act concurrently rather than sequentially. By decomposing tasks into staged parallel motions with shared reference frames, look-ahead planning, and safe intermediate targets, Co-Motion increases the density of concurrent coordination samples in the training set, complementing SAE’s structural decomposition with richer demonstration coverage. In summary, this work makes the following contributions: (1) We introduce Co-VLA , a structured action-head ex-tension compatible with pretrained VLA backbones. Its core, the Structured Action Expert (SAE) , decomposes bimanual actions into a shared coordination latent and arm-specific residual latents, paired with task-adaptive coordination losses that enforce semantically meaningful separation according to task-specific coordination patterns. (2) We design a Latent-Aware Controller (LAC) that interprets the learned shared–residual representations at de-ployment to refine synchronization, asymmetry, and smooth-ness, while remaining fully compatible with standard joint-level control pipelines. (3) We explore Co-Motion , a collaborative demonstra-tion paradigm that collects concurrent bimanual trajectories through staged parallel scheduling and shared reference frames, revealing an efficiency-versus-learnability trade-off that highlights open challenges in learning from high-density coordination data. II. RELATED WORK 
+
+a) VLA for Robotic Manipulation: VLA models map multimodal inputs directly to robot actions. RT-2 [1] first co-fine-tuned a large VLM on robotic data for emergent generalization; OpenVLA [2] achieved comparable results with 7B open-source parameters; Octo [3] introduced adiffusion-based generalist policy pretrained on 800k trajecto-ries. π0 [4] proposed a flow-matching VLA on a PaliGemma backbone for dexterous multi-embodiment control, extended by π0.5 [5] for open-world generalization. Diffusion Pol-icy [6] and RDT-1B [7] further advanced continuous action modeling for bimanual tasks. While these systems show that coordinated dual-arm behavior can emerge implicitly [8], [9], [10], their action heads project to monolithic vectors without separating coordination intent from arm-specific execution. We retain the π0 backbone but introduce structured decom-position via SAE at the action head. 
+
+b) Dual-Arm Coordination: Classical bimanual control builds on operational space formulations [13], the virtual linkage model for multi-grasp internal forces [14], and hybrid position/force coordination [15]. Surveys [16], [17] cover impedance-based and kinematic consistency methods. Dynamical-systems approaches [18] generate synchronized multi-arm motions with coordination constraints. These methods impose coordination analytically at the control level. In contrast, we introduce representation-level structure com-patible with standard joint-level pipelines, bridging learning-based flexibility with structured coordination bias. 
+
+c) Structured Action Representation: Shared–private decomposition has been used in multi-task learning [19] and multi-agent RL (e.g., QMIX [20], MAPPO [21]) to separate common objectives from individual behaviors. More recently, Hao et al. [22] explored abstracting manipulation skills through mixture-of-experts in diffusion-based policies. For bimanual manipulation, IACE [23] proposed inter-arm coordinated encoders for synchronization. However, these ideas have not been integrated into VLA action heads. 
+
+d) Demonstration Paradigms for Bimanual Learning: 
+
+ALOHA [8] and Mobile ALOHA [9] collect bimanual demonstrations via puppeteering teleoperation; ALOHA Un-leashed [10] scaled this for dexterous tasks. RoboTwin [11] and RoboTwin 2.0 [12] generate scripted demonstrations via LLM-based code synthesis. In both paradigms, arm motions are often sequential or loosely coupled, underrepresenting temporal coordination. 
+
+e) Execution Refinement: Residual policy learning [24], [25] and control barrier functions [26] refine learned policies for stability and safety. For bimanual systems, impedance controllers [27], [28] enforce coordination at the hardware level but require force sensing. Our LAC operates at the joint-command level, interpreting learned shared and residual action components to refine synchronization and smoothness without specialized hardware or backbone modifications. Fig. 2: Structured Action Expert (SAE) architecture. III. METHOD Our approach extends exisiting VLA framework by intro-ducing structured action modeling and execution refinement for coordinated bimanual manipulation. As illustrated in Fig. 1, The system comprises three components: Structured Action Expert (SAE) a shared–residual decomposition that explicitly separates task-level coordination intent from arm-specific execution (Sec. III-A); Latent-Aware Controller (LAC) interprets the learned shared and residual represen-tations at deployment to modulate synchronization strength, motion smoothness, and safety in real time (Sec. III-B); addi-tionally Collaborative Motion (Co-Motion) , an exploratory demonstration paradigm that collects concurrent bimanual trajectories in simulation, enriching the training distribution with high-density coordination samples (Sec. III-C). 
+
+A. Structured Action Expert (SAE) a) Unstructured Action Generation in Standard VLAs: 
+
+In state-of-the-are VLA models such as π0 [4], the action head maps transformer hidden states directly to joint-level commands. Given the hidden representation at time step t,denoted as ht ∈ RH , the bimanual action is obtained via a single projection: at = fπ0 (ht), where at = [ at,L , a t,R ] ∈
+
+R14 denotes the concatenated joint commands of the left and right arms. This formulation treats the dual-arm action as a monolithic vector, leaving inter-arm coordination to be learned implicitly. 
+
+b) Shared–Residual Action Decomposition: As illus-trated in Fig. 2, SAE replaces the unstructured projector with parallel latent decoders that decompose action generation into shared and residual components. Given the same hidden representation ht, we compute three latent vectors: 
+
+zst = gs(ht), zLt = gL(ht), zRt = gR(ht),
+
+where share latent zst ∈ RL encodes shared coordination intent, left latent zLt ∈ RL and right latent zRt ∈ RL encode execution-specific information for each arm. The shared latent produces common action components for each arm with separate projection heads, 
+
+ast,L = ϕsL(zst ), ast,R = ϕsR(zst ),
+
+while the residual latents produce residual action components for each arm again with separate projection heads, 
+
+art,L = ϕrL(zLt ), art,R = ϕrR(zRt ).
+
+The final joint-level commands are obtained via additive composition: 
+
+at,L = ast,L + art,L , at,R = ast,R + art,R ,
+
+where at,L , a t,R ∈ R7 denote the predicted joint velocities for the two manipulators. This decomposition preserves the original joint-level action interface while introducing an explicit separation between coordination structure and execution-specific adjustments. 
+
+c) Task-Adaptive Coordination Losses: While the shared–residual decomposition provides a structural induc-tive bias, different bimanual tasks exhibit distinct coordi-nation regimes. Some tasks require highly symmetric mo-tion, others involve asymmetric role assignment, and some demand tight temporal synchronization without directional symmetry. To accommodate these variations, we introduce a modular set of auxiliary losses that shape the coordination structure in complementary ways. 
+
+Sparse Residual Regularization. To encourage shared-dominant behavior in symmetric tasks, we apply an ℓ1
+
+regularization on residual components: 
+
+Lsparse = Et
+
+∥art,L ∥1 + ∥art,R ∥1
+
+ . (1) This loss biases the model toward encoding common motion in the shared latent, while allowing residual components to activate only when asymmetric adjustments are necessary. 
+
+Shared Mean Velocity Consistency. To explicitly align the shared component with common motion trends, we introduce a shared-mean velocity loss: 
+
+Lshared = Et
+
+∥ast,L − ¯ut∥22 + ∥ast,R − ¯ut∥22
+
+ , (2) where ¯ut = 12 (ut,L + ut,R ) is the average joint velocity. This loss reinforces the semantic interpretation of the shared latent as encoding task-level coordination intent. 
+
+Temporal Synchronization Loss. Let at,L , a t,R ∈ R7
+
+denote the predicted joint velocities for the left and right arms. We define temporal differences ∆at,L = at,L − at−1,L 
+
+and ∆at,R = at,R − at−1,R , and their magnitudes mt,L =
+
+∥∆at,L ∥2 and mt,R = ∥∆at,R ∥2. After standardizing each magnitude sequence over time, we compute the temporal coupling as corr pred = Et [ ˜ mt,L ˜mt,R ]. The synchronization loss is then defined as 
+
+Lsync = 1 − corr pred , (3) which encourages the two arms to accelerate and decelerate synchronously regardless of motion direction. In general, the training objective takes the form 
+
+L = Laction + λ Laux , (4) where Laux ∈ {L sparse , Lshared , Lsync } is selected based on the dominant coordination pattern of the target task: Lsparse 
+
+for near-symmetric execution, Lshared for asymmetric role assignment, and Lsync for temporally coupled motion. We set 
+
+λ = 0 .001 across all experiments. This task-level selection is guided by prior knowledge of each task’s coordination struc-ture; empirical validation of this design choice is provided in Experiment Section. Algorithm 1 Latent-Aware Controller (LAC) 
+
+Input: Raw action chunk {qt}Ht=1 where qt = [ at,L ; at,R ] ∈
+
+R14 ; latent components {ast,L , a st,R , a rt,L , a rt,R }Ht=1 
+
+Output: Refined action sequence {˜qt}Ht=1  
+
+> 1:
+
+Initialize ˜q0 ← q1, α0 ← αbase  
+
+> 2:
+
+for t = 1 , . . . , H do  
+
+> 3:
+
+% Step 1: Energy analysis  
+
+> 4:
+
+Est ← 12 (∥ast,L ∥2 + ∥ast,R ∥2) , 
+
+> 5:
+
+Ert ← 12 (∥art,L ∥2 + ∥art,R ∥2) 
+
+> 6:
+
+ρt ← Ert / (Est + ε) 
+
+> 7:
+
+% Step 2: Opposition analysis  
+
+> 8:
+
+ωt ← − (⟨art,L , a rt,R ⟩) / (∥art,L ∥2 ∥art,R ∥2 + ε) 
+
+> 9:
+
+% Step 3: Adaptive stiffness  
+
+> 10:
+
+if ρt < τ ρ then  
+
+> 11:
+
+ˆαt ← αbase + ∆ macro ▷ Macro-dominant  
+
+> 12:
+
+else if ρt ≥ τρ ∧ ωt > τ ω then  
+
+> 13:
+
+ˆαt ← αbase + ∆ prec ▷ Precision-critical  
+
+> 14:
+
+else  
+
+> 15:
+
+ˆαt ← αbase − ∆noise ▷ Noise suppression  
+
+> 16:
+
+end if  
+
+> 17:
+
+ˆαt ← clip(ˆ αt, α min , α max ) 
+
+> 18:
+
+αt ← (1 − β) αt−1 + β ˆαt 
+
+> 19:
+
+% Step 4: Low-pass refinement  
+
+> 20:
+
+˜qt ← (1 − αt) ˜ qt−1 + αt qt 
+
+> 21:
+
+end for 
+
+In practice, we observe that different tasks benefit from different auxiliary losses, reflecting variations in coordina-tion structure. We interpret this as evidence that bimanual manipulation spans multiple coordination regimes, and that a modular structural bias enables targeted adaptation. 
+
+B. Latent-Aware Controller (LAC) 
+
+SAE produces joint-level action predictions together with the shared and residual latent components. While these predictions already encode meaningful bimanual structure, direct execution can still suffer from high-frequency jit-ter, overreaction to small residual signals, or insufficient protection of precision-critical motions. The Latent-Aware Controller (LAC) addresses these issues by interpreting the shared–residual decomposition at deployment time to adap-tively refine joint commands before they are sent to the robot. Recall that the predicted actions are decomposed as at,L =
+
+ast,L +art,L , a t,R = ast,R +art,R , where the shared components 
+
+as represent task-level collaboration (macro motion), and the residual components ar represent residual execution details (micro adjustment). Empirically, we observe that in most time steps the shared components dominate the action magnitude, while the resid-ual components are relatively small but critical for precise collaboration. This motivates a macro–micro control strategy in which shared actions are transmitted with high fidelity, while residual actions are selectively protected or suppressed depending on their semantic relevance. 
+
+a) Energy-Based Micro–Macro Analysis: At each time step t, we compute the average magnitudes of the shared and residual components: 
+
+Est = 12
+
+ ∥ast,L ∥2 + ∥ast,R ∥2
+
+ , E rt = 12
+
+ ∥art,L ∥2 + ∥art,R ∥2
+
+ .
+
+We define the micro-motion ratio as 
+
+ρt = Ert
+
+Est + ε ,
+
+where ε is a small constant for numerical stability. This ratio characterizes the relative importance of residual adjustments at the current time step. 
+
+b) Residual Opposition and Collaboration Signal: To distinguish meaningful asymmetric collaboration from noise, we further analyze the directional relationship between the residual components. We compute the cosine similarity 
+
+cos t = ⟨art,L , a rt,R ⟩∥art,L ∥2 ∥art,R ∥2 + ε ,
+
+and define an opposition score ωt = −cos t. A high op-position score indicates that the two arms apply residual adjustments in opposing directions, which commonly arises in coordinated behaviors such as stabilizing, holding, or fine alignment. In contrast, low or inconsistent opposition suggests residual noise or jitter. 
+
+c) Adaptive Stiffness Modulation: Based on the micro-motion ratio ρt and opposition score ωt, the controller computes an adaptive execution stiffness ˆαt around a base stiffness αbase . The controller follows three regimes:  
+
+> •
+
+Macro-dominant motion: If ρt is below a small thresh-old τρ, the action is dominated by shared motion. The controller increases stiffness by a margin ∆macro (ˆαt =
+
+αbase + ∆ macro ) to allow fast, direct execution.  
+
+> •
+
+Precision-critical micro adjustment: If ρt ≥ τρ and 
+
+ωt exceeds a collaboration threshold τω , residual actions are interpreted as meaningful micro adjustments. The stiffness is explicitly increased ( ˆαt = αbase + ∆ prec ) to preserve these delicate opposite-direction alignments.  
+
+> •
+
+Noise suppression: Otherwise, the residual energy is considered uncoordinated high-frequency jitter and stiff-ness is reduced ( ˆαt = αbase − ∆noise ) to suppress it. To avoid abrupt changes, the target stiffness ˆαt is first bounded within [αmin , α max ], and then temporally smoothed: 
+
+αt = (1 − β) αt−1 + β ˆαt,
+
+where β ∈ (0 , 1) controls the smoothing rate. 
+
+d) Joint-Level Action Refinement: Given the raw joint command qt = [ at,L ; at,R ] predicted by the VLA model, the controller applies a first-order low-pass refinement: 
+
+˜qt = (1 − αt) ˜ qt−1 + αt qt,
+
+where ˜qt denotes the refined joint command sent to the robot. This formulation ensures smooth execution while adaptively preserving collaboration-critical motion components. LAC does not introduce additional learning modules and does not modify the trained policy. Instead, it interprets the semantic structure already present in SAE’s action decomposition to shape execution behavior. By explicitly Fig. 3: Visualization of sequential motion paradigm (left) and our designed collaborative motion paradigm (right). distinguishing macro collaboration from micro adjustment and protecting meaningful residual signals, LAC improves motion smoothness, stability, and safety without requiring force sensing or impedance control. 
+
+C. Co-Motion: Collaborative Motion Paradigm 
+
+Standard bimanual demonstration pipelines typically ex-ecute arm motions sequentially or with loose synchroniza-tion, underrepresenting the temporal coordination and role coupling that characterize real collaborative manipulation. Co-Motion is an exploratory demonstration paradigm that increases the density of concurrent bimanual coordination in the training set. It is implemented by restructuring the task-level scheduling logic within the RoboTwin 2.0 code-generation pipeline; the underlying motion planner (cuRobo) and primitive interfaces remain unchanged. As illustrated in Fig. 3, Co-Motion decomposes each task into a sequence of stages with explicit synchronization boundaries. Within each stage, non-conflicting subtasks are dispatched to both arms in parallel, reducing idle time and capturing natural temporal overlap. To make this paralleliza-tion practical, Co-Motion adopts three supporting mecha-nisms: (i) shared reference frames , namely common spatial anchors (e.g., a handover midpoint or goal pose) that both arms reference, decoupling their planning and stabilizing demonstrations across trials; (ii) look-ahead precomputation 
+
+of near-future interaction targets, which eliminates stop-and-plan interruptions and yields smoother trajectories; and (iii) safe intermediate targets with explicit clearance margins that act as buffers between stages, with graceful fallback to sequential execution when parallel dispatch is infeasible. Co-Motion is a complementary data strategy rather than a prerequisite: SAE and LAC already deliver consistent improvements on standard sequential demonstrations (cf. Table I). Co-Motion provides an additional axis for enrich-ing the training distribution, revealing an efficiency-versus-learnability trade-off that warrants further investigation. 
+
+> RoboTwin tasks
+> Real-World tasks
+
+Fig. 4: Evaluation tasks. Top: Bimanual tasks in RoboTwin 2.0 simulation (Aloha-AgileX robot). Bottom: 
+
+Real-world tasks (AgileX Cobot Magic robot). IV. E XPERIMENT 
+
+A. Training Pipeline 
+
+At training stage, we adopt a two-phase strategy. In Phase 1 (warm-up), we freeze the pretrained backbone and train only the newly introduced SAE layers, including the shared and residual action projections as well as the share-to-arm routing modules, for 1,000 steps with a peak learning rate of 5 × 10 −5. This allows the new parameters to reach a reasonable initialization without disrupting the pretrained representations. In Phase 2 (full fine-tuning), we resume from the Phase 1 checkpoint, unfreeze all parameters, and continue training for 30,000 steps with a reduced peak learning rate of 2.5 × 10 −5 that decays to 2.5 × 10 −6. Both phases use a batch size of 32 distributed across 4 GPUs with FSDP. 
+
+B. Simulation Evaluation on RoboTwin 2.0 
+
+In simulation, we conduct experiments on the RoboTwin 2.0 benchmark, which offers over 50 dual-arm manipulation tasks. From this pool, we deliberately select a subset of tasks that explicitly require concurrent bimanual motion, as illustrated in Fig. 4. The selected tasks still span diverse coordination patterns, including symmetric lifting, asymmetric role assignment, and temporally coupled handovers. For each task, we collect 1,000 successful demonstrations under clean (non-randomized) scene configurations, fine-tune a separate model per task, and evaluate over 100 rollouts under both Easy and Hard settings with increasing levels of scene randomization. 
+
+1) Co-VLA on RoboTwin Tasks: We first compare Co-VLA with state-of-the-arts methods on bimanual manipu-lation tasks in RoboTwin 2.0. Both models are trained on the same demonstration data and evaluated under identical conditions. Performance is measured by the average task success rate over 100 rollouts. TABLE I: Success rate (%) on RoboTwin 2.0 tasks over 100 rollouts. Higher is better.                                                              
+
+> π0.5π0Co-VLA (Ours) Easy Hard Easy Hard Easy Hard Handover Block 44% 10% 64% 7% 91 %12 %Lift Pot 100% 60% 100% 63% 100% 65 %Pick Diverse Bottles 95% 18% 91% 13% 95 %16% Pick Dual Bottles 100% 27 %100% 16% 100% 18% Place Bread Basket 92 %28% 70% 46% 69% 48 %Place Bread Skillet 38% 7% 63% 8% 70 %8%Put Object Cabinet 70% 19 %79% 8% 81 %5% Scan Object 45% 6%41% 3% 50 %2% Average 73% 21.9% 76% 21% 82 %22 %
+
+TABLE II: Average time (seconds) to generate 1,000 suc-cessful demonstrations. Lower is better.          
+
+> Task Method Handover Block Scan Object Place Bread Skillet Put Object Cabinet Sequential 9.47 5.65 5.51 8.95 Co-Motion 8.49 4.52 4.59 6.45
+
+As shown in Table I, Co-VLA consistently matches or improves upon both π0 and π0.5 across tasks, raising the average Easy-setting success rate from 76% ( π0) and 73% (π0.5) to 82%. The largest improvement appears in Han-dover Block (64% →91% over π0; 44% →91% over π0.5), a task requiring tight inter-arm coordination, suggesting that explicit shared–residual decomposition particularly benefits role-coupled manipulation. Notably, π0.5 does not consis-tently outperform π0 on these bimanual-specific tasks, indi-cating that backbone capacity alone is insufficient to resolve inter-arm coordination without structural inductive bias. 
+
+2) Effect of Co-Motion Demonstrations: We analyze Co-Motion along two axes execution efficiency and learnability 
+
+to characterize the trade-off introduced by concurrent demon-stration collection. Not all bimanual tasks admit a Co-Motion variant: con-current arm dispatch requires that parallel subtasks are spa-tially non-conflicting and that the underlying motion planner (cuRobo) maintains a sufficiently high success rate under the tighter timing constraints. Of the selected tasks, four satisfy both criteria: Handover Block, Scan Object, Place Bread Skillet, and Put Object Cabinet. 
+
+a) Efficiency: We first measure the average time to gen-erate 1,000 successful demonstrations per task. As shown in Table II, Co-Motion reduces demonstration time by 10–25% across all four tasks, confirming that parallel scheduling and shared anchors improve data collection throughput without sacrificing success rate. This efficiency advantage persists at inference time. Ta-ble III reports the average completion time of successful rollouts during model execution. Models trained on Co-Motion data consistently produce faster task completions, indicating that the concurrent motion patterns transfer to more temporally compact execution behavior. TABLE III: Average completion time (seconds) for 50 suc-cessful rollouts during evaluation. Lower is better.                         
+
+> RoboTwin Co-Motion
+> π0Co-VLA π0Co-VLA Handover Block 28.39 28.56 32.87 25.38
+> Place Bread Skillet 15.02 15.28 12.79 12.35
+> Put Object Cabinet 26.96 28.69 20.87 21.08 Scan Object 15.94 19.00 12.57 13.92 Average 21.58 22.88 19.78 18.18
+
+TABLE IV: Success rate (%) when trained with Co-Motion demonstrations. Higher is better.                         
+
+> π0Co-VLA (Ours) Easy Hard Easy Hard Handover Block 15% 8% 38% 8% Place Bread Skillet 60% 3% 62% 8%
+> Put Object Cabinet 83% 45% 70% 47%
+> Scan Object 43% 8% 53% 3% Average 50% 16% 56% 17%
+
+b) Learnability: Despite the efficiency gains, training on Co-Motion data proves substantially more challenging than training on standard RoboTwin demonstrations. As shown in Table IV, the average Easy-setting success rate drops from 76% to 50% for π0, and from 82% to 56% for Co-VLA. This drop is consistent across architectures, indicating that the difficulty lies in the data distribution itself rather than a specific model limitation. Concurrent trajectories introduce tighter temporal coupling and more complex inter-arm de-pendencies, raising the learning difficulty relative to sequen-tial demonstrations. Notably, Co-VLA still outperforms π0
+
+under Co-Motion training (56% vs. 50%), suggesting that SAE’s shared–residual decomposition helps the model better absorb high-density coordination signals even when overall learning is harder. These results reveal a clear efficiency-vs-learnability trade-off: Co-Motion produces more compact and coordination-rich demonstrations, but current VLA ar-chitectures have difficulty fully exploiting them. 
+
+C. Real-World Evaluation 
+
+For real-world evaluation, we deploy the models on an AgileX Cobot Magic dual-arm robot equipped with wrist-mounted cameras. For each task, we collect 50 human demonstrations via teleoperation with randomized object positions and poses. In-distribution (ID) evaluation follows the same randomization protocol. Out-of-distribution (OOD) evaluation additionally introduces cluttered backgrounds, dis-tractor objects, and low-lighting conditions to assess robust-ness beyond the training distribution, as illustrated in Fig. 5. For the Latent-Aware Controller (Algorithm 1), we em-pirically configure the modulation parameters as follows: 
+
+αbase = 0 .4, ∆macro = 0 .4, ∆prec = 0 .3, ∆noise = 0 .1,
+
+τρ = 0 .01 , τω = 0 .3, β = 0 .2, and bounds [αmin , α max ] = [0 .05 , 0.95] . These parameters are kept fixed across all real-world tasks. We mainly compare three variants: π0, Co-VLA Fig. 5: Examples of out-of-distribution conditions for real-world evaluation on the Lift Pot task, including cluttered backgrounds, distractor objects, and low-lighting. TABLE V: Real-world experiment results over 30 rollouts for each evaluation under ID and OOD settings.                           
+
+> Handover Pick Bottles Lift Pot Method ID OOD ID OOD ID OOD
+> π063% 13% 57% 37% 43% 33% Co-VLA noLAC 57% 17% 57% 50% 63% 27% Co-VLA LAC 73% 27% 67% 47% 67% 37%
+
+without LAC, and Co-VLA with LAC enabled. As shown in Table V, the full system (Co-VLA LAC )achieves the highest success rate in five out of six settings, with the largest gains on coordination-intensive tasks: Han-dover ID improves from 63% ( π0) to 73%, and Lift Pot ID from 43% to 67%. Comparing Co-VLA noLAC with π0 isolates the effect of SAE alone. The results are task-dependent: SAE yields a notable improvement on Lift Pot (43% →63% ID) but a slight decrease on Handover (63% →57% ID), suggesting that structured action decomposition alone does not uniformly translate to higher success without execution-time refine-ment. Enabling LAC consistently recovers and surpasses π0
+
+across all ID settings, indicating that the combination of structured representation and latent-aware control is more robust than either component in isolation. Under OOD conditions, Co-VLA LAC improves over π0 on all three tasks (e.g., Handover 13% →27%, Lift 33% →37%). One exception is Pick Bottles OOD, where Co-VLA noLAC 
+
+achieves the highest rate (50%) while LAC slightly reduces it to 47%, possibly because LAC’s noise suppression filters out residual adjustments that happen to be beneficial under distribution shift for this particular task. Overall, these re-sults highlight that SAE and LAC are complementary: SAE provides the representational structure, while LAC translates it into reliable execution. 
+
+D. In-Depth Analysis a) Latent–Behavior Alignment: Question: Does the structured latent decomposition in Co-VLA translate into behaviorally meaningful coordination? We analyze how the magnitude of the shared and residual action components relates to the actual synchronization between the two arms at inference time. We compute Sync t the cosine similarity between the final composed joint actions at,L and at,R . We visualize Sync t against Est and Ert across rollouts in Fig. 6. The results reveal a consistent positive correlation between synchronization and shared energy (Fig. 6 Left), and a
+
+Fig. 6: Latent–behavior alignment on the Pick Bottles task. 
+
+Left: shared energy Est vs. inter-arm synchronization Sync t
+
+(positive correlation). Right: residual energy Ert vs. Sync t
+
+(negative correlation). TABLE VI: Auxiliary loss ablation on representative tasks from three coordination regimes. All models use Laction as the primary objective. Each row adds one auxiliary loss. Success rate (%) over 100 rollouts on Easy Setting. Higher is better.                   
+
+> Aux. Loss Lift (Sym.) Cabinet (Asym.) Skillet (Temp.) None 99% 49% 51%
+> +Lsparse 100% 51% 55%
+> +Lshared 100% 72% 55%
+> +Lsync 100% 70% 62%
+
+negative correlation with residual energy (Fig. 6 Right). This confirms that the shared latent acts as a coordination driver promoting aligned motion, while the residual components encode arm-specific deviations—indicating that the learned decomposition captures interpretable coordination structure rather than merely partitioning internal representations. 
+
+b) Action Head Ablation and Structural Priors: Ques-tion: How do different auxiliary structural priors influence performance across tasks? We perform a controlled ablation study by adding each auxiliary loss individually on top of the primary objective Laction . Due to computational constraints, we restrict our evaluation to single-loss variants rather than exploring all combinations. Table VI reports results on representative tasks from three coordination patterns. The performance gains are task-dependent. On the role-asymmetric Put Object Cabinet task, adding shared consistency produces the largest improvement (49% → 70%), suggesting that stabilizing common motion trends is particularly beneficial when asymmetric execution must be coordinated. On the temporally coupled Place Bread Skillet task, synchronization loss yields the highest per-formance (51% → 62%), indicating that enforcing aligned motion timing is critical in such scenarios. 
+
+c) Effect of LAC: Question. What is the role of LAC during execution, and how does it affect performance and stability? To isolate the effect of deployment-time execution refinement, we conduct an ablation study on the real-world Pick Bottles task, comparing Co-VLA with LAC enabled, without LAC, and against a standard Exponential Moving Average (EMA) baseline. All other components, including trained policy and raw action predictions, remain identical. Empirically, while the naive EMA filter produces the abso-lutely smoothest joint trajectories (Fig. 7), it suffers a notable drop in task success (Pick Bottles at 60% compared to LAC enabled at 67%). Qualitative inspection reveals that EMA’s Fig. 7: Effect of LAC on joint trajectories. LAC produces smoother trajectories with fewer acceleration peaks and lower cross-rollout variance while preserving task-critical motion patterns. Naive EMA filtering yields the smoothest curves but over-suppresses precision-critical residual adjust-ments, leading to reduced task success. uniform low-pass filtering introduces unavoidable phase lag and “over-smooths” the trajectory. This inadvertently washes out the precision-critical micro-adjustments required for the tight physical coupling inherent in bimanual picking. LAC overcomes this trade-off by explicitly interpreting the semantic structure of SAE’s action decomposition. Macro collaboration components are transmitted with high fidelity to preserve synchronized motion, while micro residual com-ponents are selectively protected or suppressed based on their relative magnitude and opposition structure. This allows LAC to filter high-frequency noise while preserving task-critical residual adjustments that EMA blindly eliminates. Since LAC operates entirely at execution time without modifying the learned policy, it highlights the complementary roles of SAE and LAC. V. CONCLUSION In this paper, we presented Co-VLA, a coordination-aware bimanual manipulation framework that introduces explicit structural priors into VLA models. Specifically, we instantiate our method on a state-of-the-art vision-language backbone by replacing its monolithic action head with a Structured Action Expert (SAE) that decomposes coordina-tion into shared and residual latents, and integrating this with a Latent-Aware Controller (LAC) at deployment, Co-VLA achieves superior task success, execution smoothness, and latent interpretability. Several critical insights emerged from our study. First, although the shared–residual decomposition is architecture-agnostic, validating SAE and LAC on other continuous-action paradigms (e.g., Diffusion Policy) remains future work. Second, while the Co-Motion paradigm enriches the training distribution with concurrent samples, it results in a performance trade-off where success rates drop compared to sequential demonstrations. This suggests that concurrent bimanual trajectories, characterized by tighter temporal cou-pling, impose significantly higher demands on the spatio-temporal reasoning of VLA backbones. Finally, due to com-putational constraints, our auxiliary loss ablation was limited to single-loss variants selected per task. Defining computable task-level coordination descriptors, such as inter-arm velocity correlation or role asymmetry indices, to enable automatic loss routing, and exploring joint activation of multiple losses with adaptive weighting, are promising directions for scaling the framework to diverse task distributions without manual loss selection. REFERENCES [1] A. Brohan, N. Brown, J. Carbajal, et al., “RT-2: Vision-language-action models transfer web knowledge to robotic control,” arXiv preprint arXiv:2307.15818 , 2023. [2] M. J. Kim, K. Pertsch, S. Karamcheti, et al., “OpenVLA: An open-source vision-language-action model,” arXiv preprint arXiv:2406.09246 , 2024. [3] Octo Model Team, D. Ghosh, H. Walke, et al., “Octo: An open-source generalist robot policy,” in Proc. Robotics: Science and Systems (RSS) ,2024. [4] K. Black, N. Brown, D. Driess, et al., “ π0: A vision-language-action flow model for general robot control,” arXiv preprint arXiv:2410.24164 , 2024. [5] Physical Intelligence, “ π0.5: A vision-language-action model with open-world generalization,” arXiv preprint arXiv:2504.16054 , 2025. [6] C. Chi, Z. Xu, S. Feng, et al., “Diffusion policy: Visuomotor policy learning via action diffusion,” Int. J. Robotics Research , 2025. [7] S. Liu, L. Wu, B. Li, et al., “RDT-1B: A diffusion foundation model for bimanual manipulation,” arXiv preprint arXiv:2410.07864 , 2024. [8] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn, “Learning fine-grained bimanual manipulation with low-cost hardware,” in Proc. Robotics: Science and Systems (RSS) , 2023. [9] Z. Fu, T. Z. Zhao, and C. Finn, “Mobile ALOHA: Learning bimanual mobile manipulation with low-cost whole-body teleoperation,” in 
+
+Conf. Robot Learning (CoRL) , 2024. [10] T. Zhao, et al., “ALOHA unleashed: A simple recipe for robot dexterity,” arXiv preprint arXiv:2410.13126 , 2024. [11] Y. Mu, T. Chen, S. Peng, et al., “RoboTwin: Dual-arm robot bench-mark with generative digital twins,” in ECCV Workshop , 2024. [12] T. Chen, et al., “RoboTwin 2.0: A scalable data generator and benchmark with strong domain randomization for robust bimanual manipulation,” arXiv preprint arXiv:2506.18088 , 2025. [13] O. Khatib, “A unified approach to motion and force control of robot manipulators: The operational space formulation,” IEEE J. Robotics and Automation , vol. 3, no. 1, pp. 43–53, 1987. [14] D. Williams and O. Khatib, “The virtual linkage: A model for internal forces in multi-grasp manipulation,” in Proc. IEEE Int. Conf. Robotics and Automation , 1993, pp. 1025–1030. [15] M. Uchiyama and P. Dauchez, “A symmetric hybrid position/force control scheme for the coordination of two robots,” in Proc. IEEE Int. Conf. Robotics and Automation , 1988, pp. 350–356. [16] C. Smith, Y. Karayiannidis, L. Nalpantidis, et al., “Dual arm manipulation—A survey,” Robotics and Autonomous Systems , vol. 60, no. 10, pp. 1340–1353, 2012. [17] F. Caccavale and M. Uchiyama, “Cooperative manipulation,” in 
+
+Springer Handbook of Robotics , B. Siciliano and O. Khatib, Eds., 2016, pp. 989–1006. [18] S. S. Mirrazavi Salehian, N. Figueroa, and A. Billard, “A uni-fied framework for coordinated multi-arm motion planning,” Int. J. Robotics Research , vol. 37, no. 13–14, pp. 1765–1797, 2018. [19] S. Ruder, “An overview of multi-task learning in deep neural net-works,” arXiv preprint arXiv:1706.05098 , 2017. [20] T. Rashid, M. Samvelyan, C. S. de Witt, et al., “QMIX: Monotonic value function factorisation for deep multi-agent reinforcement learn-ing,” in Proc. ICML , 2018. [21] C. Yu, A. Velu, E. Vinitsky, et al., “The surprising effectiveness of PPO in cooperative multi-agent games,” in Proc. NeurIPS , 2022. [22] C. Hao, X. Zhai, Y. Liu, and H. Soh, “Abstracting robot manipula-tion skills via mixture-of-experts diffusion policies,” arXiv preprint arXiv:2601.21251 , 2026. [23] T. Motoda, R. Hanai, R. Nakajo, M. Murooka, F. Erich, and Y. Domae, “Learning bimanual manipulation via action chunking and inter-arm coordination with transformers,” arXiv preprint arXiv:2503.13916 ,2025. [24] T. Silver, K. Allen, J. Tenenbaum, and L. Kaelbling, “Residual policy learning,” arXiv preprint arXiv:1812.06298 , 2018. [25] T. Johannink, S. Bahl, A. Nair, et al., “Residual reinforcement learning for robot control,” in Proc. IEEE Int. Conf. Robotics and Automation ,2019. [26] A. D. Ames, S. Coogan, M. Egerstedt, et al., “Control barrier func-tions: Theory and applications,” in Proc. European Control Confer-ence , 2019. [27] F. Caccavale, P. Chiacchio, A. Marino, and L. Villani, “Six-DOF impedance control of dual-arm cooperative manipulators,” 
+
+IEEE/ASME Trans. Mechatronics , vol. 13, no. 5, pp. 576–586, 2008. [28] T. Wimb¨ ock, C. Ott, and G. Hirzinger, “Impedance behaviors for two-handed manipulation: Design and experiments,” in Proc. IEEE Int. Conf. Robotics and Automation , 2007, pp. 4182–4189.

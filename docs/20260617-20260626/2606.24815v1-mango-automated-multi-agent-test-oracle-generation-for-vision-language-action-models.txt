@@ -1,0 +1,1512 @@
+Title: MANGO: Automated Multi-Agent Test Oracle Generation for Vision-Language-Action Models
+
+URL Source: https://arxiv.org/pdf/2606.24815v1
+
+Published Time: Wed, 24 Jun 2026 01:23:53 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+> 1
+
+# MANGO: Automated Multi-Agent Test Oracle Generation for Vision-Language-Action Models 
+
+Pablo Valle , Shaukat Ali , Aitor Arrieta and Lionel Briand , Fellow, IEEE 
+
+Abstract —Vision-Language-Action (VLA) models are emerg-ing robotic control systems that integrate perception, language understanding, and action generation in a unified architecture. Existing testing approaches for VLA-enabled robots rely on manually constructed symbolic test oracles that determine task success from final environment states. These oracles are costly to construct, require domain expertise, and are often tightly coupled to specific tasks and environments, limiting scalability and reuse. Furthermore, they provide only end-state assessments of task outcomes, offering limited insight into intermediate behavior and fault localization. To address these limitations, we introduce MANGO, a multi-agent framework that automatically generates fine-grained oracles from natural-language descriptions of robotic tasks. MANGO first generates a reusable library of atomic tasks, then generates simulator-grounded oracle def-initions for each atomic task, and finally produces executable fine-grained oracles by decomposing complex instructions into ordered sequences of atomic actions and corresponding oracles. The framework uses collaborative Generator, Assessor, and Judge agents that iteratively refine generated artifacts through struc-tured feedback. We evaluate MANGO on the LIBERO 10 and RoboCasa Humanoid Tabletop benchmarks. Results show that MANGO generates executable, fine-grained oracles that detect a similar number of failures as symbolic oracles while accurately localizing them and providing richer diagnostic information. Through ablation studies, we further analyzed component contri-butions and the effect of initial task set, while preserving oracle quality. Overall, the results show the feasibility and effectiveness of test oracle generation for VLA-enabled robots testing. 
+
+I. I NTRODUCTION 
+
+Vision-Language-Action (VLA) models are emerging as a new generation of control algorithms for robots [1], [2], [3]. Unlike traditional robotic architectures that separate percep-tion, planning, and control into independent modules, VLA models integrate visual observations, natural-language instruc-tions, and robot state information into a unified multimodal representation from which executable actions are generated. This enables robots to interpret high-level instructions such as 
+
+“store the bottle of water in the fridge” and autonomously translate them into sequences of low-level control com-mands. Recent works have demonstrated remarkable capabil-ities across many manipulation tasks [4], [3], [5], enabling general-purpose robots operating in complex environments. As VLA-enabled robots become more capable, ensuring their correctness and reliability becomes critical. Current 
+
+Pablo Valle and Aitor Arrieta are with Mondragon University, Guipuzcoa, Spain. E-mail: pvalle@mondragon.edu, aarrieta@mondragon.edu. Shaukat Ali is with Simula Research Laboratory, Oslo, Norway. E-mail: shaukat@simula.no. Lionel Briand is with the University of Ottawa, Ottawa, ON K1N 6N5, Canada, and also with the Research Ireland Lero Centre for Software, Univer-sity of Limerick, V94 T9PX, Limerick, Ireland. E-mail: lbriand@uottawa.ca; lionel.briand@lero.ie 
+
+testing approaches [6], [7] primarily rely on symbolic test oracles provided by robotic benchmarks [8], [9]. Given task instructions and simulator execution, these oracles determine task success by checking whether the environment’s final state matches the expected goal state. For example, in a task requiring a robot to place an object inside a container, the oracle verifies whether the object is inside the target container at the end of the execution. This strategy is widely used in existing benchmarks due to its simplicity and automation. However, symbolic oracles have limitations [10]. First, they reduce task correctness to a binary decision based solely on the final environment state, ignoring the action sequence that produced it, and thus cannot distinguish between failures arising from different reasons [10]. For example, a robot tasked with placing a bottle in a fridge may fail because it cannot open the fridge, drops the bottle during transport, or attempts to place it before opening the door. From the perspective of a symbolic oracle, all such executions are indistinguishable, as they collapse to the same outcome: task failure. Second, symbolic oracles provide little support for debugging, as they cannot identify which sub-task failed within a complex instruction that failed during execution. As VLA-enabled robots increasingly execute long-horizon tasks with multiple objects and intermediate goals, this lack of diagnostic infor-mation becomes a major obstacle to development and testing. These limitations reflect the test oracle problem in software testing, i.e., the difficulty of determining output correctness automatically [11]. While symbolic oracles provide a partial solution for robotic benchmarks, they are limited to predefined goal states and fail to capture the structure and quality of task execution. This limitation is particularly problematic in long-horizon robotic manipulation, where success depends not only on achieving a final configuration but also on correctly executing a sequence of interdependent sub-tasks. A natural direction to address this issue is finer-grained evaluation. Rather than treating a complex instruction as a single objective, it can be decomposed into atomic tasks cor-responding to reusable capabilities such as opening, grasping, placing, or closing. Associating an oracle with each atomic task reframes evaluation as structured verification that assesses both final goal completion and correctness of intermediate step and their order. Such fine-grained oracles provide richer feedback, improve failure localization, and enable more in-terpretable assessment of robot behavior. However, manually defining them is impractical at scale, as benchmarks often comprise dozens to hundreds of tasks [7], [12], [13], each with different objects, environments, and execution constraints. De-signing atomic task decompositions and corresponding oracles would require substantial human effort and domain expertise. 
+
+> arXiv:2606.24815v1 [cs.SE] 23 Jun 2026 2
+
+Moreover, maintaining consistency across manually authored fine-grained oracles becomes increasingly difficult as bench-mark complexity grows. In addition, existing benchmarks typ-ically implement symbolic oracles in heterogeneous formats and programming languages; for example, Python [13], or .bddl files [8]. This fragmentation further complicates reuse, interoperability, and scalability across benchmarks. As a result, scalable fine-grained evaluation requires automated methods that translate natural-language instructions into executable, fine-grained oracle specifications. In this paper, we present MANGO, a Multi-Agent Fi Ne-
+
+Grained Oracle Generator for automatically generating fine-grained test oracles for VLA-enabled robots from natural-language task descriptions. MANGO operates in three stages. First, it automatically generates a reusable library of atomic tasks from user-provided robotic instructions. Second, it gen-erates oracle definitions for each atomic task using available target simulator functions. Finally, it generates executable fine-grained oracles for individual tasks by decomposing instruc-tions into ordered atomic tasks and linking each step to its corresponding oracle. To ensure correctness and robustness, MANGO employs a collaborative multi-agent architecture with Generator , Assessor , and Judge agents that iteratively refine generated artifacts through structured feedback. We evaluate MANGO on two representative robotic benchmarks, LIBERO 10 [8] and RoboCasa Humanoid Tabletop [3], as-sessing the ability of MANGO to generate fine-grained ora-cles, comparing against symbolic oracles for failure detection and localization, and conducting ablation studies on key frame-work components. We also study how much the initial task set can be minimized while preserving the quality of the generated fine-grained oracles, providing insights for practitioners. The main contributions of the paper are:  
+
+> •
+
+A novel formulation of fine-grained test oracles for VLA-enabled robots based on task decomposition into reusable atomic tasks.  
+
+> •
+
+MANGO, the first multi-agent framework for automat-ically generating fine-grained test oracles from natural language task descriptions for VLA-enabled robots.  
+
+> •
+
+An extensive empirical evaluation on two robotic bench-marks assessing generation quality, failure detection ca-pability, and failure localization effectiveness.  
+
+> •
+
+A replication package, which will be made available upon acceptance, containing the implementation of MANGO, generated oracle libraries, experimental artifacts, and in-structions to facilitate reproducibility and future research. II. B ACKGROUND 
+
+In this section, we present the background on VLA-Enabled robots, followed by their testing. 
+
+A. VLA-Enabled Robots 
+
+Vision-Language-Action (VLA)-enabled robots are an emerging class of Cyber-Physical Systems (CPSs) in which multimodal foundation models are embedded as core runtime components for closed-loop decision-making. As Figure 1 de-picts, unlike traditional autonomous CPSs, which decompose perception, planning, and control into modular components, VLA-enabled robots leverage a unified model that encodes visual observations, language instructions, and proprioceptive information into a shared representation space [3], [4], [2], [5]. This design departs from conventional Deep Neural Network (DNN) specialization, such as Convolutional Neural Networks (CNNs) for visual feature extraction [14], [15], [16], [17] or transformer-based Large Language Models (LLMs) for textual reasoning [18], [19], [20], [21], [22], by enabling a single model to bridge perception and action. Within a robotic system, this capability allows the agent to interpret instructions such as “ Pick up the coke can ” in its environment, resolve referential ambiguities through visual understanding, and generate executable control commands. Formally, at each control step t, the VLA-enabled robot receives an observation ot = [ It
+
+> 1
+
+, I t
+
+> 2
+
+, . . . , I tn, ℓ t, θ t], where Iti
+
+is an RGB image captured by the camera of the robot (i.e., Environment image in Figure 1), ℓt is the task instruction in natural language (i.e., Prompt in Figure 1), and θt represents the robot’s proprioceptive state (i.e., Robot state in Figure 1). These inputs are encoded and represented in a shared latent space, from which the VLA model predicts a temporally ex-tended control command, referred to as an action chunk AC t.Each action chunk AC t = [ at, a t+1 , . . . , a t+h−1] corresponds to a sequence of actions over a finite time horizon h. By iteratively producing such chunks, the VLA model constructs an action sequence A = AC t, AC t+h, . . . , AC t+( N −1) h
+
+
+
+of length N , which when executed, produces a trajectory 
+
+T = [ St, S t+1 , . . . , S t+T ] of T states. Each state St captures the configuration of the robot’s end-effector (i.e., the part of the robot that interacts with the environment, such as a gripper), including its position (x, y, z ) and orientation in quaternions 
+
+(q1, q 2, q 3, q 4). When the corresponding actions are fed to the robot, the robot’s control system automatically computes and applies the necessary joint movements to move the end-effector to the specified positions and orientations. This way, the VLA model serves as the central decision-making com-ponent of the robot, continuously translating natural-language instructions into physically grounded behavior. Recent VLA models further enhance action generation by incorporating diffusion-based action refinement mecha-nisms [3], [4], as shown in Figure 1, which act as iterative post-processing layers over initially predicted actions. Inside the de-noising module, an initial action-chunk prediction is iteratively refined through a denoising diffusion process implemented via a diffusion transformer. At each refinement step, the denoising diffusion module iterates over the same multimodal context, visual observations, language instructions, and proprioceptive state to progressively improve action consistency and fea-sibility. Instead of generating actions in a single pass, this iterative process acts as a structured optimization procedure over the action space. This approach has been shown to reduce error accumulation and improve robustness in long-horizon tasks [3], [4], [23]. 
+
+B. Test Execution of VLA-Enabled Robots 
+
+Figure 2 depicts the full pipeline for testing a VLA-enabled robot within a given scenario and task instruction. For each 3 
+
+> Fig. 1. Overview of the action generation process in a VLA-enabled robot, mapping multimodal inputs to executable action chunks
+
+task evaluation, we assume the availability of three key com-ponents: (1) a natural language instruction, (2) a simulation environment in which the task is executed, and (3) an oracle that determines whether the task is completed. 
+
+1) Instruction: The instruction corresponds to the task description provided to the VLA-enabled robot in natural language. It specifies the intended behavior, including the goal to be achieved and, implicitly, the interactions required with the environment. As shown in Figure 2, the instruction “ Put the black bowl in the bottom drawer of the cabinet and close it ” defines the desired behavior of the robot and serves as the primary interface between the human intent and the robot execution. 
+
+2) Execution: The execution component corresponds to the instantiation of the simulation environment in which the robot operates. This includes setting up the scene, initializing relevant objects, such as those the robot must interact with, and defining their spatial relationships so that the robot can interact with the environment to perform the specified task. The robot interacts with this environment to perform the task specified by the instruction. During execution, at each time step, the robot receives visual inputs (i.e., RGB images) from the simulator and acts on the environment by executing a sequence of actions generated by its controller (i.e., the VLA model), thereby generating a trajectory that accomplishes the specified task. 
+
+3) Oracle: The oracle defines the task success criteria in an executable form. It depends on both the instruction and the environment configuration and is typically defined per task and scenario. These oracles are manually defined by each benchmark’s developers, which results in implementation differences across benchmarks. For instance, in the LIBERO benchmark [8] (i.e., the one shown in Figure 2), oracles are defined as separate specification files in .bddl format instan-tiated per instruction. In contrast, the RoboCasa Humanoid Tabletop benchmark [3] embeds the oracle within the scenario definition and implements it directly in Python. Despite these differences, both approaches rely on predefined simulator functions, such as object contact detection and spatial relations (e.g., whether an object is inside or on top of another), to evaluate task completion. These oracles are symbolic, rely on the aforementioned simulator functions, and produce a binary success/failure result based on whether the environment’s goal state is achieved. In the example shown in Figure 2, the robot is instructed to store a bowl inside the bottom drawer of the cabinet and to close it. Therefore, the oracle evaluates task success by checking whether the bottom drawer is closed, i.e., Close white_cabinet_1_bottom_drawer ,and whether the bowl is inside the bottom drawer of the cabinet, i.e., In akita_black_bowl_1 white_cabinet_1_bottom_region . While this captures the final state of the task, it does not account for the intermediate steps required to complete it, such as grasping the bowl or checking whether the drawer is open before placing it inside. Subsequently, the oracle is limited to the task’s end state, resulting in several limitations. On the one hand, intermediate steps are not considered when assessing test execution. For instance, in prior studies [10], we found high variability in quality across successful executions (e.g., in many successful executions, the object drops multiple times); these oracles are unable to capture such issues. 4Put the black bowl in   
+
+> the bottom drawer of
+> the cabinet and close it
+> Instruction
+> Execution
+> Oracle
+> VLA-Enabled
+> Robot Simulation Environment
+> (define
+> (problem LIBERO_Kitchen_Tabletop_Manipulation)
+> (:domain robosuite)
+> (:goal
+> (And (Close white_cabinet_1_bottom_region)
+> (In akita_black_bowl_1
+> white_cabinet_1_bottom_region)
+> )
+> )
+> )
+> Task
+> Verdict Action
+> Image
+> Info
+> Fig. 2. Task execution pipeline for the “ Put the black bowl in the bottom drawer of the cabinet and close it ” task
+
+Another limitation is that, in the case of long-horizon unsuccessful tasks, it is not possible to know which sub-task the VLA-enabled robotic system failed to complete; this information could eventually be used for debugging and repair. III. F INE -G RAINED ORACLES 
+
+Existing evaluation approaches for VLA-Enabled robots [6], [12], [24], [7] typically rely on symbolic oracles that deter-mine task success by verifying whether the final state of the environment is the same as the expected one, as explained in Section II-B3. Formally, given an instruction ( I), a sym-bolic oracle evaluates the final state ( sn−1) of an execution trace ( τ = ⟨s0, a 0, . . . , s n−1⟩) and returns a binary outcome (Os(sn−1) ∈ Pass , Fail ). For instance, for the instruction 
+
+“store the bottle of water in the fridge” , a symbolic oracle may simply check whether the bottle is located inside the fridge at the end of the execution. While this formulation is effective for simple goal assessment, it fundamentally reduces task correctness to a single end-state condition. As a result, it provides no insight into how the task was executed, nor can it detect at which step of the task execution the failure occurred. In the given example, a robot may fail to open the fridge or place the bottle inside it, which, from the perspective of symbolic oracles, these two failures appear indistinguishable, while they probably correspond to different underlying causes. To address this limitation, we propose the use of fine-grained oracles for task assessment in the context of VLA-enabled robots. The central idea is to decompose the evaluation of a natural-language instruction into a structured set of smaller, reusable instructions that align with the task’s underly-ing structure. Instead of associating a complete instruction with a single symbolic oracle, we first decompose the instruction into a sequence of atomic tasks , and then associate each atomic task with its own symbolic oracle. Finally, the fine-grained oracle is defined as the composition of these atomic symbolic oracles. Any given instruction I can be decomposed as a sequence of parameterized atomic tasks as: 
+
+D(I) = ⟨a0(θ0), a 1(θ1), . . . , a n−1(θn−1)⟩, (1) where each atomic task ai(·) is a reusable functional template and θi denotes its task-specific arguments, such as objects or target regions. The resulting sequence may be strictly ordered, unordered, or partially ordered, depending on the structure and ambiguity of the input instruction. Some instructions are inherently sequential, while in others the execution order does not affect the final outcome. For example, in a pick-and-place task involving a single object, the sequence is strictly ordered because the steps must follow a fixed order (i.e., pick first, then place). When two objects are involved, the overall task can become partially ordered: the order in which the two objects are handled may not matter, but the internal steps for each object remain sequential. In other words, each pick-and-place subtask is ordered, while the choice of which object to process first is flexible. Under this formulation, atomic tasks are not tied to a specific instruction instance but instead represent general-purpose manipulation tasks instantiated with context-dependent parameters. For example, the instruction “store the bottle of water in the fridge” can be decomposed as: 
+
+D(I) = ⟨Open (Fridge ), Pick (Bottle ),
+
+Place (Bottle , Fridge ), Close (Fridge )⟩.
+
+(2) Each atomic task a(θ) is associated with a reusable sym-bolic oracle that evaluates whether the intended effect of that parameterized operation has been achieved in the environ-ment. These atomic symbolic oracles are also parameterized functions over the state of the environment and task argu-ments, allowing them to generalize across different objects and contexts. Formally, each atomic oracle is defined as: 
+
+Oa(θ) : s → { Pass , Fail }, where s denotes the current state of the environment. Importantly, the evaluation performed by 
+
+Oa(θ) is conditioned on the task parameters θ. For instance, the oracle for the task Open (Fridge ) evaluates a task such as: 
+
+OOpen (Fridge )(s) = isOpen (Fridge , s ), (3) which returns Pass if the fridge door is open in state s,and Fail otherwise. Similarly, Pick (Bottle ) evaluates whether the robot is currently holding the specified object, and Place (Bottle , Fridge ) checks whether the bottle is located inside the target container. This parameterized formu-lation is crucial because it decouples the oracle’s structure from specific object instances, enabling the same atomic oracle template to be reused across a wide range of instructions involving different objects and environments. A fine-grained oracle is then constructed by composing the symbolic oracles associated with the decomposed atomic tasks. Given an instruction ( I) and its decomposition ( D(I) = 
+
+⟨a1, . . . , a n⟩), the corresponding fine-grained oracle is defined 5
+
+as: OF (I) = Vni=1 Oai . This formulation transforms the eval-uation from a monolithic decision problem into a structured verification process over atomic tasks. In the example of “store the bottle of water in the fridge” , the fine-grained oracle can be defined as follows:         
+
+> OF= OOpenFridge ∥OPickBottle
+> ≺OPlaceBottleInFridge ≺OCloseFridge
+
+(4) where ∥ denotes that the two initial actions can be executed in any order, and ≺ enforces a strict temporal ordering constraint requiring one step to be completed before the next begins. This ensures that both opening the fridge and picking up the bottle are completed, regardless of order, before placing the bottle inside the fridge, and that closing the fridge occurs only after placement. Note that this oracle would be generated for a multi-arm robot, where the initial actions can be performed in parallel or independently; in contrast, for a single-arm robot, these actions would typically need to be sequential, i.e., opening the fridge first and then picking up the bottle. This decomposition provides a more informative notion of correctness by explicitly incorporating the instruction’s structure and ordering constraints. Rather than producing a single binary outcome, the oracle identifies not only which atomic task was not satisfied but also whether violations occurred in the required temporal sequence. For instance, a failure may arise because the bottle was never successfully grasped, or because it was placed outside the fridge despite all prior steps being correctly executed. Importantly, it can also distinguish ordering violations, such as attempting to place the bottle before the fridge has been opened or before the object has been grasped, which represent fundamentally different failure modes from missing or incorrect actions. As a result, fine-grained oracles provide a structured, compositional, and reusable mechanism for evaluating complex robotic tasks, en-abling scalable and interpretable assessment of VLA-enabled robot behavior. However, manually defining such fine-grained oracles for every task would be extremely expensive and would not scale to large, diverse collections of tasks. This motivates the need for automatically generating fine-grained oracles from natural language instructions, which is the goal of MANGO, presented in Section IV. IV. MANGO: M ULTI -A GENT -B ASED FINE -G RAINED 
+
+ORACLE GENERATOR 
+
+This section presents MANGO, a Multi-Agent Fi Ne-
+
+Grained Oracle Generator for automatically generating fine-grained test oracles for VLA-enabled robots from natural-language task descriptions. As illustrated in Figure 3, the pro-cess is divided into three modules: Atomic Task Library Gen-eration , Atomic Task Oracle Generation , and Fine-Grained Oracle Generation . In the Atomic Task Library Generation 
+
+module, an initial set of complex tasks described in natural language is used to produce a candidate library of atomic tasks. This library is iteratively refined to ensure that each task in the atomic task library is truly atomic and that no redundant or duplicate tasks are included. The result is the final Atomic Task Library , which contains all the atomic tasks required to compose the complex tasks in the initial set. This library subsequently serves as the basis for decomposing new complex tasks into atomic steps at the Fine-Grained Oracle Generation module. In the Atomic Task Oracle Generation module, the Atomic Task Library is combined with the Simulator Functions , which are the functions available in the simulator, to produce an oracle for each atomic task in the Atomic Task Library ,resulting in the Atomic Task Oracle Library . Each oracle specifies the expected behavior and success conditions of its corresponding atomic task. Similar to the previous module, this step is performed only once per benchmark, as the resulting Atomic Task Library and the corresponding Atomic Task Oracle Library can be reused across all complex tasks in the same benchmark, enabling scalable and consistent decomposition without requiring re-execution of these two modules. Finally, in the Fine-Grained Oracle Generation module, a 
+
+Fine-Grained Oracle is produced for each task in the Set of Complex Tasks . This module leverages the Available Objects in the Environment , along with the previously generated Atomic Task Library and Atomic Task Oracle Library . A Candidate Fine-Grained Oracle is generated and then iteratively refined by addressing the issues identified by the Assessment Board ,including errors in oracle logic, object grounding, function compliance, and execution reliability. The final output is a 
+
+Fine-Grained Oracle that decomposes the task into a sequence of atomic steps and checks, with the corresponding oracle for each step, whether each step is completed in the specified order. 
+
+A. Agent Profiles 
+
+The iterative refinement pipeline introduced in each of the three modules of MANGO relies on three agent profiles as Figure 4 depicts: Generator , Assessor , and Judge . As explained in Sections IV-A1– IV-A3, each role is instantiated with a different foundation model, carefully selected to balance output quality and computational efficiency, as these pipelines require multiple inference calls per iteration. A detailed de-scription of each agent used in MANGO can be found in the Appendix. 
+
+1) Generator: The Generator is implemented using aWorld Model and is responsible for producing the Candidates 
+
+for each module in MANGO. World Models are particularly well-suited for this role due to their strong understanding of physical dynamics and environmental semantics, including object properties, spatial relationships, and the planning of action sequences [25], [26], [27], [28]. Moreover, in our preliminary empirical evaluation (see Section V-C), World Models consistently outperformed other foundation models in terms of generation quality, thereby motivating their selection for this component. 
+
+2) Assessor: The Assessor is instantiated as a lightweight base language model. In the context of these agents, fast in-ference is prioritized over deep reasoning, as several assessors operate in parallel, each evaluating a single, specific aspect of the Candidates , such as logical correctness, object grounding, or function compliance. This design enables the construction 6 
+
+> Fig. 3. Overview of MANGO and a fine-grained oracle example for the task “ Put both the alphabet soup and the tomato sauce in the basket ”.
+
+of Assessment Boards , i.e., groups of Assessors that operate in parallel to deliver comprehensive, multidimensional feedback with minimal execution time. 
+
+3) Judge: The Judge is a reasoning LLM that receives the generated Candidate together with the complete set of 
+
+Assessors evaluations and produces a final verdict. If the verdict is positive, the Candidate is accepted as the module’s final output. Otherwise, the Judge generates the structured 
+
+Refinement Instructions that explicitly indicate the issues to be addressed. These instructions are fed to the Generator 
+
+to produce an improved Candidate in the next iteration. By centralizing deep reasoning within a dedicated agent after the assessments, potentially conflicting, incomplete, or ambiguous assessments can be resolved to get the final verdict and issue the pertinent Refinement Instructions .
+
+B. Module I: Atomic Task Library Generation 
+
+This module generates the Atomic Task Library from an initial set of complex tasks expressed in natural language. As illustrated in the Atomic Task Library Generation module in Figure 3, the module consists of three main components: 1) the 
+
+Atomic Task Library Generator , 2) the Assessment Board , and 3) the Atomic Task Library Judge . Together, these components form an iterative refinement loop that ensures that the final 
+
+Atomic Task Library is consistent, reusable, non-redundant, and sufficiently atomic for fine-grained oracle generation. To prevent excessive refinement cycles, the process is terminated after 10 iterations or when the Atomic Task Library Candidate 
+
+is accepted by the judge. 
+
+1) Atomic Task Library Generator: The Atomic Task Li-brary Generator is a Generator agent responsible for gen-erating the Atomic Task Library Candidate . Given a set of complex tasks described in natural language as illustrated in Figure 5, the generator decomposes them into atomic tasks that satisfy a set of predefined constraints. For instance, each generated atomic task should represent a single executable capability that can be independently grounded by the robotic systems (e.g., picking or placing an object). In addition, the 7GENERATOR  ASSESSOR  JUDGE 
+
+Description : Wold Model in charge of 
+
+generating proposals for each of the 
+
+module. This is a World model due to its 
+
+strong understanding of physical 
+
+dynamics, spatial relationships and action 
+
+planning needed for generation of 
+
+proposals in every module. 
+
+Description : Basic LLM specialized in 
+
+evaluating a single aspect of a proposal, 
+
+such as logic correctness, object 
+
+grounding, or function compliance. 
+
+Designed for fast parallel inference within 
+
+Assessment Boards to provide efficient 
+
+multi-dimensional feedback. 
+
+Description : Reasoning LLM that analyzes 
+
+the proposal together with all assessor 
+
+evaluations to produce the final verdict. If 
+
+issues are detected, it generates structured 
+
+refinement instructions to guide the 
+
+Generator in the next iteration. 
+
+Type : World Model 
+
+Job : Generation of the 
+
+libraries or oracles 
+
+Type : Basic LLM 
+
+Job : Assessment of the 
+
+generated libraries or oracles 
+
+Type : Reasoning LLM 
+
+Job : Accept or Reject the 
+
+generated libraries or oracles 
+
+Fig. 4. Overview of the three different agent profiles: Generator , Assessor , and Judge .{                                                                                                                                                                            
+
+> "atomicity" :"NON -ATOMIC ACTIONS" :[{
+> "put" :"This action encodes afull sequence of manipulation goals –lifting
+> the object, transporting it, and placing it at the destination –which
+> amounts to multiple primitive state changes (pick_up +place) .It
+> shou 0ld be decomposed into separate primitive actions, e.g.,
+> pick _up (obj_id )followed by place( obj_id ,target_id )."}],
+> "Sore" :0.83 ,
+> "redundancy" :"REDUNDANCY" :None,
+> "Score" :10 .00 ,
+> "repetition" :"REPETITION" :None,
+> "Score" :10 .00
+> }
+> [
+> "Put both the alphabet soup and the tomato sauce in the basket",
+> "Put both the cream cheese box and the butter in the basket",
+> "Turn on the stove and put the moka pot on it",
+> "Put the black bowl in the bottom drawer of the cabinet and close it",
+> "Put the white mug on the left plate and put the yellow and white mug on the right
+> plate",
+> "Pick up the book and place it in the back compartment of the caddy",
+> "Put the white mug on the plate and put the chocolate pudding to the right of the
+> plate",
+> "Put both the alphabet soup and the cream cheese box in the basket",
+> "Put both moka pots on the stove",
+> "Put the yellow and white mug in the microwave and close it"
+> ]
+
+Initial  Set  of  Complex  Tasks  Candidate  Atomic  Task  Librar y
+
+Assessors ’ Report 
+
+Judge’s  Report                                                                                                
+
+> {
+> "atomic_library ": [
+> {
+> "id": "close",
+> "description": "Actuate a mechanism to close it (door, cabinet, drawer, door).",
+> "parameters": [
+> "joint_id "
+> ],
+> "pre_conditions ": [
+> "[ joint_id ] is in state: open"
+> ],
+> "post_conditions ": [
+> "[ joint_id ] is in state: closed"
+> ]
+> },
+> {
+> "id": “`put",
+> "description": "Lower and release a held object onto or into a target
+> location/object…",
+> "parameters": [
+> "obj_id ",
+> "target_id "
+> ],
+> "pre_conditions ": [
+> "target_id is accessible"
+> ],
+> "post_conditions ": [
+> "[ obj_id ] is supported by [ target_id ]"
+> ]
+> }
+> ]
+> }
+> {
+> "VERDICT ":"REJECTED",
+> "Refinement Instructions" :"1.**Decompose the `put` primitive** into two separate actions :`pick_up (obj_id )` followed by `place( obj_id ,target_id )` .
+> 2.**Add a`transport` or `move` primitive** if intermediate relocation without placement is needed (e .g.,carrying items to astove or microwave) .
+> 3.**Ensure all target types** (basket, drawer, plate, stove, microwave) are explicitly represented as target entities in the system so that `place` can
+> reference them .
+> 4.**Remove or clarify any unused or duplicate primitives** (currently none) .
+> 5.**Validate that each original task can be expressed** using the refined set of primitives (e .g.,“pick_up (soup)”, “place(soup, basket)”, “turn_on (stove)”,
+> “pick_up (moka_pot )”, “place( moka_pot ,stove)”, etc .).“
+> }
+
+Fig. 5. Input and output examples of each agent in Module I 
+
+generated library should avoid task specialization when a more general abstraction already exists. For example, tasks such as “open a drawer” and “open a closet” should be generalized into a single atomic task representing the action of opening. Similarly, the library should not contain redundant atomic tasks that are unnecessary for decomposing the original set of complex tasks, or tasks that duplicate the functionality of another existing atomic task in the library. Under these constraints, the Atomic Task Library Generator produces a library candidate, as exemplified in Figure 5, in which each atomic task contains: (1) a semantic description of the action, (2) the execution parameters required by the task, and (3) a brief specification of the preconditions and post-conditions required for successful execution. 
+
+2) Assessment Board: The Assessment Board is composed of multiple specialized Assessor agents that independently evaluate the generated Atomic Task Library Candidate . Each assessor focuses on a different constraint. On the one hand, the Atomicity Assessor verifies that each task corresponds to a single indivisible operation and does not contain multiple sequential actions, ensuring task atomicity. On the other hand, the Redundancy Assessor identifies atomic tasks whose func-tionality is already represented by other, more general tasks, and recommends their removal or consolidation to improve 8
+
+reusability. In contrast, the Repetition Assessor focuses on detecting duplicated or semantically equivalent atomic tasks arising from repeated decomposition steps, and either merging them or removing unnecessary copies to maintain a concise task set. Each Assessor produces an independent JSON-based report describing the detected issues, the reason why those are considered issues, and a score out of 10 representing the assessor’s rating of the library. These reports are aggregated into a unified Assessors’ Reports , illustrated in Figure 5, which is provided as input to the Atomic Task Library Judge .
+
+3) Atomic Task Library Judge: The Atomic Task Library Judge analyzes the consolidated Assessors’ Report and de-termines whether the proposed library satisfies the required constraints, as Figure 5 depicts. Then, the judge produces a structured Judge’s Report with the acceptance or rejection of the Atomic Task Library Candidate . The Report Interpretation 
+
+module interprets the Judge’s Report , where if the Candidate 
+
+is marked as “ APPROVED ” it is stored as the final Atomic Task Library . Otherwise, if the Candidate is marked as “ RE-JECTED ”, the feedback provided in the Judge’s Report is reformulated into a set of Refinement Instructions that are fed back into the Atomic Task Library Generator . The Refinement Instructions specify the atomic task identifiers along with required modifications, such as task removal, merging, or gen-eralization, ensuring that subsequent candidates progressively satisfy all imposed constraints. 
+
+C. Module II: Atomic Task Oracle Library Generation 
+
+The objective of this module is to generate an Atomic Task Oracle Library . This library formally specifies an oracle for each task in the Atomic Task Library by leveraging the functions available in the simulator. As illustrated in the 
+
+Atomic Task Oracle Library Generation module in Figure 3, this module consists of two main components: (1) the Atomic Oracle Generation Discussion submodule and (2) the Atomic Task Oracle Library Judge . Similar to the previous module, these components operate within an iterative refinement loop. This process ensures that the resulting Atomic Task Oracle Library remains consistent with the Simulator Functions fed to this module and that each atomic task is associated with a valid functional oracle. To avoid excessive refinement cycles, the process terminates after either 10 iterations or the acceptance of the Atomic Task Oracle Library Candidate .
+
+1) Atomic Oracle Generation Discussion: The Atomic Or-acle Generation Discussion sub-module introduces a multi-agent deliberation process involving two specialized agents: (1) the Atomic Task Oracle Library Generator and (2) the 
+
+Oracle Hacker . This sub-module receives as inputs the Atomic Task Library and the Simulator Functions , and iteratively generates an oracle for each atomic task in the Atomic Task Library . For each task, the corresponding task definition together with the Simulator Functions is provided to the 
+
+Atomic Task Oracle Library Generator , a Generator agent responsible for producing the Atomic Task Oracle Candidate .As Figure 6 depicts, each Atomic Task Oracle Candidate 
+
+contains: (1) the identifier of the atomic task, (2) a brief description of the task, (3) the parameters used by the oracle, and (4) a logical expression representing the oracle itself. The 
+
+Atomic Task Oracle Candidate is then evaluated by the Oracle Hacker , which identifies potential issues, such as the misuse or omission of simulator functions, inconsistencies between parameters and function calls, or invalid logical expressions, as shown in Figure 6. Based on this evaluation, the Oracle Hacker generates the Hacker’s Report , which is analyzed by the Report Interpretation module. Similar to the Atomic Task Library Generation module, the Report Interpretation module either forwards the approved Candidate to the Atomic Task Oracle Library Candidate or generates Refinement Instructions 
+
+to guide the next iteration of the generator. This iterative process continues until the candidate is accepted by the Oracle Hacker or the maximum number of 10 iterations is reached. The procedure is repeated for each atomic task in the Atomic Task Library , and the resulting oracle definitions are stored in the Atomic Task Oracle Library Candidate .
+
+2) Atomic Task Oracle Library Judge: Once the discussion converges and the Atomic Task Oracle Library Candidate is produced, the Atomic Task Oracle Library Judge evaluates the complete library. The judge verifies that the oracle def-initions are logically coherent, correctly aligned with their corresponding atomic tasks, and that the parameters used within each oracle match those required by the referenced simulator functions. As illustrated in Figure 6, the Atomic Task Oracle Library Judge then generates a Judge’s Report 
+
+summarizing the validity of the proposed library and detailing any identified issues or inconsistencies for individual oracle definitions. As in previous modules, this report is analyzed by the Report Interpretation module, which either outputs the final Atomic Task Oracle Library or generates Refinement Instructions when the Candidate is rejected by the judge. 
+
+D. Module III: Fine-Grained Oracle Planning 
+
+This final module is responsible for generating an exe-cutable Fine-Grained Oracle for any given task, using the same benchmark as the generated Atomic Task Library and 
+
+Atomic Task Oracle Library . By leveraging these two files, the module generates structured execution plans that decompose complex instructions into ordered sequences of atomic tasks and their corresponding atomic oracles. The module consists of three components: 1) Fine-Grained Oracle Generator , 2) 
+
+Assessment Board , and 3) Fine-Grained Oracle Judge . As in the other modules, these components operate in an iterative loop to progressively refine the output. This process ensures that the resulting Fine-Grained Oracles are fully executable within the simulator. It also verifies that task decompositions are logically consistent and correctly ordered, since the order of sub-tasks is important for some tasks. Finally, it ensures that all referenced objects exist in the simulated environment and that the final output follows a predefined structure suitable for execution. To prevent excessive refinement cycles, the process of this module terminates upon either acceptance by the Fine-Grained Oracle or after 25 iterations. The increased iteration limit, compared to the other modules, is due to the greater complexity of generating executable fine-grained oracles and ensuring their correctness and consistency. 9Simulator  Functions  Candidate  Atomic  Task  Oracl e
+
+Hacker’s  Report 
+
+Judge’s  Report                                                                                                                                                                                                                                                                                                                                                                                                   
+
+> {
+> "predicates" :{
+> "in" :{
+> "predicate" :"in",
+> "description" :"Checks if target_object is volumetrically contained by
+> container_object and in physical contact .",
+> "input_arguments ":[" target_object ", "container_object "],
+> "type" :"BinaryAtomic "
+> },
+> "on" :{
+> "predicate" :"on",
+> "description" :"Checks if target_object is physically resting on top of the
+> surface_object .",
+> "input_arguments ":[" target_object ", "surface_object "],
+> "type" :"BinaryAtomic "
+> },
+> "turnon ":{
+> "predicate" :"turnon ",
+> "description" :"Checks if afunctional device or machine is currently in its
+> 'Active' state .",
+> "input_arguments ":[" functional_object "],
+> "type" :"UnaryAtomic "
+> },
+> "turnoff" :{
+> "predicate" :"turnoff",
+> "description" :"Checks if afunctional device or machine is currently in its
+> 'Inactive' state .",
+> "input_arguments ":[" functional_object "],
+> "type" :"UnaryAtomic "
+> }
+> }
+> }
+> {
+> "atomic_oracle_library ": [
+> {
+> "id": " pick_up ",
+> "description": "Approach, grasp, and lift an object from its support surface.",
+> "parameters": [
+> "obj_id "
+> ],
+> "correctness_oracle ": " is_held (robot, obj_id ) and is_lifted (obj_id )"
+> }
+> ]
+> }
+> 'The current oracle `up( obj_id )` for the `pick_up `task is insufficient and fails to capture the
+> full post -condition .
+> -Incomplete Post -condition Verification :The task post -condition states "[ obj_id ]is held by
+> the robot" and "[ obj_id ]is lifted from support ."The oracle `up( obj_id )` only checks if the
+> object \'s Z-coordinate is above acertain threshold .It does not verify if the robot is
+> actually grasping the object, nor does it confirm the object is no longer on its original
+> support surface .
+> -State Confusion -Object Not Held :The oracle could return `True` if `obj_id `is somehow
+> elevated (e .g.,knocked over) but not actually grasped by the robot .The task explicitly
+> requires the object to be "held by the robot .
+> -State Confusion -Object Still Supported :The oracle `up( obj_id )` does not check if the
+> object is still supported by its original surface .An object could be elevated slightly
+> (satisfying `up`) while still resting on its support, which contradicts the intent of "lifted
+> from support ."The predicate `on( obj_id ,support_surface )` would be needed to check this .
+> -Missing Predicate for Grasping :There is no predicate available in the provided library to
+> verify if the object is "held by the robot" (e .g.,a`grasped_by (obj_id ,robot_gripper )`
+> predicate) .This is acritical omission for verifying the `pick_up `task .
+> -Incomplete Spatial Logic :The oracle lacks any predicate that confirms the object has been
+> separated from its support .While `up` implies some separation, it doesn \'t guarantee it .The
+> absence of apredicate to check for absence of support (e .g.,`not on( obj_id ,
+> original_support )`) is avulnerability .'
+> [FAIL][ID :0]The predicate `is_held (robot, obj_id )` is functionally redundant with `grasped(object)` which is introduced and defined in the context of the `place` oracle .To maintain
+> consistency and avoid ambiguity across the library, these predicates should be unified .The definition of `grasped(object)` ("Checks if the object is currently held by the robot \'s end
+> effector") accurately captures the intent of `is_held (robot, object)` .\n\n
+> -Proposed fix :Change the `correctness_oracle `for `pick_up `from `is_held (robot, obj_id )and is_lifted (obj_id )` to `grasped( obj_id )and up( obj_id )` .This aligns with the predicate used in the
+> `place` oracle and reduces redundancy .'
+
+Fig. 6. Input and output examples of each agent in Module 2 
+
+1) Fine-Grained Oracle Generator: The Fine-Grained Or-acle Generator receives a Complex Task Instruction in natural language along with the generated libraries from the previous modules and the Available Objects in the Environment as illustrated in Figure 7. Its objective is to generate a detailed execution plan comprising ordered atomic tasks and their corresponding atomic oracles. This generated plan, i.e., Fine-Grained Oracle Candidate , specifies the execution structure (e.g., sequential or any-order execution), the sequence of execution steps, the oracles used to verify each execution step, and the parameters required by each oracle. The resulting 
+
+Fine-Grained Oracle Candidate is represented as a structured JSON file and directly submitted to the Assessment Board for evaluation. An example of a candidate fine-grained oracle prior to refinement is shown in Figure 8. As illustrated, the candidate oracle is incomplete because the handle as field associated with each action and step lacks a corresponding functional oracle. This example suggests the need for a refinement procedure that systematically improves the candidate fine-grained oracle by incorporating the information required for accurate task evaluation. 
+
+2) Assessment Board: Similar to the Assessment Board 
+
+in Module I, the generated Candidate is evaluated by aspecialized Assessment Board composed of multiple Assessor 
+
+agents: (1) the Logic Assessor , (2) the Compliance Assessor ,(3) the Grounding Assessor , and (4) the Execution Reliability 
+
+Assessor, which is a rule-based code component. The Logic Assessor verifies the logical consistency and ordering of the generated atomic action sequence. The Compliance Assessor 
+
+evaluates whether the generated plan correctly satisfies the user instruction and adheres to the available atomic task and atomic task oracle definitions. The Grounding Assessor is responsible for verifying that all reference objects, regions, and execution parameters are properly grounded by cross-checking them against the Available Objects in the Environment . Finally, the Execution Reliability module analyzes whether the oracle definition follows the required format for execution in the simulator, and whether all functions used within the oracle logic can be correctly parsed and executed without failure. Each Assessor generates an independent report, which is aggregated into a unified Assessor’s Report that serves as the basis for approval or rejection of the Candidate , similar to the one presented in Figure 7. 
+
+3) Fine-Grained Oracle Judge: The Fine-Grained Oracle Judge analyzes the Assessors’ Report and determines whether the generated Candidate meets all the requirements or not. Similar to the judges in the other modules, it generates the 
+
+Judge’s Report with the analysis, as illustrated in Figure 7. Finally, the Report Interpretation module analyzes the Judge’s Report , in which, if the Candidate is marked as “ REJECTED ”, it generates the Refinement Instructions based on the feedback annotations from the judge on Judge’s Report that guide the next iteration of the Fine-Grained Oracle Generator , specify-ing which aspects must be corrected, added, or restructured. Otherwise, if the Fine-Grained Oracle Candidate is marked as “APPROVED ”, the module finalizes and outputs the validated 
+
+Fine-Grained Oracle . An example of a validated oracle is shown in Figure 8. 10 Available  Objects  in  Environment 
+
+Assessors ’ Report 
+
+Judge’s  Report                                                                                                                                                                                                           
+
+> {
+> {
+> "task_objects ":[
+> {
+> "id" :"Put the black bowl in the bottom drawer of the cabinet and close it",
+> "objects" :["akita_black_bowl_ 1", "white_cabinet_ 1"],
+> "states" :["akita_black_bowl_ 1", "white_cabinet_ 1", "white_cabinet_ 1_top_side",
+> "white_cabinet_ 1_top_region", "white_cabinet_ 1_middle_region",
+> "white_cabinet_ 1_bottom_region"]
+> },
+> {
+> "id" :"Put both the alphabet soup and the tomato sauce in the basket",
+> "objects" :["alphabet_soup_ 1", "tomato_sauce_ 1", "basket_ 1"],
+> "states" :["alphabet_soup_ 1", "tomato_sauce_ 1", "basket_ 1",
+> "basket_ 1_contain_region"]
+> }, ]
+> }
+> }
+> {
+> "grounding" :{
+> "issues_found ":[],
+> "grounding_check ":"Pass",
+> "explanation" :"All objects and predicates correctly reference the oracle library .",
+> "score" :"10 "
+> },
+> "coverage" :{
+> "issues_found ":[],
+> "oracle_check ":“Fail",
+> "coverage_explanation ":“No logic expressions found .",
+> "score" :“0"
+> },
+> "independence" :{
+> "issues_found ":[
+> "Sequence Efficiency :The two items can be placed in any order, which is already correctly
+> handled by the 'any_order 'execution mode .However, aparallel execution approach could further
+> optimize the workflow if multiple manipulators were available, though not strictly required by the
+> task ."
+> ],
+> "score" :4
+> }
+> }
+> {
+> "status" :"FAIL",
+> "iterations_count ":1,
+> "directives" :[
+> {
+> "type" :"Oracle Usage",
+> "description" :"The 'handle_as 'values are not valid logic expressions as required by the oracle library .They must be derived from the 'correctness_oracle 'field of the respective oracle,
+> substituting parameters from the action .The current values (' pick_up ', 'place_in ') are merely the oracle IDs, not the logical conditions .",
+> "details" :[
+> "In Step 1,Action 1(pick_up ):Change 'handle_as ':'pick_up 'to 'handle_as ':'up(alphabet_soup_ 1)and incontact (alphabet_soup_ 1,robot_gripper )' .",
+> "In Step 1,Action 2(place_in ):Change 'handle_as ':'place_in 'to 'handle_as ':'in(alphabet_soup_ 1,basket_ 1)' .",
+> "In Step 2,Action 1(pick_up ):Change 'handle_as ':'pick_up 'to 'handle_as ':'up(tomato_sauce_ 1)and incontact (tomato_sauce_ 1,robot_gripper )' .",
+> "In Step 2,Action 2(place_in ):Change 'handle_as ':'place_in 'to 'handle_as ':'in(tomato_sauce_ 1,basket_ 1)' ."
+> ]
+> }
+> ]
+> }
+
+Set  of  Complex  Tasks                         
+
+> [
+> "Put both the alphabet soup and the tomato sauce in the basket",
+> "Put the black bowl in the bottom drawer of the cabinet and close it",
+> ]
+
+Fig. 7. Input and output examples of each agent in Module 3 
+
+V. E XPERIMENTAL SETUP 
+
+We conducted an empirical study to assess the performance of MANGO in generating fine-grained test oracles for robotic tasks. This section presents the research questions and details the experimental setup used in our evaluation. 
+
+A. Research Questions 
+
+In our evaluation, we aimed to answer the following Re-search Questions (RQs): 
+
+RQ1 – Generation Capability: How well does MANGO 
+
+perform at generating fine-grained test oracles for VLA-enabled robots? We aim to assess the performance of MANGO to generate fine-grained test oracles for VLA-enabled robots automatically. We compare MANGO against three baselines to evaluate both the quality of the generated fine-grained oracles and the efficiency of the generation. The assessment focuses on whether MANGO can effectively produce correct, valid, and executable fine-grained test oracles while maintaining efficient gen-eration performance. 
+
+RQ2 – Effectiveness Against Traditional Oracles: How do the generated fine-grained test oracles compare to tradi-tional symbolic test oracles? We assess the effectiveness of the generated fine-grained oracles by comparing the failure detection capability to that of traditional symbolic oracles. Using the benchmark-provided symbolic oracles as the reference, we assess whether the generated fine-grained oracles can provide comparable or improved failure detection capabilities. In addition to assessing their ability to identify task failures, we also examine whether the fine-grained oracles are capable of accurately localizing at which step of the task the failure occurs. 
+
+RQ3 – Ablation Study: What is the individual efficiency and effectiveness contribution of the key components in 
+
+MANGO ? This research question aims to assess the role and contribution of the main components of MANGO. To this end, we conduct a series of ablation studies by comparing the full implementation of MANGO with variants in which individual components are removed: the Atomic Task Library Generator (w/o Atomic Task Lib.), the Atomic Task Oracle Library Generator (w/o Atomic Oracle Lib.), and the Execution Reliability module (w/o Execution Reliability). Through these comparisons, we investigate the extent to which each component con-tributes to the overall performance of MANGO and iden-tify the components that are most critical for generating effective and reliable fine-grained oracles. This analysis also provides insights into the interactions among the different components and helps determine whether the benefits of MANGO arise from specific modules or from the synergy of the overall framework. 
+
+RQ4 – Atomic Task Library Reduction: To what extent can the initial set of complex tasks be minimized while preserving the effectiveness and efficiency of 
+
+MANGO ? We investigate whether the initial set of complex tasks used by MANGO to construct the atomic task and atomic task oracle libraries can be reduced while maintaining the overall performance of the approach. In 11 {    
+
+> "instruction": "Put both the alphabet soup and the tomato sauce in the basket",
+> "execution_mode ": " any_order ",
+> "plan": [
+> {
+> "step": 1,
+> "execution_mode ": "sequential",
+> "actions": [
+> {
+> "action_id ": " pick_up ",
+> "parameters": {
+> "obj_id ": "alphabet_soup_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " pick_up ",
+> "handle_as ": " pick_up "
+> }
+> ]
+> },
+> {
+> "action_id ": " place_in ",
+> "parameters": {
+> "obj_id ": "alphabet_soup_1",
+> "target_id ": "basket_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " place_in ",
+> "handle_as ": " place_in "
+> }
+> ]
+> }
+> ]
+> },
+> {
+> "step": 2,
+> "execution_mode ": "sequential",
+> "actions": [
+> {
+> "action_id ": " pick_up ",
+> "parameters": {
+> "obj_id ": "tomato_sauce_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " pick_up ",
+> "handle_as ": " pick_up "
+> }
+> ]
+> },
+> {
+> "action_id ": " place_in ",
+> "parameters": {
+> "obj_id ": "tomato_sauce_1",
+> "target_id ": "basket_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " place_in ",
+> "handle_as ": " place_in "
+> }
+> ]
+> }
+> ]
+> }
+> ]
+> }
+> {
+> "instruction": "Put both the alphabet soup and the tomato sauce in the basket",
+> "execution_mode ": " any_order ",
+> "plan": [
+> {
+> "step": 1,
+> "execution_mode ": " any_order ",
+> "steps": [
+> {
+> "step": 1,
+> "execution_mode ": "sequential",
+> "actions": [
+> {
+> "action_id ": " pick_up ",
+> "parameters": {
+> "obj_id ": "alphabet_soup_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " pick_up ",
+> "handle_as ": "up(alphabet_soup_1) and incontact (alphabet_soup_1, robot_gripper )"
+> }
+> ]
+> },
+> {
+> "action_id ": " place_in ",
+> "parameters": {
+> "obj_id ": "alphabet_soup_1",
+> "target_id ": "basket_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " place_in ",
+> "handle_as ": "in(alphabet_soup_1, basket_1_contain_region)"
+> }
+> ]
+> }
+> ]
+> },
+> {
+> "step": 2,
+> "execution_mode ": "sequential",
+> "actions": [
+> {
+> "action_id ": " pick_up ",
+> "parameters": {
+> "obj_id ": "tomato_sauce_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " pick_up ",
+> "handle_as ": "up(tomato_sauce_1) and incontact (tomato_sauce_1, robot_gripper )"
+> }
+> ]
+> },
+> {
+> "action_id ": " place_in ",
+> "parameters": {
+> "obj_id ": "tomato_sauce_1",
+> "target_id ": "basket_1"
+> },
+> "monitoring": [
+> {
+> "oracle_id ": " place_in ",
+> "handle_as ": "in(tomato_sauce_1, basket_1_contain_region)"
+> }
+> ]
+> }
+> ]
+> }
+> ]
+> }
+> ]
+> }
+
+Candidate Fine -Grained  Oracle  Generated  Fine -Grained  Oracle 
+
+Fig. 8. Examples of the Candidate Fine-Grained Oracle before refinement iterations and the same Fine-Grained Oracle after refinement iterations 
+
+particular, we examine whether a smaller yet sufficiently diverse subset of tasks can provide the same benefits as the original task set, thereby reducing the effort and computational resources required to use MANGO in new application domains. Understanding the extent to which the initial task set can be reduced is important for assess-ing the scalability of MANGO and its applicability to evolving environments where new tasks are continuously introduced. 
+
+B. Benchmarks 
+
+We used two benchmarks, LIBERO 10 benchmark [8] and the RoboCasa humanoid tabletop benchmark [3]. The LIBERO 10 benchmark comprises 10 distinct task instructions that cover long-horizon manipulation scenarios. These tasks are designed to evaluate the robot’s controller’s compositional reasoning, requiring it to execute sequences of independent actions to achieve a goal. Each instruction typically involves multiple objects and intermediate steps, making the benchmark suitable for studying structured task decomposition and execution (e.g., “ Put both the alphabet soup and the tomato sauce in the basket ” or “ Put the black bowl in the bottom drawer of the cabinet and close it ”). For our evaluation, LIBERO 10 provides a controlled setting with a limited but diverse set of tasks that capture key challenges in sequential decision-making. The RoboCasa humanoid tabletop benchmark comprises 24 task instructions focused on everyday household activities performed by a humanoid robot. Compared to LIBERO 10, this benchmark covers less instruction diversity but greater object and scenario diversity, and involves a more complex robotic platform, i.e., a humanoid robot. As such, it provides a complementary setting to LIBERO 10, enabling evaluation of MANGO on more complex robotic platforms and in varied environments. To construct the evaluation dataset, we adopt a two-stage sampling protocol over stochastic simulator executions. First, for each benchmark task (10 tasks in LIBERO 10 and 24 12 
+
+tasks in RoboCasa Humanoid), we generate a fixed pool of independent executions by running the task under varying random seeds and stochastic environmental conditions until 20 executions were recorded, or at least 10 failed executions and 5 successful executions were collected. This process produced a diverse set of executions that capture the VLA’s inherent variability. Each execution was then annotated using a deterministic symbolic oracle to determine whether it passed or failed. Failed executions were further manually labeled according to the task step at which the failure first occurred. From this execution pool, we constructed a stratified evaluation subset for oracle comparison. Rather than evaluating the full pool, we sample a bounded number of representative execu-tions per task to ensure tractability and controlled experimental cost. This design choice was motivated by the high computational cost of evaluation, as each execution required approximately 200 seconds of simulator runtime; scaling to the full execution pool or a larger size would result in prohibitively large experimentation times. Due to the large number of tasks (i.e., 34), we selected up to 10 executions per task, including both successful and failing runs. Failures were categorized by their position along the trajectory (i.e., early, mid, and late). For each failure category, we sampled up to 2 executions when available to ensure coverage across failure stages. When a category was underrepresented, we selected the closest available executions in terms of termination step and trajectory length. For successful executions, we randomly sampled 4 runs from the available pool. Overall, each task includes up to 10 executions, consisting of 4 successful runs and 6 failing runs (2 early, 2 mid, and 2 late failures), ensuring balanced coverage of success and failure cases. Overall, the resulting oracle evaluation dataset comprises a total of 340 execu-tions, including 40 successful executions for LIBERO 10 and 96 for Robocasa Humanoid, 20 early-failing executions for LIBERO 10 and 48 for Robocasa Humanoid, 20 mid-failing executions for LIBERO 10 and 48 for Robocasa Humanoid, and 20 late-failing executions for LIBERO 10 and 48 for Robocasa Humanoid. 
+
+C. Baselines 
+
+We compared MANGO against three baselines. To the best of our knowledge, MANGO is the first end-to-end, multi-agent-based method for automatically generating fine-grained test oracles for robotic tasks. As a result, our baselines are controlled variations of MANGO that replace the multi-agent architecture with a single-agent paradigm. Instead of leveraging multiple specialized agents that collaborate through structured interactions within each module of MANGO, each baseline relies on a single unified World Model or LLM that handles the entire reasoning pipeline for that module. We decided to include World Models because they are designed to capture environment dynamics and support reasoning over physical state transitions, object interactions, and implicit scene constraints [29]. This makes them particularly suitable for tasks that require understanding the consequences of robotic actions or planning movements. In contrast, LLM-based baselines provide a more general-purpose reasoning mechanism without explicit modeling of physical dynamics. To select the baselines, we conducted a small-scale empir-ical evaluation in which multiple candidate LLMs and World Models, along with different prompts, were assessed for their ability to decompose complex robotic tasks into structured sequences of atomic tasks. We selected the most well-known LLMs and World Models, including both proprietary mod-els and open-source models. The evaluated models included DeepSeek-V3.2 [30], GPT-5 [31], Mistral 3-675B [32], Nvidia Cosmos Reason 2-8B [28], and Gemini Robotics ER 1.6 [27]. From this set of models, we selected Gemini Robotics ER 1.6 for our approach and Nvidia Cosmos Reason 2 for our baselines, as they consistently demonstrated the strongest performance at oracle generation tasks, making them the most suitable and competitive for comparison. We note that both models are World Models and therefore hypothesize that their strong performance is likely due to their integration of implicit physical knowledge, which is particularly beneficial for robotics reasoning tasks. In the first baseline (i.e., Baseline ), we removed the three specialized agents of our architecture (i.e., the atomic task library generator, the atomic task oracle generator, and the fine-grained oracle generator) and replaced each of them with an instance of the Gemini Robotics ER model, as this was the best model among the evaluated ones. This results in a three-agent pipeline architecture in which all agents share the same underlying model, rather than being implemented as dis-tinct, specialized components with different roles or inductive biases. Consequently, the system preserves the overall stage decomposition but removes the benefits of specialization and inter-agent diversity. To define the second and third baselines, we followed the guidelines of Baltes et al. [33] for empirical studies in software engineering involving large language models, which emphasize reproducibility and replicability through the use of open-source models. Accordingly, we defined the second baseline (i.e., MANGO o) as MANGO instantiated exclu-sively with open-source models. Finally, the third baseline (i.e., Baseline o) mirrors the configuration of Baseline , in which all three agents are instantiated using the same model, but replaces the proprietary Gemini Robotics ER model with an open-source alternative. For this purpose, we selected Nvidia Cosmos Reason 2, which performed the best among the open-source models in our preliminary evaluation. 
+
+D. Minimization Algorithm for the Set of Complex Tasks (RQ4) 
+
+We formulated the minimization of the set of complex tasks as a single-objective constrained optimization problem, aiming to identify the smallest subset of complex tasks that yields a semantically similar atomic task library to that produced by the full task set. Let O denote the original set of complex tasks, and let Candidate ⊆ O be a candidate subset represented as a binary vector Candidate ∈ { 0, 1}n, where n = |O|.Each Candidate i = 1 indicates inclusion of the corresponding task, while Candidate i = 0 indicates exclusion. Then we can define the optimization problem as follows: 13 
+
+min  
+
+> Candidate ⊆O
+
+|Candidate | (5) which is subject to the constraint: 
+
+Similarity  L(Candidate ), L (O) ≥ τ (6) where L(·) denotes the atomic-task library generation func-tion, Similarity (·) measures semantic equivalence between libraries using cosine similarity over sentence embeddings, and τ is a predefined similarity threshold ensuring preser-vation of the original library semantics. We set τ = 0 .95 ,following common practice in semantic textual similarity and embedding-based matching tasks, where cosine similarity values above 0.9 are generally indicative of near-paraphrastic or highly equivalent semantic content [34], [35], [36]. This choice ensures strict semantic preservation while allowing minimal variation due to stochastic generation effects from the foundation models used in Module I. To solve this problem, we employed a (1 + 1) Evolutionary Algorithm (EA) [37], [38], a stochastic hill-climbing heuristic widely used in search-based software engineering [39], [40]. The (1 + 1) EA is particularly well-suited to expensive fitness evaluations because it maintains a single candidate solution and generates exactly one offspring per iteration via mutation. Unlike Genetic Algorithms [41], [42], which rely on a popu-lation of solutions and therefore require repeated evaluation of multiple individuals per generation, the (1 + 1) EA avoids the substantial computational overhead associated with population initialization, maintenance, and multi-sample fitness evalua-tion. In our setting, this overhead is prohibitive due to the high cost of generating the atomic-task library, as reported in Table I (Module I). As a result, even low population sizes would lead to an impractically large number of expensive evaluations per generation. We also considered greedy search strategies [43]. While greedy methods reduce computational cost by making locally optimal decisions at each step, they are prone to premature convergence and irreversible choices in combinatorial spaces with strong interdependencies among elements, as in our case. Removing or retaining a single complex task can induce non-local effects on the resulting atomic-task library, making purely local decisions potentially suboptimal. The (1 + 1) EA mitigates these limitations by enabling probabilistic exploration through mutation while re-taining a strict acceptance criterion that only admits offspring satisfying the constraint and improving the objective function. The algorithm takes as input the original set of complex tasks O and first generates the corresponding atomic-task li-brary InitialLibrary using the procedure from Module I. The search (Algorithm 1, Lines 3-8) is initialized with the full task set, ensuring that the initial solution is feasible with respect to the semantic constraint. Each candidate solution is encoded as a binary vector Candidate ∈ { 0, 1}n, where n = |O|. The search starts from the full solution ( Candidate i = 1 , ∀i) and iteratively applies a bit-flip mutation operator with mutation probability 1/n [44] (Algorithm 1, Line 4), enabling local exploration of the subset space. For each iteration, the atomic-task library L(Candidate ) is generated and compared against 
+
+Algorithm 1: Overview of the Complex Task Set Minimization Algorithm 
+
+Input: O // Original set of complex tasks 
+
+Output: Best // Minimized set of complex tasks  
+
+> 1
+
+InitialLibrary ← generateAtomicTaskLib( O);  
+
+> 2
+
+Best ← O; 
+
+> 3
+
+while terminationCriteriaNotMet do  
+
+> 4
+
+Candidate ← mutate( Best );  
+
+> 5
+
+CandidateLibrary ←
+
+generateAtomicTaskLib( Candidate );  
+
+> 6
+
+if 
+
+Similarity (CandidateLibrary, InitialLibrary ) ≥
+
+τ and |Candidate | < |Best | then  
+
+> 7
+
+Best ← Candidate ; 
+
+> 8
+
+end  
+
+> 9
+
+end  
+
+> 10
+
+return Best ;the reference library L(O) using cosine similarity between sentence embeddings [34], [45] (Algorithm 1, Lines 5-8), checking whether it outperformed the Best candidate. Acandidate replaces the current Best solution only if it satisfies the similarity constraint and is a smaller subset, ensuring that semantic integrity is never sacrificed for task reduction. The optimization process terminates after either 250 generations or 20 consecutive iterations without improvement of Best .
+
+1) Termination Criteria: The algorithm is subject to two complementary termination conditions. A fixed upper bound of 200 generations ensures termination and provides control over computational resources [46], which is particularly important given the cost of LLM-based evaluations. In addition, a no-improvement-for-K-iterations stopping criterion is employed, terminating the search if no improvement in the objective is observed over 20 consecutive generations. This follows established recommendations in evolutionary computation-related work [47], where combining fixed computational bud-gets with no-improvement stopping criteria helps balance efficiency and robustness, avoiding both premature termination and unnecessary exploration in flat objective landscapes. The choice of K = 20 is intentional to account for noise in objective estimations arising from stochastic LLM behavior while maintaining computational efficiency. 
+
+2) Number of Executions: The stochastic nature of foun-dation models used in the library generation (i.e., Module I) introduces variability in fitness evaluation, as identical inputs may yield different outputs across executions. Such non-determinism has been empirically observed in prior work and is known to affect the stability and reproducibility of LLM-based software engineering evaluations [48]. More broadly, benchmarking studies on LLM-based systems emphasize that single-run evaluations are insufficient to characterize per-formance reliably due to inherent sampling variance [49]. To mitigate this issue, each candidate solution is evaluated three times, and the final fitness score is computed as the mean of these evaluations. This choice is supported by our preliminary analysis, which showed that the standard deviation 14 
+
+of similarity scores across repeated executions is consistently below 0.001 and typically close to 0.000. This follows the protocol proposed by Xu et al. [50] for their experiment evaluation, in which experiments are repeated three times to reduce the impact of randomness in the foundation models used. In particular, this reduces the influence of outlier runs and provides a more stable estimate of expected performance, while maintaining an affordable computational cost given the expense of repeated LLM invocations [51], [49]. In addition, as part of our evaluation, we ran the minimization algorithm 10 times on both benchmarks. 
+
+E. Evaluation Metrics and Statistical Tests 
+
+We used a set of metrics, each aligned with an RQ, to evaluate the efficiency and effectiveness of MANGO and the quality of the fine-grained oracles it generated. To compare the efficiency and effectiveness of MANGO against the baselines in RQ1, efficiency was measured as the average execution time of each module in MANGO. Effectiveness was measured in terms of i) the structural validity rate of the fine-grained planned oracles, ii) the executability rate of the generated fine-grained oracles, and iii) the Levenshtein similarity between the generated oracle library and a manually constructed ground truth library. The former refers to assessing whether the generated plan for fine-grained oracles satisfies a predefined structural criterion and whether the oracles represent a logic expression. The executability rate measures the proportion of generated oracles that can be successfully executed in the simulator. Since MANGO relies on LLMs and World Models, hallucinations may lead to the use of functions that do not exist in the simulator, thereby affecting executability. The latter metric, i.e., the similarity, captures the degree of syntactic and structural distance from the ground-truth fine-grained oracle by computing the minimum number of edit operations (insertions, deletions, and substitutions) required to transform a generated oracle into its reference in the ground-truth fine-grained oracle. This metric estimates the effort required to correct a generated oracle. This metric is normalized to [0, 1], with higher values indicating greater similarity to the ground truth and lower values indicating greater editing effort to meet the ground truth. To compare the generated fine-grained oracles with state-of-the-art symbolic oracles in RQ2, we used standard clas-sification metrics on the Oracle Evaluation Dataset of task executions from both benchmarks (see Section V-B for more information). Specifically, we used accuracy, precision, recall, and F1-score, together with the distribution of true positives (TP), true negatives (TN), false positives (FP), and false negatives (FN) Accordingly, a True Positive (TP) corresponds to an execution that both the symbolic oracle and the fine-grained oracle detect as a failure, while a True Negative (TN) corresponds to an execution that neither oracle type detects as a failure. A False Positive (FP) occurs when the fine-grained oracle incorrectly identifies a passing execution as a failure, and a False Negative (FN) occurs when the fine-grained oracle incorrectly classifies a failing execution as a pass. This evalua-tion was conducted in two steps. First, we assessed task-level correctness to determine whether the generated fine-grained oracles perform as well as symbolic oracles at identifying whether each task was successfully completed. In this setting, standard binary classification metrics were applied directly to measure alignment with the benchmark-provided symbolic oracles, which serve as the reference because they were man-ually constructed and validated by the benchmark developers. Second, we evaluated the failure localization capability of the generated fine-grained oracles. Unlike symbolic oracles, our fine-grained oracles can identify the specific task step at which a failure occurs. We evaluated localization performance using exact-match localization accuracy, defined as the proportion of executions for which the predicted failure location exactly matches the ground-truth failure step. This allowed us to assess not only whether the correctness of a task is properly assessed, but also whether its location within the task execution steps is correctly identified. For RQ3, we evaluated each variant of MANGO using the same metrics employed in RQ1. This ensured consistent comparisons of both efficiency and the effectiveness of fine-grained oracle generation across the different variants of MANGO. Finally, for RQ4, we formulated the problem as an opti-mization task to minimize the size of the initial set of complex tasks while preserving the quality of the generated atomic task library. To assess the impact of reducing the initial set, we used three metrics: (1) the number of tasks after minimization (#Tasks min ), (2) the Task Reduction Ratio (TRR), and (3) the Levenshtein similarity (Similarity) between the atomic task library generated from the minimized set and that generated from the original set of complex tasks. These metrics allowed us to quantify the extent to which the initial set of complex tasks could be reduced without significantly affecting the resulting atomic task library. In addition to the metrics used for RQ1 and RQ3, we executed each approach on each benchmark 10 times and performed a statistical analysis of the results when comparing the baselines against MANGO. The same statistical procedure was applied to both research questions. For each pairwise comparison, we first assessed the normality of the result distributions using the Shapiro-Wilk test. Based on the results of this test, we evaluated statistical significance using either a Student’s t-test for normally distributed data or the Kruskal-Wallis test for non-normally distributed data. Statistical signif-icance was determined using a significance level of α = 0 .05 ,i.e., results with p < 0.05 were considered statistically signif-icant. Furthermore, we measured the effect sizes using Vargha and Delaney’s ˆA12 value. Following Romano et al. [52], the effect size can be classified as negligible when d < 0.147 ,
+
+small when d < 0.33 , medium when d < 0.474 , and large 
+
+when d ≥ 0.474 , where d = 2 ∗ | ˆA12 − 0.5|. Finally, for assessing the localization accuracy of the fine-grained oracles in RQ2 manual comparison with execution videos was required, since an evaluation of all 2,814 executions was prohibitively expensive. We therefore manually inspected a random subset of 340 failing executions, determined using Cochran’s sample size formula [53] with a significance level of 0.05. 15 
+
+F. Execution Platform and Runs 
+
+All the experiments were executed on a 64-bit Ubuntu 20.04 LTS server equipped with an AMD EPYC 7773X CPU and an NVIDIA RTX A6000 GPU with 48 GB of memory. The implementation was based on Python 3.10 and CUDA 12.8. We executed each configuration 10 times, resulting in 10 × (1 MANGO + 3 baselines + 3 ablation studies) × 2 benchmarks = 140 generated libraries. In particular, for the LIBERO 10 benchmark, we generated 70 libraries × 10 tasks = 700 fine-grained oracles, while for the RoboCasa Humanoid Tabletop benchmark, we generated 70 libraries × 24 tasks = 1,680 fine-grained oracles. Overall, this results in 2,380 fine-grained oracles. As described in Section V-B, for RQ2 we selected all the executable fine-grained oracles from MANGO to evaluate their detection capability and executed each of them on 10 different passing and failing executions of the corresponding task, resulting in a total of 79 oracles × 10 evaluation tasks for LIBERO 10 + 224 oracles × 10 evaluation tasks for Robocasa Humanoid = 3,030 task executions. VI. A NALYSIS OF THE RESULTS AND DISCUSSION 
+
+A. RQ1 - Generation Capability 
+
+Generation efficiency across Modules I to III revealed a consistent advantage of MANGO over MANGO o, despite both frameworks sharing the same underlying multi-agent architecture and a judge-based iterative refinement mechanism. As shown in Table I, MANGO achieved lower generation times in all modules and both benchmarks, with particu-larly pronounced gains in the most refinement-intensive stage (Module II), where improvements in average reached ap-proximately 2.2 × on LIBERO 10 (633.9s vs. 1403.2s) and 6.7 × on Robocasa Humanoid (220.4s vs. 1496.5s). Similar trends were observed in Modules I and III, indicating that the efficiency gains were consistent rather than isolated to a specific stage. These differences were primarily attributed to the quality of the candidate in each module. MANGO generated more accurate and stable candidate libraries and fine-grained oracles, which reduced the number of refinement iterations required at each module. In contrast, MANGO o pro-duced less precise candidates, leading to repeated refinement cycles and, in several cases, to the maximum allowed number of iterations. Such cases resulted in incomplete convergence and occasionally in invalid fine-grained oracles, which directly increased generation time. This effect was further exacerbated in Module II, since oracle generation was driven by a debate-based construction of each atomic task in the atomic task library, which increased generation time exponentially with each additional refinement iteration. The statistical analysis in Table II confirmed that these differences were systematic, with MANGO significantly out-performing MANGO o across all generation time compar-isons and consistently large effect sizes ( ˆA12 ≤ 0.12 ). This indicated that the observed improvements were driven by convergence efficiency, which was directly correlated with effective model selection. In contrast, the comparison be-tween MANGO and Baseline and Baseline o highlighted the impact of architectural design rather than model selection differences. Unlike MANGO and MANGO o, the baselines did not employ iterative multi-agent reasoning or judge-based validation. Instead, they relied on a single-pass generation procedure, eliminating refinement overhead but also removing mechanisms that ensured semantic consistency and constraint satisfaction. As reported in Table I, this design choice resulted in substantially lower generation times for both baselines across all modules. Consequently, MANGO showed an over-head of approximately 3 × in Module I, 28.5 × in Module II, and 38.7 × in Module III on LIBERO 10, with even larger overheads on Robocasa Humanoid (up to 62.7 × in Module III). While baselines were significantly faster (p < 0.0001 ), as presented in Table II, this advantage was accompanied by a substantial degradation in correctness-related metrics, with large effect sizes consistently favoring MANGO. However, these generation-time differences have limited practical sig-nificance because MANGO is executed offline. Structural validity remained comparable between MANGO and MANGO o, with both achieving near-perfect scores across benchmarks (0.950–1.000). This indicated that both systems were equally capable of producing syntactically valid fine-grained oracles. However, this similarity did not extend to executability, which exhibited a large divergence, with MANGO achieving 0.790 vs. 0.513 on LIBERO 10 and 0.933 vs. 0.446 on Robocasa Humanoid. A similar pattern was observed for ground-truth specifications, where MANGO consistently showed substantially higher similarity, indicating closer alignment with the reference oracles. This discrepancy is explained by instability in MANGO o during iterative re-finement. As explained previously, less accurate candidates within each module led to repeated judge refinements and frequent convergence failures, including instances in which the maximum number of iterations was reached without re-solving structural inconsistencies. These failures manifested as malformed function compositions, incomplete task decompo-sitions, and invalid constraint bindings, which directly reduced executability and similarity. Statistical tests confirmed that these differences were significant (p < 0.05 ) with large effect sizes ( ˆA12 ≥ 0.90 ), indicating that the improvements were concentrated in the executability of the generated fine-grained oracles rather than in their validity. Furthermore, Baseline methods exhibited consistently poor performance across all correctness-related metrics. Despite their efficiency advantage, validity remained extremely low (0.07–0.13 on LIBERO 10 and near-zero on Robocasa Hu-manoid), and executability dropped to near zero in all cases. This reflected the absence of structured decomposition and of functions in the simulator, resulting in fine-grained oracles that either violated simulator requirements or failed to invoke valid simulator functions. In most cases, executability failures stemmed from incorrect parameterization of simulator func-tions. For example, oracles that check whether an object was located on another object were often implemented using the object itself as a reference, whereas the simulator requires the object’s regions for such functions. Such mismatches resulted in oracles that could not be executed. Across both benchmarks, MANGO outperformed the baselines in executability and similarity, with statistically significant results and large effect 16 
+
+TABLE I COMPARISON OF MANGO, MANGO o , B ASELINE , AND BASELINE o ON THE LIBERO 10 AND ROBOCASA HUMANOID BENCHMARKS IN TERMS OF GENERATION TIME , VALIDITY , EXECUTABILITY , AND SIMILARITY . M ODULE I, M ODULE II, AND MODULE III CORRESPOND TO THE THREE MODULES OF THE EVALUATED APPROACHES . R EPORTED VALUES CORRESPOND TO THE MEAN (m) AND STANDARD DEVIATION (σ). F OR EACH BENCHMARK AND METRIC , THE BEST RESULT IS HIGHLIGHTED IN BOLD AND UNDERLINED . A RROWS INDICATE WHETHER LOWER (↓) OR HIGHER (↑) VALUES ARE PREFERABLE .
+
+Generation Time (s) ↓ Validity ↑ Executability ↑ Similarity ↑
+
+Module I Module II Module III Module III Module III Module III 
+
+m σ m σ m σ m σ m σ m σ
+
+LIBERO 10 
+
+MANGO 30.776 10.802 633.936 48.153 346.513 98.054 0.950 0.053 0.790 0.137 0.913 0.037 
+
+MANGO o 69.215 34.953 1403.256 238.223 534.191 109.746 0.970 0.048 0.513 0.042 0.867 0.009 Baseline 10.075 0.157 22.511 0.735 8.942 0.563 0.130 0.067 0.113 0.063 0.858 0.009 Baseline o 12.268 0.026 12.745 0.277 7.776 0.483 0.070 0.082 0.000 0.000 0.723 0.010 
+
+Robocasa Humanoid 
+
+MANGO 21.138 4.315 220.380 15.641 350.094 68.636 1.000 0.000 0.933 0.045 0.947 0.014 
+
+MANGO o 32.030 4.289 1496.496 184.120 608.736 53.246 1.000 0.000 0.446 0.074 0.902 0.007 Baseline 7.617 0.138 17.641 0.413 5.577 0.274 0.117 0.070 0.008 0.018 0.787 0.008 Baeline o 8.300 0.097 12.963 0.559 5.634 0.037 0.000 0.000 0.000 0.000 0.790 0.001 TABLE II STATISTICAL COMPARISON OF MANGO AGAINST MANGO o , B ASELINE , AND BASELINE o ON THE LIBERO 10 AND ROBOCASA HUMANOID BENCHMARKS . R ESULTS ARE REPORTED FOR GENERATION TIME , VALIDITY , EXECUTABILITY , AND SIMILARITY ACROSS THE EVALUATED MODULES 
+
+(M ODULE I, M ODULE II, AND MODULE III). T HE TABLE REPORTS VARGHA AND DELANEY ’S EFFECT SIZE STATISTIC ( ˆA12 ) TOGETHER WITH THE CORRESPONDING P -VALUES FOR EACH PAIRWISE COMPARISON . S TATISTICALLY SIGNIFICANT DIFFERENCES IN FAVOUR OF MANGO ARE HIGHLIGHTED IN BLUE . A RROWS INDICATE WHETHER LOWER (↓) OR HIGHER (↑) VALUES ARE PREFERABLE .
+
+Generation Time (s) ↓ Validity ↑ Executability ↑ Similarity ↑
+
+Module I Module II Module III Module III Module III Module III ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value 
+
+LIBERO 10 
+
+MANGO o 0.11 0.0070 0.00 <0.0001 0.12 0.0046 0.40 0.3980 0.94 0.0005 0.90 0.0028 Baseline 1.00 0.0002 1.00 <0.0001 1.00 <0.0001 1.00 <0.0001 1.00 0.0001 0.90 0.0028 Baseline o 1.00 0.0004 1.00 0.0002 1.00 <0.0001 1.00 <0.0001 1.00 <0.0001 1.00 0.0002 
+
+Robocasa Humanoid 
+
+MANGO o 0.03 <0.0001 0.00 <0.0001 0.00 <0.0001 0.50 1.0000 1.00 0.0001 1.00 0.0002 Baseline 1.00 <0.0001 1.00 <0.0001 1.00 <0.0001 1.00 <0.0001 1.00 <0.0001 1.00 0.0002 Baeline o 1.00 0.0002 1.00 0.0002 1.00 0.0002 1.00 <0.0001 1.00 <0.0001 1.00 0.0002 
+
+sizes. Therefore, this research question can be answered as follows: Answer to RQ1 MANGO achieves the strongest performance in gen-erating fine-grained oracles for VLA-enabled robots, outperforming all the baselines. Moreover, compared to MANGO o, it reduces generation times across all modules, highlighting the importance of effective model selection for optimal performance. 
+
+B. RQ2 - Effectiveness Against Traditional Oracles 
+
+We assess how the generated fine-grained oracles compare with traditional symbolic oracles in terms of correctness as-sessment while also providing failure localization capabilities. Table III summarizes the agreement between both oracle types across 2,814 executions from LIBERO 10 and Robocasa Humanoid. We treat a failed execution as the positive class and a pass execution as the negative class. Beyond correctness assessment, we also evaluated the ability of the generated oracles to localize the point at which failures occur. Since manual comparison with execution videos was required, full evaluation of all 2,814 executions was prohibitively expensive. We therefore manually inspected a random subset of 340 failing executions, determined using Cochran’s sample size formula [53] with a significance level of 0.05. We selected up to ten true-positive executions per task. However, for LIBERO 10, only six failing test executions were available, so all of them were included. This resulted in a total of 336 evaluated executions. We initially conducted the analysis of the generated fine-grained oracles twice. In the first run, we observed an average localization accuracy of 0.5. When manually analyzing the results, we noticed errors in the functions used to check whether an object was lifted in LIBERO 10. Specifically, the function relied on a height threshold defined relative to the ground. In some scenarios, this threshold was lower than the height of the table on which the robot operated, causing objects resting on the table to be incorrectly classified as lifted and resulting in false-positive lift detections. For Robocasa, there were errors in the function that checked how close the robot hand was to an object, thus affecting the assessment of the fine-grained oracles. To address the above problems, in the Libero 10 benchmark, where the height was relative to the ground, we applied a height threshold relative to the table. To resolve the issue with the function from Robocasa Humanoid, we updated the distance calculation between an object and the robot’s hand to use the hand’s center rather 17 
+
+TABLE III AGREEMENT BETWEEN GENERATED FINE -GRAINED ORACLES AND BENCHMARK -PROVIDED SYMBOLIC ORACLES ON THE LIBERO 10 AND ROBOCASA 
+
+HUMANOID BENCHMARKS AFTER CORRECTING THE FAILURES IN THE SIMULATOR FUNCTIONS . T HE TABLE REPORTS CORRECTNESS ASSESSMENT METRICS , INCLUDING ACCURACY (A CC .), PRECISION (P REC .), RECALL (R EC .), F1-SCORE (F1), AND CONFUSION MATRIX STATISTICS (TP, TN, FP, AND 
+
+FN), MEASURING THE ABILITY OF THE GENERATED ORACLES TO REPRODUCE THE SUCCESS /FAILURE DECISIONS OF TRADITIONAL SYMBOLIC ORACLES . A DDITIONALLY , LOCALIZATION ACCURACY EVALUATES THE ABILITY OF THE GENERATED FINE -GRAINED ORACLES TO IDENTIFY THE EXECUTION STEP AT WHICH THE FAILURE OCCURS . R ESULTS ARE REPORTED PER TASK AND AGGREGATED FOR EACH BENCHMARK AND OVERALL .
+
+Correctness Localization Exec # Acc. Prec. Rec. F1 TP TN FP FN Exec # Acc. LIBERO 10 
+
+Task 1 90 1.00 1.00 1.00 1.00 54 36 0 0 10 1.00 Task 2 80 1.00 1.00 1.00 1.00 48 32 0 0 10 1.00 Task 3 80 1.00 1.00 1.00 1.00 48 32 0 0 10 1.00 Task 4 10 0.60 0.60 1.00 0.75 6 0 4 0 6 1.00 Task 5 100 1.00 1.00 1.00 1.00 60 40 0 0 10 1.00 Task 6 100 1.00 1.00 1.00 1.00 60 40 0 0 10 1.00 Task 7 100 0.96 0.94 1.00 0.97 60 36 4 0 10 1.00 Task 8 70 1.00 1.00 1.00 1.00 42 28 0 0 10 1.00 Task 9 80 0.90 1.00 0.83 0.91 48 32 0 0 10 1.00 Task 10 80 1.00 1.00 1.00 1.00 48 32 0 0 10 1.00 
+
+Total 790 0.98 0.98 0.98 0.98 474 308 8 0 96 1.00 
+
+Robocasa Humanoid 
+
+Task 1 100 1.00 1.00 1.00 1.00 60 40 0 0 10 1.00 Task 2 100 1.00 1.00 1.00 1.00 60 40 0 0 10 0.80 Task 3 94 1.00 1.00 1.00 1.00 60 34 0 0 10 0.90 Task 4 81 0.93 0.91 1.00 0.95 60 15 6 0 10 0.70 Task 5 93 0.94 0.97 0.93 0.95 56 31 2 4 10 1.00 Task 6 97 0.82 0.78 1.00 0.88 60 20 17 0 10 0.70 Task 7 63 0.89 0.86 1.00 0.92 42 14 7 0 10 0.70 Task 8 44 1.00 1.00 1.00 1.00 31 13 0 0 10 0.70 Task 9 90 0.91 0.96 0.89 0.92 48 34 2 6 10 0.80 Task 10 100 0.90 0.86 1.00 0.92 60 30 10 0 10 0.70 Task 11 47 0.94 1.00 0.91 0.95 31 13 0 3 10 0.60 Task 12 90 0.80 0.75 1.00 0.86 54 18 18 0 10 0.70 Task 13 56 1.00 1.00 1.00 1.00 48 8 0 0 10 0.70 Task 14 90 0.89 0.86 1.00 0.92 60 20 10 0 10 0.70 Task 15 91 0.88 1.00 0.82 0.90 49 31 0 11 10 0.50 Task 16 72 1.00 1.00 1.00 1.00 40 32 0 0 10 0.70 Task 17 80 0.70 0.67 1.00 0.80 48 8 24 0 10 0.60 Task 18 97 0.69 0.70 0.82 0.76 47 20 20 10 10 0.40 Task 19 98 0.50 0.91 0.17 0.29 10 39 1 48 10 0.70 Task 20 100 0.77 0.72 1.00 0.84 60 17 23 0 10 0.60 Task 21 100 1.00 1.00 1.00 1.00 60 40 0 0 10 0.60 Task 22 90 0.76 0.74 0.93 0.82 50 18 18 4 10 0.60 Task 23 62 1.00 1.00 1.00 1.00 51 11 0 0 10 0.60 Task 24 89 0.88 1.00 0.81 0.90 48 30 0 11 10 0.90 
+
+Total 2024 0.87 0.88 0.92 0.90 1193 576 158 97 240 0.70 
+
+Total 2814 0.91 0.91 0.95 0.93 1667 884 166 97 336 0.78 
+
+than the wrist. After solving these two problems, we executed all the experiments for RQ2 and report them in Table III. Overall, the generated fine-grained oracles achieved an accuracy of 0.91, a precision of 0.91, a recall of 0.95, and an F1-score of 0.93 for correctness when assessing whether the task was successfully completed. These results indicate a high degree of agreement with the benchmark-provided symbolic oracles and demonstrate that MANGO can reliably reproduce their decisions on success and failure. Notably, the high recall suggests that the generated oracles rarely miss executions that the benchmark oracles consider successful, while the strong F1-score indicates balanced performance across both posi-tive and negative classifications. The results differed slightly across benchmarks. Robocasa Humanoid exhibited a higher overall accuracy (0.90) than LIBERO 10 (0.83), suggesting that the effectiveness of the generated fine-grained oracles is partially influenced by the simulator’s quality and reliability. To better understand the observed disagreements, we manually inspected all false-positive and false-negative cases. Our manual analysis revealed that most discrepancies do not originate from limitations of MANGO itself. Instead, they are primarily caused by inaccuracies in the simulator-level functions that the generated oracles use to assess task com-pletion. Since the generated oracles rely on state inspection functions provided by the simulator, any limitations in these functions directly affect the resulting correctness assessment. A detailed inspection of the disagreements revealed several distinct sources of error. In LIBERO 10, the few remaining false positives are associated with Task 7 and Task 4 and originate from inaccuracies in the generated fine-grained or-acles. In these cases, the generated oracle used a function to check whether one door was closed, but the object in which the door was expected to be closed was incorrectly specified. Despite these minor discrepancies, the benchmark 18 
+
+achieved an overall correctness accuracy of 98% and perfect localization accuracy (100%), demonstrating that the generated fine-grained oracles correctly detect and localize the failures when reliable simulator functions are available. The analysis of Robocasa Humanoid indicated a more complex situation. Several false negatives were not caused by errors in the generated fine-grained oracles but rather by inconsistencies in the simulator physics and the benchmark symbolic oracles. For example, in Task 19, which accounted for 48 false negatives, the manipulated object must be placed inside a container. During execution, the object occasionally bounces out of the container due to physics instabilities (i.e., in the real world, this would not happen) even after satisfying the intended placement condition. Consequently, the symbolic oracle classified the execution as a failure, whereas the fine-grained oracle identified that the task objective was successfully achieved and therefore classified it as a success. Similar situations were observed in tasks involving object grasping, where objects occasionally become attached to one another or remain unintentionally attached to the robot hand. These cases emphasize that the agreement between generated and symbolic oracles is limited by the simulator’s fidelity and the reliability of its functions. With respect to the false positives observed in Robocasa, these can be divided into two categories. The first category corresponds to Tasks 17, 18, 20, and 22, in which the generated fine-grained oracles employed predicates whose parameters were not properly instantiated. These cases represent genuine generation errors and highlight the importance of validating generated predicates before deployment. The second category corresponds to Tasks 4, 5, and 6, where manual inspection revealed situations that the benchmark symbolic oracles fail to capture. For instance, during a cabinet storage task, a bottle was incorrectly positioned outside the cabinet while the door remained open. When the cabinet door was closed, the bottle was pushed inside, causing the symbolic oracle to classify the execution as successful despite the task not being performed correctly. The generated fine-grained oracles, by explicitly checking intermediate task conditions, correctly identified the failure. These examples illustrate one of the key advantages of fine-grained evaluation, the ability to detect procedural failures that are invisible to symbolic oracles. These results demonstrated that both simulator fidelity and function expressiveness play a critical role. The LIBERO 10 benchmark, whose functions closely reflect the underlying simulator state, achieved near-perfect agreement between sym-bolic and fine-grained oracles, with 98% correctness accu-racy and 100% localization accuracy. In contrast, Robocasa contained several tasks that were affected by the simulator’s physics and imperfect state functions, leading to lower agree-ment scores, though the generated oracles still achieved 87% correctness accuracy and 70% localization accuracy. Notably, many localization failures were associated with functions that provide only partial information about manipulation events, particularly object grasping and release actions, making it difficult to precisely identify the step at which the execution deviated from the intended plan. These findings reveal an important practical consideration for adopting fine-grained oracles. Their effectiveness depends not only on the quality of the generated oracles but also on the reliability of the underlying simulator functions used to observe task state. Furthermore, during manual inspection, we observed occa-sional inconsistencies caused by the stochastic nature of the simulation environments. Even when replaying demonstrations from recorded datasets, small variations in object interactions occasionally produced different outcomes, highlighting the challenges of obtaining perfectly deterministic evaluations in embodied AI benchmarks. Finally, the results indicate that human verification remains valuable when deploying automatically generated fine-grained oracles, particularly in benchmarks that rely on incomplete or noisy simulator functions. Nevertheless, as simulator fidelity improves and richer state representations become available, the need for manual validation is expected to diminish. Future work will explore generating fine-grained oracles for more realistic simulation environments and real-world robotic sys-tems, including the construction of new benchmarks specifi-cally designed to support detailed execution monitoring and failure localization. Answer to RQ2 Fine-grained oracles outperformed traditional sym-bolic oracles, by providing both accurate task as-sessment (91% accuracy, 0.93 F1-score) and fail-ure localization (78% accuracy). Most disagreements were caused by limitations in simulator functions and physics rather than oracle generation errors. These results demonstrated that fine-grained oracles can ef-fectively replace manually generated symbolic oracles while providing substantially richer feedback about task execution and being generated automatically. 
+
+C. RQ3 - Ablation Study 
+
+The first ablation evaluates the contribution of Module I (Atomic Task Library Generator) . Removing this module re-duced the generation time associated with Module II, as shown in Table IV. In LIBERO 10, the average generation time decreased by approximately 13.8 × (638.17s vs 46.09s), while in Robocasa Humanoid it decreased by approximately 1.9 ×
+
+(222.38s vs 114.37s), with statistically significant differences in both cases ( ˆA12 = 1.00 , p < 0.0001 , Table V). This reduction was expected because the system, instead of taking each atomic task and generating its corresponding atomic task oracle, attempted to generate the atomic task oracle library directly from the initial set of complex tasks. However, this reduction in generation time was followed by an increase in the generation time of Module III, whose average generation time increased from 346.51s to 404.09s in LIBERO 10 and from 350.09s to 404.64s in Robocasa Humanoid, although the differences were not statistically significant in any of the benchmarks. This increase in generation time suggests that atomic task library generation by Module I simplifies the subsequent fine-grained oracle generation process by providing a structured atomic task representation that aligns with the 19 
+
+TABLE IV ABLATION STUDY OF MANGO ON THE LIBERO 10 AND ROBOCASA HUMANOID BENCHMARKS . T HE TABLE REPORTS GENERATION TIME , VALIDITY ,
+
+> EXECUTABILITY
+
+, AND SIMILARITY METRICS FOR MANGO AND ITS VARIANTS OBTAINED BY REMOVING INDIVIDUAL MODULES OR THE EXECUTION RELIABILITY MECHANISM . M ODULE I, M ODULE II, AND MODULE III CORRESPOND TO THE THREE MODULES OF MANGO. R EPORTED VALUES CORRESPOND TO THE MEAN (m) AND STANDARD DEVIATION (σ). F OR EACH BENCHMARK AND METRIC , THE BEST RESULT IS HIGHLIGHTED IN BOLD 
+
+> AND UNDERLINED
+
+. A RROWS INDICATE WHETHER LOWER (↓) OR HIGHER (↑) VALUES ARE PREFERABLE .
+
+Generation Time (s) ↓ Validity ↑ Executability ↑ Similarity ↑
+
+Module I Module II Module III Module III Module III Module III 
+
+m σ m σ m σ m σ m σ m σ
+
+LIBERO 10 
+
+MANGO 30.776 10.802 638.169 42.079 346.513 98.054 0.990 0.032 0.800 0.149 0.912 0.034 
+
+w/o Module I N/A N/A 46.091 23.029 404.093 78.575 1.000 0.000 0.990 0.032 0.687 0.004 w/o Module II 30.776 10.802 N/A N/A 458.874 119.468 0.990 0.032 0.360 0.135 0.857 0.015 w/o Execution Reliability 30.776 10.802 638.169 42.079 78.189 24.422 0.680 0.132 0.470 0.157 0.896 0.022 
+
+Robocasa Humanoid 
+
+MANGO 21.138 4.315 222.379 15.662 350.094 68.636 1.000 0.000 0.933 0.045 0.947 0.014 
+
+w/o Module I N/A N/A 114.368 27.950 404.635 89.887 0.996 0.013 0.221 0.040 0.800 0.001 w/o Module II 21.138 4.315 N/A N/A 453.148 98.833 0.996 0.013 0.013 0.013 0.779 0.004 w/o Execution Reliability 21.138 4.315 222.379 15.662 52.240 4.861 0.796 0.115 0.037 0.031 0.861 0.013 TABLE V STATISTICAL COMPARISON OF MANGO AGAINST MANGO W/O MODULE I, W/O MODULE II, AND W /O EXECUTION RELIABILITY ON THE LIBERO 10  
+
+> AND
+
+ROBOCASA HUMANOID BENCHMARKS . R ESULTS ARE REPORTED FOR GENERATION TIME , VALIDITY , EXECUTABILITY , AND SIMILARITY ACROSS THE EVALUATED MODULES (M ODULE I, M ODULE II, AND MODULE III). T HE TABLE REPORTS VARGHA AND DELANEY ’S EFFECT SIZE STATISTIC ( ˆA12 )
+
+> TOGETHER WITH THE CORRESPONDING P
+
+-VALUES FOR EACH PAIRWISE COMPARISON . S TATISTICALLY SIGNIFICANT DIFFERENCES IN FAVOUR OF 
+
+MANGO ARE HIGHLIGHTED IN BLUE . A RROWS INDICATE WHETHER LOWER (↓) OR HIGHER (↑) VALUES ARE PREFERABLE .
+
+Generation Time (s) ↓ Validity ↑ Executability ↑ Similarity ↑
+
+Module I Module II Module III Module III Module III Module III ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value ˆA12 p-value 
+
+LIBERO 10 
+
+w/o Module I N/A N/A 1.00 <0.0001 0.29 0.1212 0.45 0.3681 0.02 0.0001 1.00 0.0002 w/o Module II 0.50 1.0000 N/A N/A 0.24 0.0539 0.50 1.0000 0.97 0.0004 0.90 0.0028 w/o Execution Reliability 0.50 1.0000 0.50 1.0000 1.00 <0.0001 0.99 <0.0001 0.93 0.0009 0.88 0.0046 
+
+Robocasa Humanoid 
+
+w/o Module I N/A N/A 1.00 <0.0001 0.36 0.5436 0.55 0.3681 1.00 <0.0001 1.00 0.0002 w/o Module II 0.50 1.0000 N/A N/A 0.17 0.0140 0.55 0.3681 1.00 <0.0001 1.00 0.0002 w/o Execution Reliability 0.50 1.0000 0.50 1.0000 1.00 <0.0001 1.00 0.0003 1.00 0.0001 1.00 0.0002 
+
+decomposition of complex tasks. Without this atomic task library, the generator must reason simultaneously about both task decomposition and the corresponding executable oracles, producing lower-quality fine-grained oracles that require addi-tional refinement iterations before convergence. Moreover, the impact of removing Module I became even more evident when analyzing oracle correctness. Although validity remained almost unchanged, executability and simi-larity revealed important differences. In Robocasa Humanoid, executability dropped from 0.933 to 0.221, while similarity decreased from 0.947 to 0.800, with statistically significant differences favoring MANGO. However, in LIBERO 10, ex-ecutability unexpectedly increased from 0.800 to 0.990, while similarity decreased from 0.912 to 0.687. At first glance, this increase in executability might suggest improved oracle quality; however, it is a false positive. Executability only measures whether an oracle can be executed successfully, not whether it faithfully captures the intended fine-grained task structure. By analyzing these contradictory results, we observed that most generated fine-grained oracles omitted several intermediate actions and focused primarily on verifying the final task outcome. Such oracles are easier to implement correctly because they primarily check the final state, inflating executability scores without reflecting true task decomposition. As a result, the generated fine-grained oracles remained exe-cutable but failed the core goal of being fine-grained oracles. Thus, the generated oracles resembled the symbolic oracle formulations commonly used in previous approaches, in which only the final state is assessed. This indicates that without decomposing into atomic tasks, generating fine-grained oracles becomes significantly more challenging. Furthermore, in the Robocasa Humanoid benchmark, although the task instructions are more fine-grained than those in LIBERO 10 and reduce planning complexity, the simulator functions and required parameterization are more complex, resulting in a significant drop in both executability and similarity. Overall, these results showed that Module I is essential for producing the atomic task library that guides the generation process towards fine-grained oracles that not only execute successfully but also accurately capture the intended sequence of actions of the complex task. The second ablation evaluates the contribution of Module II (Atomic Task Oracle Library Generator) . Since the same atomic task libraries generated by Module I on MANGO were reused, no differences were observed in the generation time of Module I. However, as presented in Table IV, removing the atomic task oracle library significantly affected the generation time of the fine-grained oracles. The average generation time of Module III increased 1.3 × in LIBERO 10 and in Robo-casa Humanoid, indicating that it required more refinement iterations to converge. This increase can be explained by the 20 
+
+loss of task-specific oracles associated with each atomic task. In MANGO, these atomic task oracles provided concrete guidance on evaluating atomic tasks, thereby reducing the effort required for fine-grained oracle generation. Without this information, the generator had to infer the implementation details of each atomic task oracle from scratch, making the generation process more complex. This effect was also visible in the effectiveness metrics. While validity remained unchanged in both benchmarks, exe-cutability decreased from 0.800 to 0.360 in LIBERO 10 and from 0.933 to 0.013 in Robocasa Humanoid, with statisti-cally significant differences in favor of MANGO in both benchmarks, as Table V reflects. Similarity showed the same effect, decreasing from 0.912 to 0.857 in LIBERO 10 and from 0.947 to 0.779 in Robocasa Humanoid. The greater degradation observed in executability than in validity suggests that syntactically valid fine-grained oracles were relatively easy to generate, whereas generating fine-grained oracles that executed correctly in the simulator was more challenging. For instance, several of the fine-grained oracles generated in this ablation were valid but used inappropriate function parameters or functions not available in the simulator. This was because, in many of these cases, Module III struggled to converge on a correct solution despite multiple refinement attempts, ultimately reaching the maximum number of refinement iter-ations. These findings demonstrated that Module II provided critical implementation-level information that bridges the gap between high-level task decomposition and executable fine-grained oracles in the simulator. The third and final ablation evaluates the contribution of the Execution Reliability mechanism in Module III, which determines whether the fine-grained oracle candidate is ex-ecutable in the simulator. As expected, removing this com-ponent did not affect the generation time of Modules I and II, because these modules operate before Module III. How-ever, as presented in Table IV, the impact of this execution reliability mechanism on Module III was substantial. The average generation time decreased by approximately 4.4 × in LIBERO 10 and 6.7 × in the Robocasa Humanoid benchmark, with statistically significant differences as shown in Table V. While this reduction might suggest an efficiency improvement, it was achieved because the fine-grained oracle judge no longer verified whether the generated fine-grained oracle candidate could actually be executed within the simulator. Consequently, fine-grained oracle candidates were accepted much earlier in the refinement process, leading to faster convergence but significantly lower oracle validity, executability and similarity. This effect was reflected in all three metrics, as reported in Table IV. Validity decreased from 0.990 to 0.780 in LIBERO 10 and from 1.000 to 0.796 in Robocasa Humanoid, while executability dropped from 0.8000 to 0.470 and from 0.933 to 0.037, respectively. In addition, similarity also decreased in both benchmarks. All these differences were statistically significant. The reason for these drops across all metrics was that many fine-grained oracles suffered from subtle param-eterization issues, such as referencing the wrong objects or using nonexistent functions in the simulator. Although these errors often produced syntactically valid fine-grained oracles, they prevented successful execution within the simulator. The results, therefore, showed that although the execution relia-bility mechanism incurs a generation-time overhead, it also provides information that cannot be obtained from structural or reasoning analyses, enabling the system to identify and correct errors that would otherwise remain hidden. Therefore, this research question can be answered as follows: Answer to RQ3 All components of MANGO contribute significantly and complement each other. Module I improves task decomposition and planning quality; Module II pro-vides the task-specific knowledge required for oracle generation; and the Execution Reliability mechanism ensures simulator-compliant execution. Removing any component reduces oracle validity, executability, and similarity, despite lower generation time. 
+
+D. RQ4 - Atomic Task Library Reduction 
+
+The results in Table VI show that the Atomic Task Library generated by Module I of MANGO can be generated with a reduced set of complex tasks. Across both benchmarks, the optimization algorithm consistently identified a small yet effective subset of tasks that yield atomic task libraries se-mantically equivalent to those produced using the full task sets (i.e., an average similarity score of 1.000). Regarding the reduction of the initial set on LIBERO 10, the initial set of 10 tasks was reduced to an average of 3.1 tasks (minimum 2, maximum 6). This corresponds to a mean TRR of 0.69, i.e., the original set of complex tasks can be reduced by 69% without altering the generated Atomic Task Library. A similar but even stronger effect was observed on the Robocasa Humanoid, where the 24 initial tasks were reduced to an average of 3.5 tasks (minimum 2, maximum 11). This yielded a mean TRR of 0.854, corresponding to an 85.4% reduction in the initial task set size. Despite the larger initial set of tasks, the resulting atomic task libraries are preserved in terms of semantic similarity, again achieving a perfect score of 1.0 across all runs. These findings have direct implications for practitioners adopting MANGO to their case studies. First, these findings suggest that users do not need to curate large and exhaustive initial task sets; instead, a small but diverse set of complex tasks, on average, 3-4 complex tasks, is sufficient to generate a highly covered atomic task library. This reduces the initial effort required to specify tasks in new case studies. Second, the results support an incremental workflow, where practitioners can begin with a compact task set, generate the atomic task and atomic task oracle libraries once, and subsequently extend the tasks in their benchmark without rerunning Modules I and II. This is particularly beneficial in industrial or evolving environments where tasks are continuously added, as it avoids repeated expensive recomputation. Finally, the observed high semantic similarity across all runs indicates that the atomic task library is robust to redundancy in the input task distribu-21                                                                   
+
+> TABLE VI RESULTS FOR RQ4 ON THE LIBERO 10 AND ROBOCASA HUMANOID BENCHMARKS . T HE TABLE REPORTS THE NUMBER OF TASKS BEFORE (#T ASKS )
+> AND AFTER MINIMIZATION (#T ASKS min ), THE TASK REDUCTION RATIO (TRR), AND THE SEMANTIC SIMILARITY BETWEEN THE ATOMIC TASK LIBRARY GENERATED FROM THE MINIMIZED SET OF COMPLEX TASKS AND THE ONE GENERATED FROM THE ORIGINAL TASK SET . R EPORTED VALUES CORRESPOND TO MINIMUM (MIN ), MAXIMUM (MAX ), MEAN (m), AND STANDARD DEVIATION (σ)ACROSS 10 EXECUTIONS . A RROWS INDICATE WHETHER LOWER (↓)OR HIGHER (↑)VALUES ARE PREFERABLE .
+> #Tasks #Tasks min ↓TRR ↑Similarity ↑
+> min max mσmin max mσmσ
+> LIBERO 10 10 263.100 1.22 0.400 0.800 0.690 0.12 1.000 0.00
+> Robocasa Humanoid 24 211 3.500 2.58 0.542 0.917 0.854 0.11 1.000 0.00
+
+tion. In practice, this implies that MANGO naturally filters out overlapping or semantically redundant task specifications, focusing instead on a minimal set of representative atomic tasks. As a result, MANGO improves scalability while main-taining consistency and reliability of the generated libraries and fine-grained oracles. Answer to RQ4 The initial complex task set can be reduced by 69%-85% on average while still yielding an atomic task library that is fully semantically equivalent to that generated from the full set. Practically, this shows that MANGO requires only a small, diverse subset of tasks to generate the atomic task library, enabling efficient reuse and incremental extension without rerunning Modules I and II. VII. T HREATS TO VALIDITY 
+
+We considered potential threats to the validity of our study and adopted several measures to mitigate their impact. A threat to internal validity arises from the stochastic nature of the foundation models used by MANGO to generate fine-grained oracles. Since these models may produce different outputs across executions, observed performance differences between approaches could be partially attributable to sampling variability rather than to the approaches themselves. To miti-gate this threat, we executed each experimental configuration 10 times and reported statistical significance tests along with effect-size estimates, thereby increasing confidence that the observed differences are not due to chance. A second internal validity threat concerns the choice of foundation models used in MANGO and its baselines in RQ1, RQ3, and RQ4. Since the quality of generated outputs may depend on the underlying model’s capabilities, conclusions drawn from a single model could be biased. To reduce this risk, we conducted a preliminary model-selection study involving both proprietary and open-source foundation models and evaluated MANGO under multiple model configurations. A threat to external validity concerns the generalizability of our findings beyond the evaluated benchmarks. Although LIBERO 10 and RoboCasa Humanoid Tabletop encompass diverse manipulation tasks, environments, and failure scenar-ios, both benchmarks primarily target household manipulation scenarios. As a result, the effectiveness of MANGO may dif-fer in other domains, such as industrial robotics or real-world deployments, where sensing noise, hardware variability, and environmental uncertainty are more pronounced. To improve external validity, we evaluated MANGO on two substantially different benchmark suites featuring distinct task structures, oracle implementations, and robotic platforms. Nevertheless, further studies involving additional simulators, robotic plat-forms, and physical robots are required to assess the broader applicability of our findings. Importantly, we note that the selected benchmarks are among the most widely used for evaluating VLA-enabled robots [3], [5], [54], [2], [55]. Finally, a threat to conclusion validity concerns the as-sessment of generated fine-grained oracles and their effective-ness in detecting faults. Our evaluation relies on benchmark-provided symbolic oracles as ground truth for task-level correctness and on manually annotated failure locations as ground truth for fine-grained localization in RQ2. While the symbolic oracles were developed and validated by the benchmark authors, they may not fully capture all aspects of task semantics, and manual annotations may introduce subjectivity. To mitigate these risks, failure locations were annotated according to a predefined protocol based on the first task step in which execution deviated from the expected behav-ior. Furthermore, the quality of generated fine-grained oracles is assessed by comparing them against manually generated ground-truth oracles and evaluating multiple complementary properties, including structural validity and executability. Us-ing this diverse set of metrics reduces reliance on any single measure and provides a more comprehensive assessment of oracle quality and effectiveness. Finally, all reported findings are supported by statistical analyses, reducing the likelihood that the observed effects are attributable to random variations. VIII. R ELATED WORK 
+
+A. Test Oracle Generation 
+
+Automated test oracle generation has been extensively stud-ied in software testing, particularly to address the oracle prob-lem [11], [56]. Early approaches focused on generating oracles from specifications, invariants, assertions, and documentation artifacts [57], [58], while later work explored oracle generation for cyber-physical systems (CPSs) using formal requirements and temporal logic models [59], [60]. Although effective within their target domains, these techniques generally assume the availability of source code, formal specifications, or design models, which are typically unavailable for instruction-driven robotic tasks specified solely in natural language. 22 
+
+The emergence of large language models (LLMs) has led to significant advances in specification-based oracle generation. TOGA [61] pioneered the use of transformer-based models for generating test assertions from program context, demon-strating the feasibility of neural oracle generation. Subse-quent work explored both prompt engineering and fine-tuning strategies, including LLMEmpirical [62], TOGLL [63], and RetriGen [64], demonstrating that contextual information, re-trieval augmentation, and fine-tuning can substantially improve oracle correctness and fault-detection capabilities. Other ap-proaches, such as CHATASSERT [65] and AugmenTest [66], further demonstrated the benefits of incorporating execution feedback and structured contextual information during ora-cle generation. More recently, researchers have investigated multi-agent LLM architectures for oracle generation. CAN-DOR [50] introduces a dual-LLM, multi-agent framework in which specialized agents collaboratively generate and assess candidate oracles through panel-based deliberation, reducing hallucinations and improving oracle correctness. Similarly, Nexus [67] combines multi-agent reasoning with execution-grounded validation and refinement. MASTOR [68] lever-ages a role-based multi-agent workflow in which specialized agents collaboratively generate test prefixes, infer expected outcomes, and validate candidate assertions through iterative deliberation and consensus. These studies provide evidence that consensus-based reasoning and execution feedback are effective mechanisms for improving oracle quality. MANGO is inspired by these advances but differs in several important aspects: (i) it targets VLA-enabled robots rather than software unit testing; (ii) it generates simulation-executable fine-grained oracles instead of assertion-based JUnit oracles; (iii) it oper-ates directly from natural-language task instructions without requiring source code, test prefixes, or formal specifications; and (iv) it employs specialized agents with robotic knowledge and execution-based validation to generate reusable atomic-task-level oracles. 
+
+B. Testing VLA-enabled Robots 
+
+Recent work has begun to address the testing and eval-uation of Vision-Language-Action (VLA)-enabled robots, primarily through benchmark-driven evaluation frameworks. Existing benchmarks such as LIBERO [8], VLATest [6], VLABench [7], RoboCasa Humanoid Tabletop [3], and NEB-ULA [24] evaluate VLA-enabled robots across diverse ma-nipulation tasks and environments using manually constructed symbolic task oracles. These benchmarks typically reduce evaluation to binary end-state success conditions and report aggregate success rates as the primary metric. While effective for large-scale comparison, this paradigm is fundamentally limited for VLA-enabled robots, whose behavior depends on the coupling of perception, language grounding, and the execu-tion of sequential actions. Conventional robotics metrics such as task success rate, path efficiency, or grasp reliability [69], [70] similarly fail to capture this coupling, while single-modal benchmarks from vision and language domains [71], [72], [73], [74] do not reflect the integrated, cross-modal reasoning required in VLA-enabled robot settings. As a result, current evaluation protocols primarily measure outcomes rather than task execution, overlooking how intermediate decisions con-tribute to final behavior. A growing body of work highlighted the limitations of end-state evaluation in VLA-enabled robots. Valle et al. [10] demonstrated that such systems may exhibit substantial vari-ability in execution quality despite producing identical final outcomes. In particular, they report cases in which tasks are completed successfully even under suboptimal or erroneous intermediate conditions, such as collisions or object drops, highlighting the need to assess intermediate execution steps rather than relying solely on final-state evaluation. Comple-mentary studies further demonstrated that strong benchmark performance often fails to translate into robust real-world behavior under distribution shifts or minor perturbations [75], [76], [77], exposing a persistent gap between reported capa-bility and practical reliability. However, existing VLA-enabled robot evaluation frameworks still provide limited support for analyzing intermediate execution, diagnosing failure modes, or quantifying step-level quality beyond final success. A central remaining obstacle is the oracle problem [11]: defining what constitutes correct behavior in VLA-enabled robots. Most benchmarks, including LIBERO [8], RLBench [78], Robo-Casa [13], and CALVIN [79], rely on binary success/failure signals. While simple and scalable, such oracles cannot cap-ture finer-grained properties such as manipulation efficiency, safety constraints, temporal ordering, or task decomposition quality, which are essential for understanding the root causes of failures and guiding corrective actions. Efforts such as VLATest [6] and LADEV [80] improve robustness evaluation via perturbation-based testing and invariance checks, but re-main constrained to final-state evaluation and do not explicitly model intermediate execution structure. To address these limitations, recent work has begun to shift from static benchmarking toward more dynamic and adap-tive evaluation strategies. FATE-VLA [81] introduces failure-aware test generation to actively detect weaknesses in VLA-enabled robots rather than passively measuring success rates. In parallel, VISOR [82] leverages vision-language models as oracles for robotic evaluation, moving beyond handcrafted symbolic oracles. Similarly, Valle et al. [83] adapted meta-morphic testing to VLA-enabled robots, introducing relation-based evaluation that assesses behavioral consistency under task transformations and enables oracle-free testing. Collec-tively, these approaches highlight a shift toward automated test generation and automated oracles; however, they still primarily evaluate whole-task outcomes and detect failures without decomposing execution into structured intermediate steps. In summary, existing VLA-enabled robot evaluation methodologies are limited by three key factors: (i) reliance on binary end-state oracles, (ii) insufficient modeling of intermediate execution behavior, and (iii) limited automa-tion. In contrast, MANGO addresses these limitations by automatically generating fine-grained, instruction-driven, and executable intermediate-state oracles that enable structured evaluation, failure localization, and diagnostic analysis of VLA-enabled robots beyond final success rates. 23 
+
+IX. C ONCLUSION 
+
+We presented MANGO, a novel multi-agent framework for generating fine-grained test oracles to evaluate Vision-Language-Action (VLA)-enabled robots in an automated man-ner. Unlike existing evaluation approaches that rely on sym-bolic end-state oracles, MANGO automatically generates exe-cutable fine-grained oracles by decomposing natural-language task descriptions into reusable atomic tasks and corresponding oracles. Through the collaboration of Generator , Assessor ,and Judge agents, MANGO automates the generation of fine-grained oracles while reducing the manual effort required for oracle generation. Evaluation on the LIBERO 10 and RoboCasa Humanoid Tabletop benchmarks demonstrates that MANGO generates executable fine-grained oracles across diverse robotic manipulation tasks, providing richer diagnostic information and more precise failure localization than sym-bolic oracles. Our ablation studies highlight the importance of the multi-agent collaboration mechanism and atomic-task de-composition strategy in improving oracle quality, executability, and robustness. Moreover, analysis of task-library reduction suggests that a compact set of reusable atomic tasks can sup-port oracle generation for a broad range of robotic instructions, highlighting the scalability of MANGO. In future work, we plan to investigate oracle generation for more complex long-horizon tasks and extend the framework to additional robotic environments and real-world platforms. ACKNOWLEDGMENTS 
+
+Pablo Valle and Aitor Arrieta are part of the Software and Systems Engineering research group of Mondragon Unibertsi-tatea (IT1519-22), supported by the Department of Education, Universities and Research of the Basque Country. Pablo Valle is supported by the Pre-doctoral Program for the Training of Non-Doctoral Research Staff (Grant No. PRE 2025 2 0252) of the Department of Education of the Basque Government, as well as by the EGONLABUR 2026 program (Grant No. EP 2026 1 0080), funded by the Department of Science, Universities and Innovation of the Basque Government. Aitor Arrieta is supported by the Spanish Ministry of Science, Innovation and Universities (project PID2023-152979OA-I00), funded by MCIU /AEI /10.13039/501100011033 / FEDER, UE. Shaukat Ali is supported by the Co-tester project (No. 314544) funded by the Research Council of Norway and the FRAME project (Grant Agreement No. 101298951) funded by the European Commission’s Horizon Europe programme. Lionel Briand is supported by Taighde ´ Eireann – Research Ire-land under Grant number 13/RC/2094 2 and Canada’s NSERC Discovery Grant and Canada Research Chair programs. REFERENCES [1] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid, et al. , “Rt-2: Vision-language-action models transfer web knowledge to robotic control,” in Conference on Robot Learning , pp. 2165–2183, PMLR, 2023. [2] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, et al. , “Openvla: An open-source vision-language-action model,” arXiv preprint arXiv:2406.09246 ,2024. [3] NVIDIA, J. Bjorck, F. Casta˜ neda, N. Cherniadev, X. Da, R. Ding, L. J. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, J. Jang, Z. Jiang, J. Kautz, K. Kundalia, L. Lao, Z. Li, Z. Lin, K. Lin, G. Liu, E. Llontop, L. Magne, A. Mandlekar, A. Narayan, S. Nasiriany, S. Reed, Y. L. Tan, G. Wang, Z. Wang, J. Wang, Q. Wang, J. Xiang, Y. Xie, Y. Xu, Z. Xu, S. Ye, Z. Yu, A. Zhang, H. Zhang, Y. Zhao, R. Zheng, and Y. Zhu, “Gr00t n1: An open foundation model for generalist humanoid robots,” 2025. [4] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter, S. Jakubczak, T. Jones, L. Ke, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, L. X. Shi, J. Tanner, Q. Vuong, A. Walling, H. Wang, and U. Zhilinsky, “ π0: A vision-language-action flow model for general robot control,” 2024. [5] D. Qu, H. Song, Q. Chen, Z. Chen, X. Gao, X. Ye, Q. Lv, M. Shi, G. Ren, C. Ruan, M. Yao, H. Yang, J. Bao, B. Zhao, and D. Wang, “Eo-1: Interleaved vision-text-action pretraining for general robot control,” 2025. [6] Z. Wang, Z. Zhou, J. Song, Y. Huang, Z. Shu, and L. Ma, “Vlatest: Testing and evaluating vision-language-action models for robotic ma-nipulation,” Proceedings of the ACM on Software Engineering , vol. 2, no. FSE, pp. 1615–1638, 2025. [7] S. Zhang, Z. Xu, P. Liu, X. Yu, Y. Li, Q. Gao, Z. Fei, Z. Yin, Z. Wu, Y.-G. Jiang, et al. , “Vlabench: A large-scale benchmark for language-conditioned robotics manipulation with long-horizon reasoning tasks,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 11142–11152, 2025. [8] B. Liu, Y. Zhu, C. Gao, Y. Feng, Q. Liu, Y. Zhu, and P. Stone, “Libero: Benchmarking knowledge transfer for lifelong robot learning,” arXiv preprint arXiv:2306.03310 , 2023. [9] X. Li, K. Hsu, J. Gu, K. Pertsch, O. Mees, H. R. Walke, C. Fu, I. Lunawat, I. Sieh, S. Kirmani, S. Levine, J. Wu, C. Finn, H. Su, Q. Vuong, and T. Xiao, “Evaluating real-world robot manipulation policies in simulation,” arXiv preprint arXiv:2405.05941 , 2024. [10] P. Valle, C. Lu, S. Ali, and A. Arrieta, “Evaluating uncertainty and quality of visual language action-enabled robots,” arXiv preprint arXiv:2507.17049 , 2025. [11] E. T. Barr, M. Harman, P. McMinn, M. Shahbaz, and S. Yoo, “The oracle problem in software testing: A survey,” IEEE transactions on software engineering , vol. 41, no. 5, pp. 507–525, 2014. [12] S. Fei, S. Wang, J. Shi, Z. Dai, J. Cai, P. Qian, L. Ji, X. He, S. Zhang, Z. Fei, et al. , “Libero-plus: A progressive robustness benchmark for visual-language-action models,” in Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition , pp. 38574–38583, 2026. [13] S. Nasiriany, A. Maddukuri, L. Zhang, A. Parikh, A. Lo, A. Joshi, A. Mandlekar, and Y. Zhu, “Robocasa: Large-scale simulation of ev-eryday tasks for generalist robots,” arXiv preprint arXiv:2406.02523 ,2024. [14] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner, “Gradient-based learning applied to document recognition,” Proceedings of the IEEE , vol. 86, no. 11, pp. 2278–2324, 2002. [15] A. Krizhevsky, I. Sutskever, and G. E. Hinton, “Imagenet classification with deep convolutional neural networks,” Advances in neural informa-tion processing systems , vol. 25, 2012. [16] K. Simonyan and A. Zisserman, “Very deep convolutional networks for large-scale image recognition,” arXiv preprint arXiv:1409.1556 , 2014. [17] C. Szegedy, W. Liu, Y. Jia, P. Sermanet, S. Reed, D. Anguelov, D. Erhan, V. Vanhoucke, and A. Rabinovich, “Going deeper with convolutions,” in Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 1–9, 2015. [18] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017. [19] J. Achiam, S. Adler, S. Agarwal, L. Ahmad, I. Akkaya, F. L. Aleman, D. Almeida, J. Altenschmidt, S. Altman, S. Anadkat, et al. , “Gpt-4 technical report,” arXiv preprint arXiv:2303.08774 , 2023. [20] G. Team, R. Anil, S. Borgeaud, J.-B. Alayrac, J. Yu, R. Soricut, J. Schalkwyk, A. M. Dai, A. Hauth, K. Millican, et al. , “Gemini: a family of highly capable multimodal models,” arXiv preprint arXiv:2312.11805 ,2023. [21] A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Kadian, A. Al-Dahle, A. Letman, A. Mathur, A. Schelten, A. Vaughan, et al. , “The llama 3 herd of models,” arXiv preprint arXiv:2407.21783 , 2024. [22] A. Q. Jiang, A. Sablayrolles, A. Mensch, C. Bamford, D. S. Chaplot, D. de las Casas, F. Bressand, G. Lengyel, G. Lample, L. Saulnier, L. R. Lavaud, M.-A. Lachaux, P. Stock, T. L. Scao, T. Lavril, T. Wang, T. Lacroix, and W. E. Sayed, “Mistral 7b,” 2023. 24 
+
+[23] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn, “Learning fine-grained bimanual manipulation with low-cost hardware,” arXiv preprint arXiv:2304.13705 , 2023. [24] J. Peng, Y. Zhang, Y. Duan, T. Liang, V. Chaudhary, and Y. Yin, “Nebula: Do we evaluate vision-language-action agents correctly?,” 2025. https: //arxiv.org/abs/2510.16263. [25] D. Ha and J. Schmidhuber, “World models,” arXiv preprint arXiv:1803.10122 , vol. 2, no. 3, p. 440, 2018. [26] P.-F. Zhang, Y. Cheng, X. Sun, S. Wang, F. Li, L. Zhu, and H. T. Shen, “A step toward world models: A survey on robotic manipulation,” arXiv preprint arXiv:2511.02097 , 2025. [27] G. R. Team, A. Abdolmaleki, S. Abeyruwan, J. Ainslie, J.-B. Alayrac, M. G. Arenas, A. Balakrishna, N. Batchelor, A. Bewley, J. Bingham, 
+
+et al. , “Gemini robotics 1.5: Pushing the frontier of generalist robots with advanced embodied reasoning, thinking, and motion transfer,” arXiv preprint arXiv:2510.03342 , 2025. [28] N. Agarwal, A. Ali, M. Bala, Y. Balaji, E. Barker, T. Cai, P. Chattopad-hyay, Y. Chen, Y. Cui, Y. Ding, et al. , “Cosmos world foundation model platform for physical ai,” arXiv preprint arXiv:2501.03575 , 2025. [29] J. Ding, Y. Zhang, Y. Shang, Y. Zhang, Z. Zong, J. Feng, Y. Yuan, H. Su, N. Li, N. Sukiennik, et al. , “Understanding world or predicting future? a comprehensive survey of world models,” ACM Computing Surveys ,vol. 58, no. 3, pp. 1–38, 2025. [30] A. Liu, B. Feng, B. Xue, B. Wang, B. Wu, C. Lu, C. Zhao, C. Deng, C. Zhang, C. Ruan, et al. , “Deepseek-v3 technical report,” arXiv preprint arXiv:2412.19437 , 2024. [31] A. Singh, A. Fry, A. Perelman, A. Tart, A. Ganesh, A. El-Kishky, A. McLaughlin, A. Low, A. Ostrow, A. Ananthram, et al. , “Openai gpt-5 system card,” arXiv preprint arXiv:2601.03267 , 2025. [32] M. AI, “Introducing mistral 3 — mistral ai,” December 2025. https: //mistral.ai/news/mistral-3/. [33] S. Baltes, F. Angermeir, C. Arora, M. M. Bar´ on, C. Chen, L. B¨ ohme, F. Calefato, N. Ernst, D. Falessi, B. Fitzgerald, et al. , “Guidelines for empirical studies in software engineering involving large language models,” arXiv preprint arXiv:2508.15503 , 2025. [34] N. Reimers and I. Gurevych, “Sentence-bert: Sentence embeddings using siamese bert-networks,” in Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pp. 3982–3992, 2019. [35] D. Cer, M. Diab, E. Agirre, I. Lopez-Gazpio, and L. Specia, “Semeval-2017 task 1: Semantic textual similarity multilingual and crosslingual focused evaluation,” in Proceedings of the 11th international workshop on semantic evaluation (SemEval-2017) , pp. 1–14, 2017. [36] T. Zhang, V. Kishore, F. Wu, K. Q. Weinberger, and Y. Artzi, “Bertscore: Evaluating text generation with bert,” arXiv preprint arXiv:1904.09675 ,2019. [37] G. Rudolph, Convergence properties of evolutionary algorithms . Verlag Dr. Kovaˇ c, 1997. [38] S. Droste, T. Jansen, and I. Wegener, “On the analysis of the (1+ 1) evolutionary algorithm,” Theoretical Computer Science , vol. 276, no. 1-2, pp. 51–81, 2002. [39] M. Harman and B. F. Jones, “Search-based software engineering,” 
+
+Information and software Technology , vol. 43, no. 14, pp. 833–839, 2001. [40] A. E. Eiben and J. E. Smith, Introduction to evolutionary computing .Springer, 2015. [41] D. E. Goldberg, “Genetic algorithms in search, optimization, and ma-chine learning. addison,” Reading , 1989. [42] J. H. Holland, Adaptation in natural and artificial systems: an intro-ductory analysis with applications to biology, control, and artificial intelligence . MIT press, 1992. [43] T. H. Cormen, C. E. Leiserson, R. L. Rivest, and C. Stein, Introduction to algorithms . MIT press, 2022. [44] H. Muhlenbein, “How genetic algorithms really work: I. mutation and hillclimbing,” in Proc. 2nd Int. Conf. on Parallel Problem Solving from Nature, 1992 , Elsevier, 1992. [45] S. Das, N. Deb, A. Cortesi, and N. Chaki, “Sentence embedding models for similarity detection of software requirements,” SN Computer Science ,vol. 2, no. 2, p. 69, 2021. [46] B. J. Jain, H. Pohlheim, and J. Wegener, “On termination criteria of evolutionary algorithms,” in Proceedings of the 3rd Annual Conference on Genetic and Evolutionary Computation , pp. 768–768, 2001. [47] Y.-W. Leung and Y. Wang, “An orthogonal genetic algorithm with quantization for global numerical optimization,” IEEE Transactions on Evolutionary computation , vol. 5, no. 1, pp. 41–53, 2001. [48] S. Ouyang, J. M. Zhang, M. Harman, and M. Wang, “An empirical study of the non-determinism of chatgpt in code generation,” ACM Transactions on Software Engineering and Methodology , vol. 34, no. 2, pp. 1–28, 2025. [49] M. Mohammadi, Y. Li, J. Lo, and W. Yip, “Evaluation and benchmarking of llm agents: A survey,” in Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pp. 6129– 6139, 2025. [50] Q. Xu, G. Wang, L. Briand, and K. Liu, “Hallucination to consensus: Multi-agent llms for end-to-end junit test generation,” ACM Transactions on Software Engineering and Methodology , 2026. [51] J. C´ amara, L. Burgue˜ no, and J. Troya, “Towards standardized bench-marks of llms in software modeling tasks: a conceptual framework: J. c´ amara et al.,” Software and Systems Modeling , vol. 23, no. 6, pp. 1309– 1318, 2024. [52] J. Romano, J. D. Kromrey, J. Coraggio, J. Skowronek, and L. Devine, “Exploring methods for evaluating group differences on the nsse and other surveys: Are the t-test and cohen’sd indices the most appropriate choices,” in annual meeting of the Southern Association for Institutional Research , pp. 1–51, Citeseer, 2006. [53] W. G. Cochran, Sampling techniques . john wiley & sons, 1977. [54] D. Qu, H. Song, Q. Chen, Y. Yao, X. Ye, Y. Ding, Z. Wang, J. Gu, B. Zhao, D. Wang, et al. , “Spatialvla: Exploring spatial representations for visual-language-action model,” arXiv preprint arXiv:2501.15830 ,2025. [55] C.-P. Huang, Y.-H. Wu, M.-H. Chen, F. Wang, and F.-E. Yang, “Thinkact: Vision-language-action reasoning via reinforced visual latent planning,” Advances in Neural Information Processing Systems , vol. 38, pp. 82782–82802, 2026. [56] M. Pezze and C. Zhang, “Automated test oracles: A survey,” in Advances in computers , vol. 95, pp. 1–48, Elsevier, 2014. [57] A. Goffi, A. Gorla, M. D. Ernst, and M. Pezz` e, “Automatic generation of oracles for exceptional behaviors,” in Proceedings of the 25th in-ternational symposium on software testing and analysis , pp. 213–224, 2016. [58] V. Terragni, G. Jahangirova, P. Tonella, and M. Pezz` e, “Evolutionary improvement of assertion oracles,” in Proceedings of the 28th ACM Joint Meeting on European Software Engineering Conference and Symposium on the Foundations of Software Engineering , pp. 1178–1189, 2020. [59] C. Menghi, S. Nejati, K. Gaaloul, and L. C. Briand, “Generating automated and online test oracles for simulink models with continuous and uncertain behaviors,” in Proceedings of the 2019 27th acm joint meeting on european software engineering conference and symposium on the foundations of software engineering , pp. 27–38, 2019. [60] P. Valle, A. Arrieta, L. Han, S. Ali, and T. Yue, “Defining and generating multi-level and uncertainty-wise test oracles for cyber-physical systems: P. valle et al.,” Software and Systems Modeling , vol. 24, no. 3, pp. 679– 704, 2025. [61] E. Dinella, G. Ryan, T. Mytkowicz, and S. K. Lahiri, “Toga: A neural method for test oracle generation,” in Proceedings of the 44th Interna-tional Conference on Software Engineering , pp. 2130–2141, 2022. [62] M. L. Siddiq, J. C. Da Silva Santos, R. H. Tanvir, N. Ulfat, F. Al Rifat, and V. Carvalho Lopes, “Using large language models to generate junit tests: An empirical study,” in Proceedings of the 28th international con-ference on evaluation and assessment in software engineering , pp. 313– 322, 2024. [63] S. B. Hossain and M. B. Dwyer, “Togll: Correct and strong test oracle generation with llms,” in 2025 IEEE/ACM 47th International Conference on Software Engineering (ICSE) , pp. 1475–1487, IEEE, 2025. [64] Q. Zhang, C. Fang, Y. Zheng, Y. Zhang, Y. Zhao, R. Huang, J. Zhou, Y. Yang, T. Zheng, and Z. Chen, “Improving deep assertion generation via fine-tuning retrieval-augmented pre-trained language models,” ACM Transactions on Software Engineering and Methodology , vol. 34, no. 7, pp. 1–23, 2025. [65] I. Hayet, A. Scott, and M. d’Amorim, “Chatassert: Llm-based test oracle generation with external tools assistance,” IEEE Transactions on Software Engineering , vol. 51, no. 1, pp. 305–319, 2024. [66] S. M. Khandaker, F. Kifetew, D. Prandi, and A. Susi, “Augmentest: Enhancing tests with llm-driven oracles,” in 2025 IEEE Conference on Software Testing, Verification and Validation (ICST) , pp. 279–289, IEEE, 2025. [67] D. Huang, M. Du, J. M. Zhang, Z. Lin, M. Luo, Q. Zhang, and S.-K. Ng, “Nexus: Execution-grounded multi-agent test oracle synthesis,” 
+
+arXiv preprint arXiv:2510.26423 , 2025. [68] S. Deng, R. Huang, Z. Yang, M. Zhang, X. Xie, and R. Wang, “Mastor: A multi-agent approach to semantic test oracle generation for restful apis,” arXiv preprint arXiv:2606.10465 , 2026. 25 
+
+[69] J. Bohg, A. Morales, T. Asfour, and D. Kragic, “Data-driven grasp synthesis—a survey,” IEEE Transactions on robotics , vol. 30, no. 2, pp. 289–309, 2013. [70] J. Mahler, J. Liang, S. Niyaz, M. Laskey, R. Doan, X. Liu, J. A. Ojea, and K. Goldberg, “Dex-net 2.0: Deep learning to plan robust grasps with synthetic point clouds and analytic grasp metrics,” arXiv preprint arXiv:1703.09312 , 2017. [71] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet: A large-scale hierarchical image database,” in 2009 IEEE conference on computer vision and pattern recognition , pp. 248–255, Ieee, 2009. [72] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Doll´ ar, and C. L. Zitnick, “Microsoft coco: Common objects in context,” in European conference on computer vision , pp. 740–755, Springer, 2014. [73] K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu, “Bleu: a method for automatic evaluation of machine translation,” in Proceedings of the 40th annual meeting of the Association for Computational Linguistics ,pp. 311–318, 2002. [74] C.-Y. Lin, “Rouge: A package for automatic evaluation of summaries,” in Text summarization branches out , pp. 74–81, 2004. [75] J. Zhou, K. Ye, J. Liu, T. Ma, Z. Wang, R. Qiu, K.-Y. Lin, Z. Zhao, and J. Liang, “Exploring the limits of vision-language-action manipulations in cross-task generalization,” arXiv preprint arXiv:2505.15660 , 2025. [76] I. Fang, J. Zhang, S. Tong, and C. Feng, “From intention to execution: Probing the generalization boundaries of vision-language-action mod-els,” arXiv preprint arXiv:2506.09930 , 2025. [77] Q. Li, “Task reconstruction and extrapolation for \pi 0 using text latent,” arXiv preprint arXiv:2505.03500 , 2025. [78] S. James, Z. Ma, D. R. Arrojo, and A. J. Davison, “Rlbench: The robot learning benchmark & learning environment,” IEEE Robotics and Automation Letters , vol. 5, no. 2, pp. 3019–3026, 2020. [79] O. Mees, L. Hermann, E. Rosete-Beas, and W. Burgard, “Calvin: A benchmark for language-conditioned policy learning for long-horizon robot manipulation tasks,” IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 7327–7334, 2022. [80] Z. Wang, Z. Zhou, J. Song, Y. Huang, Z. Shu, and L. Ma, “Ladev: A language-driven testing and evaluation platform for vision-language-action models in robotic manipulation,” arXiv preprint arXiv:2410.05191 , 2024. [81] A. Kanwal, P. Valle, S. Ali, and A. Arrieta, “Fate-vla: Failue-aware test generation for vision-language-action models,” arXiv preprint arXiv:2606.02307 , 2026. [82] P. Saurabh, P. Valle, A. Arrieta, S. Ali, and P. Arcaini, “Visor: A vision-language model-based test oracle for testing robot,” arXiv preprint arXiv:2605.10408 , 2026. [83] P. Valle, S. Segura, S. Ali, and A. Arrieta, “Metamorphic testing of vision-language action-enabled robots,” arXiv preprint arXiv:2602.22579 , 2026. 
+
+APPENDIX 
+
+This section provides an overview of the different agents used in MANGO. Figure 9 shows the agents used in Module I, Figure 10 shows the agents used in Module II, and Figure 11 shows the agents used in Module III. 26 System Prompt : You are a Principal Robotics Planning 
+
+Engineer tasked with generating a Atomic Action Library 
+
+in JSON format. The output should contain only unique, 
+
+object-agnostic atomic action primitives represented as 
+
+single skills, using generic placeholders such as [obj_id] 
+
+and [location]. Exclude complex tasks, task-to-action 
+
+mappings, object-specific variants, robot motion details, 
+
+end-effector movements, and articulation commands, 
+
+and return only raw JSON without any markdown, 
+
+explanations, or additional text. 
+
+User Prompt:  Analyze the following  {count}  complex 
+
+robotic instructions to identify the underlying  atomic skills 
+
+required to execute them: 
+
+## Tasl list:  {task_list} 
+
+Based on these instructions, generate the 
+
+"atomic_library" JSON. 
+
+## Output format:  {output_format} 
+
+Name : Atomic Task Library Generator 
+
+Type : Generator - World Model 
+
+Job : Generation of the atomic task 
+
+library 
+
+Name : Atomicity Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Atomicity assessment of the 
+
+generated library 
+
+System Prompt : You are a Robotics Systems Analyst 
+
+tasked with evaluating whether actions are at the correct 
+
+manipulation-primitive level. Your goal is only to detect 
+
+overly high-level, composite actions that contain multiple 
+
+goals, sequences, or state changes. Treat basic 
+
+manipulation actions as atomic and do not decompose 
+
+them further, even if they involve internal motion steps. 
+
+If everything is atomic, return a validity confirmation and 
+
+score; otherwise, list only the non-atomic actions with 
+
+brief reasons and suggested primitive-level 
+
+replacements. 
+
+User Prompt:  Analyze the library strictly according to 
+
+the defined granularity level. 
+
+## Candidate library:  {candidate_lib} 
+
+## Original complex tasks:  {task_list} 
+
+## Output format:  {output_format} 
+
+Name : Redundancy Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Redundancy assessment of the 
+
+generated library 
+
+System Prompt : You are a Robotics Action Library 
+
+Efficiency Analyst tasked with detecting true redundancy 
+
+in an atomic action library. An action is redundant only if 
+
+it is either unused for any original task or a semantic 
+
+duplicate that produces the same world-state transition 
+
+as another action. Do not treat inverse or opposite 
+
+operations (e.g., open vs close, lock vs unlock) as 
+
+redundant, and do not merge actions that differ in 
+
+meaningful manipulation intent or state effect. Given the 
+
+candidate library and original tasks for context, report 
+
+either no redundancy with a score, or list redundant 
+
+actions with brief reasons, and an overall score. 
+
+User Prompt:  Analyze strictly for semantic redundancy 
+
+and unused atomic tasks. 
+
+## Candidate library:  {candidate_lib} 
+
+## Original complex tasks:  {task_list} 
+
+## Output format:  {output_format} 
+
+System Prompt : You are a Robotics Pattern 
+
+Recognition Analyst tasked with identifying duplicate 
+
+actions and opportunities to generalize the atomic action 
+
+library through parameterization. Detect actions that 
+
+have the same semantic effect under different names or 
+
+differ only by object, joint, or location and could be 
+
+merged into a single parameterized primitive. Do not 
+
+merge actions with opposite state transitions, distinct 
+
+manipulation goals, or meaningfully different semantic 
+
+effects. Report either no repetition with a score or list 
+
+merge opportunities with brief reasoning and suggested 
+
+generalized actions, while preserving semantic clarity. 
+
+User Prompt:  Analyze strictly for semantic redundancy 
+
+and unused atomic tasks. 
+
+## Candidate library:  {candidate_lib} 
+
+## Original complex tasks:  {task_list} 
+
+Do NOT touch inverse actions or unrelated tasks. 
+
+Respond only in the required format. 
+
+## Output format:  {output_format} 
+
+Name : Repetition Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Repetition assessment of the 
+
+generated library 
+
+Name : Atomic Task Library Judge 
+
+Type : Judge - Reasoning LLM 
+
+Job : Judge the  generated library 
+
+System Prompt : You are a Final Quality Assurance 
+
+Judge reviewing a Robotics Atomic Action Library 
+
+against atomicity, redundancy, repetition reports, and 
+
+the original task set. Your job is to ensure full functional 
+
+coverage of all required atomic tasks while reconciling 
+
+critique conflicts. The library is approved only if it fully 
+
+supports all original tasks and has no issues across 
+
+reports; otherwise it is rejected. If rejected, provide a 
+
+concise refinement roadmap covering missing atomic 
+
+tasks, non-atomic actions, redundancy, and merge 
+
+opportunities. Always return a final verdict (APPROVED 
+
+or REJECTED) plus a single atomicity score. 
+
+User Prompt:  Evaluate the following candidate library 
+
+and reports: 
+
+## Candidate Library:  {candidate_lib} 
+
+## Original complex tasks:  {task_list} 
+
+## Atomicity report:  {atomicity_report} 
+
+## Redundancy report:  {redundancy_report} 
+
+## Repetition report:  {repetition_report} 
+
+## Output format:  {output_format} 
+
+Fig. 9. Overview of the different agents used in MANGO Module I. 27 System Prompt : You are a Robotics Formal Verification 
+
+Expert. Your task is to create a 'success_oracle' for each 
+
+action in an atomic library using a specific set of 
+
+predicates and the logic expresions of combinations of 
+
+them. 
+
+User Prompt:  Create/refine a standalone JSON 
+
+'Atomic_Task_Oracle_Library'.  Infer a 'success_oracle' 
+
+string using the the provided predicates. In case any 
+
+predicate is needed, just say it-
+
+## Target task:  {specific_task} 
+
+## Task ID:  {task_id} 
+
+## Simulator functions:  {functions} 
+
+## Previous generation:  {last_oracle_version} 
+
+## Feedback:  {feedback} 
+
+## Generation history:  {generation_history} 
+
+Return Only a JSON object with this structure: 
+
+## Output format:  {output_format} 
+
+Name : Atomic Task Oracle Library 
+
+Generator 
+
+Type : Generator - World Model 
+
+Job : Generation of the atomic task 
+
+oracle library 
+
+Name : Oracle Hacker 
+
+Type : Assessor - Basic LLM 
+
+Job : Assessment of the generated 
+
+atomic task oracles 
+
+System Prompt : You are a Logic Vulnerability 
+
+Researcher focused on formally verifying robotic 
+
+success oracles against task post-conditions. Your role 
+
+is to identify ambiguities, predicate errors, or logical 
+
+weaknesses that could allow incorrect or partial states 
+
+to be marked as successful. Check only whether the 
+
+final state exactly matches the physical goal using 
+
+correct predicates, ignoring how it was achieved. Allow 
+
+idempotent states, avoid extra assumptions, focus on 
+
+spatial accuracy, and keep feedback to five points max. 
+
+User Prompt: 
+
+## Candidate:  {oracle} 
+
+## Simulator functions:  {functions} 
+
+## Targe task:  {specific_task} 
+
+## Debate history:  {generation_history} 
+
+Provide your critique identifying logical 
+
+vulnerabilities  and return “NOTHING TO HACK” if it is 
+
+fully correct and robust. 
+
+## Output format:  {output_format} 
+
+Name : Atomic Task Oracle Library 
+
+Judge 
+
+Type : Judge - Reasoning LLM 
+
+Job : Judge the  generated atomic task 
+
+oracle library 
+
+System Prompt : You are the Lead Robotics Systems 
+
+Architect. You perform the final global audit of the 
+
+Atomic Task Oracle Library. You ensure that the library 
+
+is consistent, lacks redundancies, and that every oracle 
+
+is formally correct. 
+
+User Prompt: 
+
+## Full Library:  {candidate_lib} 
+
+## Simulator functions:  {functions} 
+
+## Original complex tasks:  {task_list} 
+
+Evaluate the full library for correctness and consistency; 
+
+return GLOBAL_APPROVED if flawless, otherwise list 
+
+entry-specific [FAIL][ID: index] issues with fixes, starting 
+
+IDs from 0 and using the required format only. 
+
+## Output format:  {output_format} 
+
+Fig. 10. Overview of the different agents used in MANGO Module II. 28 System Prompt : You are a Robotic Task Planner that 
+
+decomposes complex instructions into atomic, structured 
+
+JSON plans using only provided action and oracle 
+
+libraries with valid object/region IDs. Handle multi-object 
+
+or order-independent tasks using any_order execution 
+
+mode while ensuring correct sequencing within subtasks 
+
+when needed. Include all required subtasks, and ensure 
+
+monitoring oracles confirm completion of all conditions. 
+
+Output must be valid JSON only. 
+
+User Prompt:  Decompose the following instruction: 
+
+## Instruction:  {instruction} 
+
+## Grounding objects:  {available_objects} 
+
+## Action library:  {action_lib} 
+
+## Oracle library:  {oracle_lib} 
+
+## Previous plan:  {prev_generation} 
+
+## Feedback:  {feedback} 
+
+## Output format:  {output_format} 
+
+Name : Fine-Grained Oracle Generator 
+
+Type : Generator - World Model 
+
+Job : Generation of the fine-grained 
+
+oracle 
+
+Name : Logic Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Logic assessment of the 
+
+generated fine-grained oracle 
+
+System Prompt : You are a Planning Structure Auditor 
+
+evaluating whether a task plan has efficient and logically 
+
+correct step ordering, focusing on unnecessary 
+
+sequencing, missed parallelization opportunities, and 
+
+improper merging or splitting of independent tasks. Only 
+
+assess structural dependencies and execution ordering 
+
+(not grounding or oracle correctness), flag inefficiencies 
+
+such as forced sequences for independent actions or 
+
+missed parallel execution, and ensure actions are 
+
+logically valid within steps. Output must be valid JSON 
+
+only. 
+
+User Prompt:  Analyze ONLY the logical structure and 
+
+ordering of steps. 
+
+## Fine-grained oracle:  {oracle} 
+
+##  Instruction:  {instruction} 
+
+## Output format:  {output_format} 
+
+Name : Compliance Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Compliance Assessment of the 
+
+generated fine-grained oracle 
+
+System Prompt : You are an Oracle Verification Auditor 
+
+who checks that each plan step properly uses 
+
+handle_as conditions with correct oracles to verify 
+
+completion. Ensure every step includes valid oracle-
+
+based verification, the chosen oracle matches the 
+
+intended action, and the logic expression correctly 
+
+confirms completion without gaps. Flag missing, 
+
+incorrect, or weak verification logic, and do not assess 
+
+ordering or grounding. Output must be valid JSON only. 
+
+User Prompt:  Evaluate whether the 'handle_as' 
+
+correctly verifies task completion using the oracle library. 
+
+## Fine-grained oracle:  {oracle} 
+
+##  Instruction:  {instruction} 
+
+## Oracle library:  {oracle_lib} 
+
+## Output format:  {output_format} 
+
+System Prompt : You are a Grounding Consistency 
+
+Auditor who checks that a plan only references valid 
+
+object and fixture IDs from the grounded environment. 
+
+Verify object and fixture existence, consistency of usage, 
+
+and detect any hallucinated entities. Do not evaluate 
+
+ordering or oracle logic. Output must be valid JSON only. 
+
+User Prompt:  Check whether the plan correctly 
+
+references grounded elements. 
+
+## Fine-grained oracle:  {oracle} 
+
+##  Instruction:  {instruction} 
+
+## Oracle library:  {oracle_lib} 
+
+## Grounding objects:  {available_objects} 
+
+## Output format:  {output_format} 
+
+Name : Grounding Assessor 
+
+Type : Assessor - Basic LLM 
+
+Job : Grounding assessment of the 
+
+generated fine-grained oracle 
+
+Name : Fine-Grained Oracle Judge 
+
+Type : Judge - Reasoning LLM 
+
+Job : Judge the  generated fine-grained 
+
+oracle 
+
+System Prompt : You are the Final Oracle Judge that 
+
+combines multiple assessor outputs (logical 
+
+independence, oracle coverage, grounding, and 
+
+execution reliability) to decide whether a generated plan 
+
+is correct. Independently verify handle_as logic validity 
+
+and parameter consistency, then output PASS if 
+
+everything succeeds or FAIL with specific, actionable fix 
+
+directives if any issue exists. The result must be valid 
+
+JSON. 
+
+User Prompt:  Analyze the following fine-grained oracle: 
+
+## Fine-grained oracle:  {oracle} 
+
+##  Instruction:  {instruction} 
+
+## Logic report:  {logic_report} 
+
+## Compliance report:  {compliance_report} 
+
+## Grounding report:  {grounding_report} 
+
+## Execution report:  {execution_report} 
+
+## Oracle library:  {oracle_lib} 
+
+## Grounding objects:  {available_objects} 
+
+## Output format:  {output_format} 
+
+Fig. 11. Overview of the different agents used in MANGO Module III.

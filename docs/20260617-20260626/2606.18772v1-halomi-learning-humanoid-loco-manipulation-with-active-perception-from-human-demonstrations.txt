@@ -1,0 +1,460 @@
+Title: HALOMI: Learning Humanoid Loco-Manipulation with Active Perception from Human Demonstrations
+
+URL Source: https://arxiv.org/pdf/2606.18772v1
+
+Published Time: Thu, 18 Jun 2026 00:40:25 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# HALOMI: Learning Humanoid Loco-Manipulation with Active Perception from Human Demonstrations 
+
+Zehui Zhao 1,∗, Yuxuan Zhao 1,∗, Gaojing Zhang 1,2, Chenxi Liu 3, Maolin Zheng 3, Wenzhao Lian 1,†
+
+> 1
+
+Shanghai Jiao Tong University 2University of Sussex 
+
+> 3
+
+East China University of Science and Technology 
+
+> ∗
+
+Equal Contribution, †Corresponding Author 
+
+Fig. 1. Humanoid Active-Perception Loco-Manipulation Interface (HALOMI). Human demonstrations are collected with UMI-style handheld grippers and wearable egocentric sensing. The data processed by the human data processing module are used to train a high-level VLA that predicts head-hand targets. The head-hand targets are then executed by a manifold-constrained whole-body controller on the humanoid robot. 
+
+Abstract —Human demonstrations, which can be collected at scale and naturally capture active hand-eye coordination, are a promising data source for learning humanoid loco-manipulation. However, directly transferring human demonstrations to hu-manoids requires a precise world-frame tracking controller, which is often brittle under Out-of-Distribution(OOD) targets, while human-to-humanoid gaps persist in both egocentric ob-servation and action execution. To address these challenges, we present HALOMI, a scalable framework for learning humanoid loco-manipulation with active perception from human demon-strations. HALOMI extends Universal Manipulation Interface (UMI) with egocentric sensing to collect ego-view and wrist-view observations along with head-hand trajectories at scale. We further propose a manifold-constrained controller that plans in a learned latent behavior manifold to enable precise and robust head-hand tracking in the world frame. To bridge the human–to-humanoid gap, we perform ego-view alignment and introduce a controller-aware reference trajectory adaptation to reduce mismatch in both observation and action execution. We validate HALOMI on a Unitree G1 humanoid robot with an actuated neck across five real-world tasks involving navigation, grasping, bimanual manipulation, whole-body coordination, and dynamic behaviors. Across the three quantitatively evaluated tasks, HALOMI achieves an average success rate of 85%, while additional qualitative demonstrations show its ability to support dynamic tossing and deep-squat grasping. Our project website can be found at https://halomi-humanoid.github.io 
+
+I. INTRODUCTION Humanoid robots, with their human-like morphology and capacity for flexible whole-body coordination, are promising robotic platforms for operating in unstructured human-centric environments. However, collecting large-scale teleoperated demonstrations for humanoids remains difficult, as whole-body teleoperation is costly, time-consuming, and requires access to physical humanoid platforms as well as skilled operators. Meanwhile, human demonstrations provide an appealing alternative for scaling humanoid loco-manipulation vision-
+
+> arXiv:2606.18772v1 [cs.RO] 17 Jun 2026
+
+language-action (VLA) models, as they can be collected without costly real-robot teleoperation. Beyond scalability, hu-man demonstrations are ego-view-guided action data. Humans coordinate head and hand motions to maintain task-relevant visual context, enabling long-horizon tasks with multi-stage gaze changes such as search, grasping, and placement [1]. Since the demonstrated actions are generated under actively changing ego-view observations, active perception is also required to transfer such data to humanoids. Robot-free demonstration frameworks have combined UMI-style handheld interfaces [2] with egocentric sensing to col-lect human demonstrations that capture hand-object interac-tions and active viewpoint behaviors [3]–[5]. These systems demonstrate the value of human demonstrations for learning manipulation tasks that require hand-eye coordination, yet they primarily focus on fixed-base or wheeled robotic platforms. Recent works have extended robot-free demonstrations to humanoid loco-manipulation by augmenting UMI interfaces with additional lower-body references, such as pelvis or foot targets [6], [7]. These additional references help specify hu-manoid whole-body motion, but require access to lower-body information during data collection. Moreover, these systems do not study active ego-view transfer from humans to humanoids, limiting their applicability to long-horizon tasks that require continual gaze changes. Motivated by these limitations, we adopt a task-centric head-hand demonstration interface that captures manipulation-relevant hand motions and active head movements, while a whole-body controller completes the whole-body motion re-quired for stable execution. However, this interface introduces additional challenges, including (1) the ego-view observation gap between humans and humanoids due to morphology and camera-pose differences, (2) directly executing world-frame head-hand trajectories with unspecified lower-body commands is brittle and unstable for the whole-body controller, (3) human demonstrations provide desired head-hand target states, while directly feeding these targets to the humanoid whole-body controller can yield non-negligible tracking errors, thereby degrading human-to-humanoid transfer. To address these challenges, we present the Humanoid 
+
+Active-Perception Lo co-Manipulation Interface ( HALOMI ), as illustrated in Fig. 1, a general and scalable framework for learning humanoid loco-manipulation with active per-ception from human demonstrations . HALOMI includes a UMI-augmented egocentric data collection protocol, a 
+
+manifold-constrained whole-body controller for robust and precise tracking of head-hand targets, and an automated human data processing procedure to reduce the human-to-humanoid gap. The main contributions of our system are summarized as follows:  
+
+> •
+
+HALOMI Data Collection System: We develop a robot-free egocentric data collection system that combines bimanual UMI-style handheld grippers with a wearable head-mounted egocentric sensing, enabling synchronized collection of multi-view visual observations and corre-sponding hand-eye motion trajectories.  
+
+> •
+
+Manifold-Constrained Whole-Body Controller: We de-velop a manifold-constrained reinforcement learning (RL) controller that tracks a unified set of head-hand world-frame targets to bridge the high-level VLA action in-terface and humanoid whole-body execution. Instead of tracking in the joint action space, the controller plans over a learned latent behavior manifold, enabling precise and robust world-frame tracking.  
+
+> •
+
+View Alignment & Reference Trajectory Adapta-tion: We introduce an automated offline data processing pipeline to reduce the human-to-humanoid embodiment gap in both observation and action spaces. View align-ment mitigates visual discrepancies caused by viewpoint mismatch, while controller-aware reference trajectory adaptation reduces execution errors of human head-hand trajectories, mitigating error accumulation during closed-loop rollouts.  
+
+> •
+
+Hierarchical Learning Framework for Human-to-Humanoid Transfer: We train a high-level VLA policy from scalable human demonstrations processed by the au-tomated data processing pipeline. The VLA policy takes ego-view and dual-hand visual observations as input and predicts head-hand targets, which are then executed by the manifold-constrained whole-body controller for hu-manoid execution. We conduct real-world experiments on a Unitree G1 humanoid across diverse loco-manipulation tasks, demonstrating effective human-to-humanoid skill transfer. II. RELATED WORK 
+
+A. Robot-Free Human Demonstrations 
+
+Robot-free demonstrations have emerged as a scalable pathway for robot policy learning without relying on real-robot teleoperation. UMI-style interfaces have shown effective transfer to fixed-base manipulators [2], [8], [9] and have been extended to mobile embodiments [4], [6], [7], [10]. For robot-free human demonstrations with active perception, egocentric sensing captures not only visual observations, but also human head motions that actively reveal task-stage-specific context during long-horizon manipulation [3], [5]. HALOMI builds on these directions by augmenting UMI-style hand-trajectory collection with wearable egocentric head sensing, capturing both hand-object interaction and active viewpoint behavior for humanoid loco-manipulation. 
+
+B. Humanoid Whole-Body Controller 
+
+Recently, RL-based controllers for humanoid robots have achieved impressive sim-to-real performance, enabling hu-manoids to perform diverse loco-manipulation tasks. HOMIE [11] and AMO [12] adopt a decoupled humanoid controller, where upper-body motion is specified by joint-space targets and the RL controller handles lower-body locomotion and balance. Another line of work builds on the motion-tracking paradigm [13], [14], enabling humanoids to reproduce human-like whole-body motions. Recent systems [15], [16] operate in the global frame to reduce global drift during teleoperation. In addition, motion-prior and latent-space controllers [17]–[19] have been explored to constrain whole-body control within (a) (b) 
+
+Fig. 2: Hardware overview of the proposed system: (a) human data collection setup and (b) robot hardware platform. a learned behavior manifold, improving motion feasibility compared with unconstrained joint-space tracking. Executing recorded human head-and-hand trajectories re-quires precise world-frame sparse keypoint tracking, which is sensitive to localization errors and infeasible commands. Since pelvis, foot, and lower-body references are not provided, the controller must infer the remaining whole-body motion from only head-hand targets. Together, these factors make the sparse world-frame tracking challenging. HALOMI therefore adopts the manifold-constrained controller, which tracks the head-hand targets by planning over a learned latent behavior manifold, enabling precise and robust world-frame tracking. 
+
+C. Whole-Body Policy Learning from Human Demonstrations 
+
+EgoHumanoid [20] attempts to transfer the human egocen-tric data to the humanoid robot via view and action alignment and human-robot co-training. HoMMI [4] integrates a 3D egocentric representation with a look-at-point head interface to mitigate the embodiment gap for whole-body mobile ma-nipulation. HuMI [6] and BifrostUMI [7] extend UMI-style robot-free demonstrations to humanoid loco-manipulation by augmenting hand trajectories with additional lower-body references, such as pelvis and foot targets. These additional references help specify humanoid whole-body motion, but they also require demonstrators to provide lower-body information and rely on morphology-aware adaptation or retargeting for execution. Since pelvis and foot targets lack direct visual anchors, VLA-predicted lower-body references can be prone to long-horizon drift. Moreover, both systems do not explicitly include active perception, limiting their applicability to long-horizon tasks that require continual gaze changes. In contrast, HALOMI uses head-hand targets as a task-centric and embodiment-agnostic interface. A unified manifold-constrained whole-body controller executes these sparse targets and completes the remaining whole-body motion, while an automated data-processing pipeline reduces human-to-humanoid gaps in ego-centric observation and action execution. These designs aim to reduce the burden of data collection and enable robot-free human demonstrations with active gaze behaviors to serve 
+
+Fig. 3: Illustration of the 3-DoF active neck motion: initial state, positive yaw, positive pitch, and positive roll. as a scalable source for learning humanoid loco-manipulation skills. III. PROPOSED FRAMEWORK HALOMI consists of four main components, including a scalable and intuitive human data collection system paired with a humanoid platform (Sec. III-A), a unified whole-body RL controller for precise and robust head-hand target tracking (Sec. III-B), an automated offline alignment pipeline for processing raw human demonstrations (Sec. III-C), and the high-level VLA training and deployment pipeline (Sec. III-D). 
+
+A. Data Collection & Robot System 
+
+Scalable and Precise Robot-Free Demonstration. As shown in Fig. 2(a), our data collection system integrates bimanual UMI-style [2] handheld grippers with wearable ego-centric sensing. The demonstrator manipulates objects using two Agilex Robotics Pika Sense handheld grippers while wear-ing a helmet equipped with an Intel RealSense D435i camera and an additional HTC VIVE Tracker 3.0. With external Lighthouse base stations, the system tracks the relative 6-DOF trajectories of both grippers and the head with millimeter-level accuracy, while each gripper records a continuous gripper-width signal. Together, these trajectories and gripper states define the unified human-robot action space. The observation space consists of two local gripper-centric RGB streams from the Pika Sense fisheye cameras and one global egocentric RGB stream from the helmet-mounted RealSense camera. All observation and action streams are synchronized at 30 Hz. 
+
+Robot Hardware with Active Neck. As depicted in Fig. 2(b), we use the Unitree G1 humanoid robot as the whole-body loco-manipulation platform and augment it with robot-mounted Pika grippers and a self-designed 3-DoF active neck. The robot-mounted Pika grippers share similar gripper geometry, hardware layout, and camera placement with the handheld Pika Sense devices used for human data collection. This mechanically and visually aligned design reduces the gripper-centric observation gap between human demonstra-tions and humanoid policy execution. To enable active perception on the humanoid, we further design a servo-driven 3-DoF active neck and mount it on the head of the Unitree G1. The neck is designed such that the three rotational axes are approximately aligned with the optical center of the RGB camera. In addition, the intermediate links between adjacent servo joints are made as short as possible, making their translational offsets negligible in practice. Hence, the active neck can be modeled as a compact 3-DoF rotational mechanism that directly controls the yaw, pitch, and roll of the robot’s head-mounted camera, as demonstrated in Fig. 3. Fig. 4: Manifold-Constrained Whole-Body Controller tracks sparse world-frame head–hand targets by predicting latent actions in the BFM-Zero action space. These latent actions are decoded by the BFM-Zero model into feasible whole-body actions, constraining humanoid execution to physically plausible loco-manipulation behaviors. In contrast, directly training RL for sparse world-frame tracking in the raw action space is under-constrained and may lead to aggressive and unstable motions. 
+
+B. Manifold-Constrained Whole-Body Control System 
+
+To enable scalable and transferable human data collection, we adopt a sparse manipulation-aware interface that records only the head and two hands, without torso, leg, or foot references. As a result, the remaining whole-body motion is under-specified during execution, requiring the controller to infer feasible whole-body motion from sparse head-hand targets. We therefore train a unified whole-body controller that tracks arbitrary feasible three-point world-frame targets while maintaining natural and stable whole-body motion. Our whole-body control system, which aims to track the head and hand target poses, consists of two modules: an RL-based humanoid body controller and a 3-DoF active-neck controller with analytical inverse kinematics. Given the head-hand targets, the body controller tracks the 6-DoF poses of both hands and the 3D position of the head, while the neck controller converts the head orientation target into 3-DoF neck joint commands. This neck–body decoupled design is motivated by the kinematic limitations of the original Unitree G1, which lacks an independently actuated neck. If the whole-body policy directly tracks head orientation, small head rotation changes may require large torso, pelvis, or leg motions, which can compromise whole-body stability and hand-tracking accuracy. As illustrated in Fig. 4, directly learning a precise world-frame tracking policy in the raw joint action space is brittle. World-frame tracking is inherently multi-modal: given the same target, the policy can realize it with many different solutions, including aggressive motions. These motions are often unstable, unnatural, and unsafe, but they may receive higher tracking rewards because they reduce tracking errors more quickly. This issue becomes more serious in the sparse world-frame keypoint tracking setting. To address this, we formulate world-frame tracking as planning on a learned behavior manifold rather than directly producing raw joint commands. Specifically, we use BFM-Zero [18] as a learned behavior prior for realizing world-frame tracking. BFM-Zero learns a spherical latent behavior space, where each latent action can be decoded by the BFM-Zero model into a natural and stable whole-body motion. We therefore train an RL tracking policy in the BFM-Zero latent space to realize sparse world-frame tracking. To train a unified head-hand world-frame tracking con-troller, we curate a large-scale loco-manipulation motion dataset containing over 6,000 motion sequences and adopt a teacher-student training strategy. We first train a teacher policy via RL with access to future reference motions, whole-body global and local tracking targets, and privileged information. We then distill a deployable student policy via DAgger, which only observes head-hand targets and proprioception available on the real robot. 
+
+Teacher Policy Training . The teacher policy πtea 
+
+is trained via RL with task tracking observations, privileged simulation states, and future reference motion: otea  
+
+> t
+
+=
+
+h
+
+otask  
+
+> t
+
+, o priv  
+
+> t
+
+, o future 
+
+> t
+
+i
+
+. Here opriv 
+
+> t
+
+denotes privileged states available only during teacher training. The teacher task observation contains whole-body reference targets and tracking errors: 
+
+otask  
+
+> t
+
+= ∆proot  
+
+> t
+
+, v root  
+
+> t
+
+, R root  
+
+> t
+
+, ω root  
+
+> t
+
+, ˆqt, ∆pbody  
+
+> t
+
+, ∆Rbody 
+
+> t
+
+.
+
+where ∆proot  
+
+> t
+
+denotes the world-frame root position tracking error, vroot  
+
+> t
+
+, Rroot  
+
+> t
+
+, and ωroot  
+
+> t
+
+denote the root linear velocity, root orientation, and root angular velocity, respectively. 
+
+ˆqt denotes reference joint positions and ∆pbody  
+
+> t
+
+, ∆Rbody 
+
+> t
+
+denote the world-frame position and orientation tracking errors of the whole-body keypoints. The future term is 
+
+ofuture  
+
+> t
+
+= otask   
+
+> t+δδ∈{ 5,10 ,..., 50 }
+
+. The teacher first outputs a 128-D latent command, ztea  
+
+> t
+
+= πtea (otea  
+
+> t
+
+), which is projected onto the BFM-Zero spherical latent space as ˜ztea  
+
+> t
+
+and decoded by the frozen BFM-Zero policy into joint commands 
+
+atea  
+
+> t
+
+= πBFM (˜ ztea  
+
+> t
+
+, s bfm  
+
+> t
+
+). The training rewards include tracking terms for hand poses and head position, together with regularization terms to encourage smooth behaviors. 
+
+Deployable Student Policy Distillation . The student pol-icy πstu observes the deployable proprioceptive history and head-hand task observations: ostu  
+
+> t
+
+= sstu 
+
+> t−10: t
+
+, o task 
+
+> t
+
+ . The Fig. 5: Controller-Aware Reference Trajectory Adaptation Overview . We first obtain the tracking errors by rolling out the reference with the whole-body controller, then perform coarse-to-fine global and local adaptation with parallel simulation. student task observation contains only world-frame head-hand tracking errors: otask  
+
+> t
+
+= ∆phead  
+
+> t
+
+, ∆plh  
+
+> t
+
+, ∆prh  
+
+> t
+
+, ∆Rlh  
+
+> t
+
+, ∆Rrh 
+
+> t
+
+ .
+
+The student predicts a 128-D latent command zstu  
+
+> t
+
+=
+
+πstu (ostu  
+
+> t
+
+), which is projected onto the spherical latent space and then decoded by the frozen BFM-Zero policy: astu  
+
+> t
+
+=
+
+πBFM (˜ zstu  
+
+> t
+
+, s bfm  
+
+> t
+
+). We optimize the student policy through DAgger: 
+
+Lstu = πstu (ostu  
+
+> t
+
+) − πtea (otea  
+
+> t
+
+) 22 (1) 
+
+C. Human Data Processing to Bridge the Embodiment Gap 
+
+Directly training an end-to-end high-level VLA policy on raw human demonstrations can lead to transfer failures during deployment, as human-to-humanoid gaps exist in both ego-view observations and action execution. We therefore present a two-step data processing module to ease the embodiment gap, including (1) ego-view alignment, which reduces visual mismatch by transforming human observations toward the humanoid viewpoint, and (2) Controller-aware reference tra-jectory adaptation adjusts the collected head-hand trajectories to enable the whole-body controller to better reproduce the demonstrated motions during humanoid execution. 
+
+1) Ego-view Alignment: We adopt the ego-view align-ment procedure from EgoHumanoid [20]. Specifically, we first reconstruct the human egocentric observation into a 3D scene representation by a learning-based single-view depth estimation model, then reproject it to the humanoid viewpoint, and use image inpainting to fill missing regions caused by reprojection and disocclusion. 
+
+2) Controller-Aware Reference Trajectory Adaptation: As illustrated in Fig. 5, the goal of controller-aware reference trajectory adaptation is to adjust the raw human-derived ref-erence trajectory so that, after closed-loop execution by the humanoid whole-body controller, the executed robot trajectory better reproduces the collected human reference trajectory. The collected human demonstration is converted into a head-hand reference trajectory anchored at a fixed start pose: 
+
+xref  
+
+> t
+
+= pLt , pRt , pHt , RLt , RRt
+
+ . Here, pLt , pRt , pHt denote the target positions of the left hand, right hand, and head, and 
+
+RLt , RRt denote the target orientations of the two hands. In practice, we adapt the translational components pref  
+
+> t
+
+=[pLt , pRt , pHt ] of the reference trajectory through a residual trajectory rt, which is parameterized by the B-splines. The adapted reference is ˜pt = pref  
+
+> t
+
++ rt. To obtain rt, we first roll out the raw reference trajectory in simulation from the same fixed start pose, and compute an initial residual trajectory which serves as the starting point of the subsequent multi-scale adaptation: et = pref  
+
+> t
+
+− pexec  
+
+> t
+
+, r0 
+
+> t
+
+= Π( Get), where G
+
+is a diagonal compensation gain and Π projects the correction to a feasible range. To correct the reference trajectory at different temporal scales, we decompose rt into a full-horizon residual compo-nent and a local residual component: r1: T = rglobal 1: T + rlocal 1: T .We adopt a coarse-to-fine strategy for the full-horizon global adaptation, and then further apply chunk-wise local adaptation over short temporal windows. We first fit an initial set of global B-spline control points 
+
+C0global from r01: T . After global adaptation, local adaptation is performed over short temporal windows Wm, each initialized from its corresponding residual within that window: 
+
+rlocal ,0 
+
+> Wm
+
+=
+
+
+
+r01: T − rglobal 1: T
+
+
+
+> Wm
+
+,
+
+Wm = [ m, m + Tm − 1] 
+
+(2) These global and local control points serve as the initial-ization of the subsequent optimization. Since the controller-simulation loop is non-differentiable, we further optimize these control points using CEM-based [21] sampling. For the global and local adaptation stages, we optimize the B-spline control points with CEM-based sampling. At each iteration, we sample K candidate control-point sets 
+
+{C(i)}Ki=1 and evaluate them in parallel using K simulation environments. For each sampled candidate, we reconstruct the corresponding corrected trajectory, convert it into delta com-mands, and execute the resulting candidate via the controller in simulation, and score it by 
+
+J(i) =
+
+> T
+
+X
+
+> t=1
+
+
+
+λtrack ∥pexec ,(i) 
+
+> t
+
+− pref  
+
+> t
+
+∥ + λreg R(i)
+
+> t
+
+
+
+(3) Here, R(i) 
+
+> t
+
+regularizes the smoothness of the executed trajec-tory. The sample distribution is then updated from the elite set 
+
+E with the lowest rollout costs: 
+
+C(i) ∼ N (μ, Σ) , μ ← 1
+
+|E| 
+
+X
+
+> C(i)∈E
+
+C(i) (4) Finally, we replay the adapted reference trajectories over the full horizon and select the one with the best execution score, accepting it only when it improves over the original reference trajectory. Fig. 6: Real-world task setup. We evaluate HALOMI on five diverse humanoid loco-manipulation tasks involving navigation, hand-eye coordination, active perception, and dynamic interaction. The task instruction and sub-stage are overlaid on each policy rollout sequence, and task-relevant objects or motion directions are highlighted with visual markers for better visualization. 
+
+D. Loco-Manipulation Policy Learning and Deployment 
+
+We use the processed human data to fine-tune π0.5 [22] as the high-level policy. This high-level VLA takes all syn-chronized RGB images and the corresponding task prompts, and predicts the action chunk. Following FastUMI [23], we represent each action chunk as relative trajectories for three tracking targets: the left hand, right hand, and head. Thus, we slice the human dataset and form the action chunk, for which the k-th relative pose inside the action chunk of the timestamp t for each target can be expressed as 
+
+pkt = pt+k − pt, Rkt = R−1 
+
+> t
+
+Rt+k (5) where the p and R denote the position and rotation parts of the pose. Both continuous gripper values from the encoders of the left and right Pika Sense are appended to the back of their relative pose. Fig. 1 illustrates the deployment pipeline of HALOMI. At inference time, we launch an asynchronous image acquisition thread that synchronizes all camera streams at 30 Hz and continuously updates an image buffer with the latest time-stamped observations. The high-level VLA queries the buffer for the most recent synchronized egocentric and gripper-centric images together with the language instruction. It then predicts an action chunk consisting of relative pose commands for the left hand, right hand, and head, together with the grip-per control signals. Each relative pose command is anchored at the corresponding absolute pose and converted into a sequence of world-frame Cartesian targets. These head-hand targets are streamed to the whole-body controller, which runs at 50 Hz. The controller tracks the VLA-generated targets while maintaining balance and completing the remaining whole-body motion. IV. EVALUATION We conduct simulation and real-world experiments to eval-uate whether HALOMI can effectively learn humanoid loco-manipulation with active perception from human demonstra-tions. Our evaluation is designed to address the following key questions: 
+
+Q1: Loco-Manipulation Capability. Can HALOMI accom-plish diverse loco-manipulation tasks through sparse head-hand interface? 
+
+Q2: Human-to-Humanoid Alignment. Do ego-view align-ment and controller-aware reference trajectory adaptation im-prove human-to-humanoid transfer? 
+
+Q3: Active Perception. What role does active perception play in learning humanoid loco-manipulation from human demonstrations? 
+
+Q4: Generalization. Can HALOMI generalize beyond the demonstrated settings to unseen object positions/appearances? 
+
+A. Experimental Setup 
+
+We evaluate HALOMI in two parts: controller execution and the entire system for loco-manipulation. We first perform simulation and real-world experiments to test the whole-body controller, evaluating whether it can achieve precise and robust head-hand tracking. We then evaluate HALOMI on five representative real-world humanoid loco-manipulation tasks, as shown in Fig. 6. For 
+
+Bag Transfer , Pick Bread and Place , and Transfer Towel to Basket , we train policies using 102, 95, and 96 human demonstrations, respectively, and conduct quantitative real-world evaluations with 20 rollouts per setting. Extensive ablations and generalization tests are further conducted to analyze how key components support learning humanoid loco-manipulation from human demonstrations. For Squat-and-Grasp and Tossing , we provide qualitative analysis to evaluate capabilities beyond standard pick-and-place, including whole-body posture adaptation and dynamic motions. 
+
+B. Can HALOMI Achieve Diverse Loco-Manipulation Tasks Through Sparse Head-Hand Interface? 
+
+The controller executes the sparse head-hand targets pre-dicted by the high-level VLA and completes the remaining whole-body motion. Therefore, we first test its tracking per-formance and robustness. As shown in Table I, we replay collected human head-hand trajectories that were not used for controller training and report the tracking errors. We use EMGBP to measure the average global tracking error over the head-hand target points. We evaluate three tasks that require accurate head-hand tracking for successful execution and cover diverse motion patterns. We further evaluate the controller under sudden large target changes and infeasible motions. As shown in Fig. 7, the controller maintains stable, non-aggressive behavior under these challenging commands. TABLE I: T RACKING PERFORMANCE .              
+
+> Task EMGBP (m) EMGBP w/ Adapt. (m) Improvement (%) Pick Bread and Place 0.0436 0.0409 6.193 Transfer Towel to Basket 0.0568 0.0523 7.923 Squat-and-Grasp 0.1238 0.1163 6.058
+
+Fig. 7: Controller Robustness Evaluation. Top row: raw action-space tracking loses balance under OOD target com-mands. Below: the manifold-constrained controller maintains stable and feasible whole-body behaviors under challenging OOD commands. From the perspective of the entire system, HALOMI is evaluated on five representative real-world loco-manipulation tasks. Specifically, Fig. 6(a) shows Bag Transfer , which evalu-ates long-range navigation with active visual search. Fig. 6(b) shows Pick Bread and Place , which evaluates moderately pre-cise tabletop pick-and-place with active perception. Fig. 6(c) shows Transfer Towel to Basket , which evaluates bimanual manipulation, whole-body coordination, and active perception. Fig. 6(d) and Fig. 6(e) further show Tossing and Squat-and-Grasp , which evaluate dynamic motion and deep-squat pick-and-place behaviors, respectively. For the three quantitatively evaluated tasks, HALOMI achieves success rates of 90% , 85% , and 80% , on Bag Transfer, Pick Bread and Place, and Transfer Towel to Basket, respectively. In Tossing , the robot performs a fast object-release motion toward the target region, while in Squat-and-Grasp , the robot performs a deep squat to grasp a low-positioned object, stands up, and turns to place it in the bag. Together, these results show that HALOMI can achieve diverse loco-manipulation behaviors from sparse head-and-hand targets with natural and stable whole-body hand-eye coordination. 
+
+C. Does Our Human Data Processing Improve Human-to-Humanoid Transfer? 
+
+We investigate whether our human data processing improves human-to-humanoid transfer by reducing observation-space and action-execution gaps. 
+
+Fig. 8: Bag Transfer Task. (a) Test scenarios with varied cabinet placements. (b) Quantitative results under ablation and generalization settings. (c) Representative failure and OOD cases across different settings. 
+
+Ego-view alignment. The ablation on Bag Transfer shows the importance of ego-view alignment. As shown in Fig. 8(b), removing ego-view alignment decreases the success rate from 
+
+90% to 10% . Without ego-view alignment, we observe that the robot can still approach the target but often stops at a constant offset from the desired placement region. This suggests that the human-to-humanoid ego-viewpoint gap biases the learned visual-action mapping, leading to systematic errors in ego-view guided manipulation. 
+
+Controller-aware reference trajectory adaptation. The ef-fect of controller-aware reference trajectory adaptation is first quantified through tracking-error analysis. As shown in Ta-ble I, reference adaptation consistently reduces tracking errors across all three tasks, yielding an average error reduction of approximately 6.725% .Its downstream effect on human-to-humanoid transfer is further evaluated through task success rate and execution quality. 
+
+Pick Bread and Place. As shown in Fig. 9(b), adding controller-aware reference trajectory adaptation improves the success rate from 75% to 85% . Among successful trials, we observe improved execution accuracy: the robot grasps closer to the bread center and places the bread closer to the intended plate region. 
+
+Transfer Towel to Basket. As shown in Fig. 10(b), adaptation improves the success rate from 75% to 80% . Beyond suc-cess rate improvement, qualitative results show more accurate Fig. 9: Pick Bread and Place Task. (a) Test scenarios with varied bread and plate placements. (b) Quantitative results under ablation and generalization settings. (c) Representative failure and capability cases across different settings. grasps and smoother whole-body execution. The smoother execution also leads to steadier ego-view observations during transport and placement. 
+
+Fig. 10: Transfer Towel to Basket (a) Test scenarios with varied towel and basket placements. (b) Quantitative results under ablation and generalization settings. (c) Representative failure cases across different settings. 
+
+D. What Is the Role of Active Perception in Human-to-Humanoid Transfer? 
+
+To evaluate the role of active perception in human-to-humanoid transfer, we ablate active neck control in two settings: tasks that require active viewpoint changes and tasks that can be completed from a static view. 
+
+Tasks requiring active perception. In Bag Transfer and 
+
+Transfer Towel to Basket , active perception is required to maintain task-relevant visual context across execution stages. For Bag Transfer , as shown in Fig. 8(b), disabling active neck control reduces the success rate to 30% . Most failures occur when the cabinet is not in the center: as the robot walks forward, the cabinet gradually moves out of the central field of the ego-view, causing the policy to lose target localization. For Transfer Towel to Basket , as shown in Fig. 10(b), disabling active neck control reduces the success rate from 
+
+80% to 10% . We observe that the robot can often still approach and grasp the towel, but fails in the subsequent placement stage because it cannot actively search for the basket and bring it into the center of the head-camera view. These indicate that active head-view control is particularly important for tasks where the task-relevant visual focus changes across execution stages. 
+
+Tasks solvable with a static view. In Pick Bread and Place , a static ego-view can provide sufficient visual coverage for task completion. However, during human data collection, demonstrators naturally coordinate head and hand motions by shifting their gaze between the grasping and placement phases. As shown in Fig. 9(b), disabling active head control still reduces the success rate from 85% to 20% . This suggests that active perception is not only necessary to enlarge the visual field, but also crucial to preserve the hand-eye coupling in human demonstrations. 
+
+E. Generalization Ability of HALOMI 
+
+We further evaluate whether HALOMI generalizes beyond the demonstrated settings under the representative distribution shifts: unseen spatial configurations and unseen object appear-ances. 
+
+Fig. 11: OOD Test Configurations (a) Bag Transfer. (b) Pick Bread and Place. (c) Transfer Towel to Basket. 
+
+Unseen Object Appearances. For Transfer Towel to Bas-ket , as shown in Fig. 11(c), we evaluate novel towels with appearances different from those in the demonstrations. The policy achieves a 60% success rate in the generalization setting, suggesting that HALOMI retains object-level visual generalization. 
+
+Unseen Spatial Configurations. For Bag Transfer , we eval-uate the cabinet at unseen locations, as shown in Fig. 11(a). The policy maintains a 60% success rate under OOD cabinet placements, suggesting that our relative head-hand pose inter-face enables generalization to unseen target locations beyond the demonstration settings. For Pick Bread and Place , we further stress-tested this by introducing two types of spatial shifts, as illustrated in Fig. 11(b): changing the absolute bread/plate positions while preserving their relative layout, and changing both the absolute positions and the relative bread-to-plate layout. The policy remains robust to global translations, achieving 6/10 success when the relative bread-to-plate arrangement is preserved. As shown in Fig. 9(c), the robot can synthesize whole-body coor-dination that is not explicitly demonstrated, enabling the robot to reach far-away targets beyond the demonstrated workspace. However, under bread-to-plate relative layout changes, the success rate dropped to 0/10. In these failures, the robot often grasps the bread but fails during placement, since the hand-target trajectory required to complete the placement is not covered by the demonstrated head-hand dataset. V. CONCLUSIONS We present HALOMI, a system for learning whole-body humanoid loco-manipulation with active perception directly from human demonstrations. We couple the robot-free ego-centric demonstration interface with an automated human data processing pipeline, providing a scalable route to collect hu-man data and bridge the human-to-humanoid embodiment gap. For robot execution, we integrate a humanoid platform with an active neck and a manifold-constrained whole-body controller, enabling robust world-frame tracking of sparse head-hand targets. Real-world experiments demonstrate that HALOMI enables versatile and challenging long-horizon humanoid loco-manipulation tasks with active perception. REFERENCES [1] H. Xiong, X. Xu, J. Wu, Y. Hou, J. Bohg, and S. Song, “Vision in action: Learning active perception from human demonstrations,” in Conference on Robot Learning . PMLR, 2025, pp. 5450–5463. [2] C. Chi, Z. Xu, C. Pan, E. Cousineau, B. Burchfiel, S. Feng, R. Tedrake, and S. Song, “Universal manipulation interface: In-the-wild robot teach-ing without in-the-wild robots,” in Proceedings of Robotics: Science and Systems (RSS) , 2024. [3] Q. Zeng, C. Li, J. S. John, Z. Zhou, J. Wen, G. Feng, Y. Zhu, and Y. Xu, “Activeumi: Robotic manipulation with active perception from robot-free human demonstrations,” arXiv preprint arXiv:2510.01607 , 2025. [4] X. Xu, J. Park, H. Zhang, E. Cousineau, A. Bhat, J. Barreiros, D. Wang, and S. Song, “Hommi: Learning whole-body mobile manipulation from human demonstrations,” arXiv preprint arXiv:2603.03243 , 2026. [5] J. Yu, Y. Shentu, D. Wu, P. Abbeel, K. Goldberg, and P. Wu, “Egomi: Learning active vision and whole-body manipulation from egocentric human demonstrations,” arXiv preprint arXiv:2511.00153 , 2025. [6] R. Nai, B. Zheng, J. Zhao, H. Zhu, S. Dai, Z. Chen, Y. Hu, Y. Hu, T. Zhang, C. Wen et al. , “Humanoid manipulation interface: Humanoid whole-body manipulation from robot-free demonstrations,” 
+
+arXiv preprint arXiv:2602.06643 , 2026. [7] C. Yu, H. Wang, Y. Hu, J. Zhang, Y. Li, and S. Luo, “Bifrostumi: Bridg-ing robot-free demonstrations and humanoid whole-body manipulation,” 
+
+arXiv preprint arXiv:2605.03452 , 2026. [8] H. Choi, Y. Hou, C. Pan, S. Hong, A. Patel, X. Xu, M. R. Cutkosky, and S. Song, “In-the-wild compliant manipulation with umi-ft,” arXiv preprint arXiv:2601.09988 , 2026. [9] M. Xu, H. Zhang, Y. Hou, Z. Xu, L. Fan, M. Veloso, and S. Song, “Dexumi: Using human hand as the universal manipulation interface for dexterous manipulation,” in Conference on Robot Learning . PMLR, 2025, pp. 437–459. [10] H. Ha, Y. Gao, Z. Fu, J. Tan, and S. Song, “UMI on legs: Making manipulation policies mobile with manipulation-centric whole-body controllers,” in Proceedings of the 2024 Conference on Robot Learning ,2024. [11] Q. Ben, F. Jia, J. Zeng, J. Dong, D. Lin, and J. Pang, “Homie: Humanoid loco-manipulation with isomorphic exoskeleton cockpit,” arXiv preprint arXiv:2502.13013 , 2025. [12] J. Li, X. Cheng, T. Huang, S. Yang, R.-Z. Qiu, and X. Wang, “AMO: Adaptive Motion Optimization for Hyper-Dexterous Humanoid Whole-Body Control,” in Proceedings of Robotics: Science and Systems ,LosAngeles, CA, USA, June 2025. [13] Y. Ze, Z. Chen, J. P. Ara´ ujo, Z. ang Cao, X. B. Peng, J. Wu, and C. K. Liu, “Twist: Teleoperated whole-body imitation system,” arXiv preprint arXiv:2505.02833 , 2025. [14] T. He, Z. Luo, X. He, W. Xiao, C. Zhang, W. Zhang, K. Kitani, C. Liu, and G. Shi, “Omnih2o: Universal and dexterous human-to-humanoid whole-body teleoperation and learning,” arXiv preprint arXiv:2406.08858 , 2024. [15] Y. Li, Y. Lin, J. Cui, T. Liu, W. Liang, Y. Zhu, and S. Huang, “Clone: Closed-loop whole-body humanoid teleoperation for long-horizon tasks,” in 9th Annual Conference on Robot Learning , 2025. [16] T. Zhu, G. Cai, Y. Zhaohui, G. Ren, H. Xie, Z. Wang, J. Wu, J. Wang, X. Yang, Y. Mu et al. , “Clot: Closed-loop global motion tracking for whole-body humanoid teleoperation,” arXiv preprint arXiv:2602.15060 ,2026. [17] Z. Luo, J. Cao, J. Merel, A. Winkler, J. Huang, K. Kitani, and W. Xu, “Universal humanoid motion representations for physics-based control,” in International Conference on Learning Representations , vol. 2024, 2024, pp. 56 766–56 782. [18] Y. Li, Z. Luo, T. Zhang, C. Dai, A. Kanervisto, A. Tirinzoni, H. Weng, K. Kitani, M. Guzek, A. Touati et al. , “Bfm-zero: A promptable behavioral foundation model for humanoid control using unsupervised reinforcement learning,” arXiv preprint arXiv:2511.04131 , 2025. [19] Y. Li, M. Lin, Z. Lin, Y. Deng, Y. Cao, and L. Yi, “Learning physics-based full-body human reaching and grasping from brief walking references,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , June 2025, pp. 27 673–27 682. [20] M. Shi, S. Peng, J. Chen, H. Jiang, Y. Li, D. Huang, P. Luo, H. Li, and L. Chen, “Egohumanoid: Unlocking in-the-wild loco-manipulation with robot-free egocentric demonstration,” arXiv preprint arXiv:2602.10106 ,2026. [21] C. Pinneri, S. Sawant, S. Blaes, J. Achterhold, J. Stueckler, M. Rolinek, and G. Martius, “Sample-efficient cross-entropy method for real-time planning,” in Conference on Robot Learning . PMLR, 2021, pp. 1049– 1065. [22] K. Black et al. , “ π0.5: a vision-language-action model with open-world generalization,” in 9th Annual Conference on Robot Learning , 2025. [23] K. Liu, C. Guan, Z. Jia, Z. Wu, X. Liu, T. Wang, S. Liang, P. Chen, P. Zhang, H. Song et al. , “Fastumi: A scalable and hardware-independent universal manipulation interface with dataset,” arXiv preprint arXiv:2409.19499 , 2024.

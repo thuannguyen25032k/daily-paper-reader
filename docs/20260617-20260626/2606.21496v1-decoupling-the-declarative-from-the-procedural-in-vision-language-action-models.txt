@@ -1,0 +1,520 @@
+Title: Decoupling the Declarative from the Procedural in Vision-Language-Action Models
+
+URL Source: https://arxiv.org/pdf/2606.21496v1
+
+Published Time: Tue, 23 Jun 2026 01:26:00 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Decoupling the Declarative from the Procedural 
+
+# in Vision-Language-Action Models 
+
+Nikolaos Tsagkas 1, Andreas Sochopoulos 1,Chris Xiaoxuan Lu 2, Oisin Mac Aodha 1, Alexandros Kouris 31University of Edinburgh, 2UCL, 3Samsung AI Center - Cambridge, UK 
+
+Abstract: Deploying generalist robotic agents in the real world requires transferable skills. Specifically, a policy trained to clone a behavior from object-specific demonstrations must generalize beyond that object, otherwise data collection requirements become intractable. Recently, fine-tuning of pre-trained billion-parameter Vision-Language Models (VLMs), initially on large-scale robot datasets and then on fewer scenario-specific demonstrations, has emerged as the predominant paradigm for designing Vision-Language-Action (VLA) models. While these policies achieve state-of-the-art manipulation performance in-distribution, they remain brittle to minor spatial, semantic, and task variations. In this work, we address the inability of current models to decouple the declarative (i.e., concepts and entity semantics) from the procedural knowledge ( i.e., how to do something) encoded in their parameters, which is a fundamental bottleneck for zero-shot skill transfer to novel objects. To address this, we propose w 2VLA, a new VLA model with restructured information flow. Rather than feeding all multimodal tokens from the VLM encoder into a large, opaque transformer-based action expert, our approach modulates the robot state sequence with visual, spatial, and skill information in a compositional and interpretable manner. Unlike popular, state-of-the-art VLAs, we show that our modular approach successfully decouples knowledge representations, enabling robust behavior cloning and unprecedented zero-shot skill transfer capabilities across dissimilar, unseen objects. Project Page : https://tsagkas.github.io/w2vla .
+
+Keywords: Vision-Language-Action Models, Imitation Learning, Skill Transfer 
+
+## 1 Introduction 
+
+In the pursuit of generalist, autonomous robot agents, the paradigm for training policies via imita-tion learning (IL) has shifted toward fine-tuning deep, billion-parameter Vision-Language Models (VLMs) ( e.g., PaliGemma [1], Qwen-VL [2]). This is motivated by their impressive generalization capabilities in traditional vision tasks. This trend, however, is rooted in a deeper assumption: that foundation models in robotics will emerge, much like in the vision and language domains, through the sheer scaling of both model parameters and datasets. Consequently, the recent proliferation of large-scale robotics datasets ( e.g., OXE [3], DROID [4]) has been instrumental in accelerating this trajectory. These architectures, termed Vision-Language-Action (VLA) models [5, 6, 7, 8, 9, 10, 11], have indeed exhibited remarkable manipulation capabilities, even when fine-tuned with just a few scenario-specific demonstrations (tailored to the target task, object, scene, and embodiment), while achieving state-of-the-art performance on popular benchmarks ( e.g., LIBERO [12], Robotwin [13]). However, despite the aforementioned success, recent work has revealed that modern VLAs lack the robust generalization capabilities anticipated when deploying strong VLM backbones [14, 15, 16, 17]. Minor environmental variations, such as altering object arrangements in the scene or modifying fundamental attributes ( e.g., object color), can cause the trained policy to fail completely. This raises a critical question: what is the utility of computationally expensive pre-training and fine-     
+
+> arXiv:2606.21496v1 [cs.RO] 19 Jun 2026 OTTER  ❌(b) Skill Transfer Example: “Rotate by 90 othe banana”
+> π0.5  ❌w 2VLA  ✅
+> (c) Results Summary (a) Training Data
+> “Rotate by 90 othe carrot”
+> “Place 5cm back the banana”
+
+Figure 1: Skill transfer example . (a) Three VLAs ( i.e., π0.5, OTTER, and our w 2VLA) are trained on a dataset of two (skill, object) pairs: (rotate 90 o, carrot ) and (place 5cm back, banana ). (b) We evaluate the three VLAs in a skill transfer scenario (rotate 90 o, banana ). Unlike our w 2VLA, 
+
+π0.5 and OTTER fail to transfer the learned skill to the other object. (c) Summary of our main experimental results: all three VLAs obtain almost perfect performance when deployed over seen 
+
+(skill, object) pairs, however, only w 2VLA manages to reliably perform skill transfer. 
+
+tuning pipelines if the resulting policies remain susceptible to the same trivial perturbations that plague traditional IL approaches? Recent literature has attempted to address these vulnerabilities by freezing the VLM entirely ( e.g., OTTER [16]) or partially ( e.g., OpenVLA + [18]). We argue that, conceptually, this is a highly promising direction. VLMs excel at encoding declarative knowledge ,
+
+i.e., objects’ identities, spatial properties and visual semantics, which should remain fundamentally decoupled from procedural knowledge , i.e., the mechanics of executing a skill. For instance, learning to grasp a mug should not require the model to relearn visually recognizing a mug. Nevertheless, we observe that both massive VLAs with fine-tuned backbones, and those utilizing frozen VLMs, fail to exhibit a crucial capability required of generalist, autonomous agents: zero-shot skill transfer across distinct objects . While humans can readily extrapolate a skill learned on one object to another ( e.g., a child learning to hold a hammer can intuitively adapt that grasp to hold a wrench), this remains a profound challenge even for state-of-the-art VLAs, as also revealed in our experiments (see Fig. 1). Addressing this problem via scaling datasets and model parameters alone is intractable. We attribute this to the opaque design of the action experts of current VLAs, that treat all multi-modal tokens from the VLM encoder as a unified sequence. Given the limited number of demonstrations available for scenario-specific fine-tuning, this encourages the policy to overfit on spurious skill-object correlations, prohibiting skill transfer. The primary contribution of this work is a novel, end-to-end trainable VLA model that, to the best of our knowledge, is the first to achieve zero-shot skill transfer to unseen objects. Akin to OTTER, our approach leverages a two-tower VLM backbone ( i.e., MetaCLIP2 [19]) that remains frozen throughout training ensuring that its pre-trained representations remain undiluted by the traditionally low-data regime of IL. We introduce a modular VLA architecture that guides the action prediction process by sequentially modulating past proprioceptive robot states with decoupled representations of the fundamental pieces of information required to precisely execute a task. In order to achieve the desired transfer of a demonstrated skill onto a novel object, we explicitly isolate two critical compo-nents of an interaction. The first piece of information is the where , which constitutes the declarative 
+
+object-centric knowledge encoded by the VLM and should not be entangled with the mechanics of the skill. The second piece concerns the what , i.e., the specific behavior to be executed. This pro-cedural knowledge is derived exclusively from the demonstration data and must not interfere with the declarative priors. Consequently, the learned policy reliably directs the robot to manipulate the target object, which does not have to be the one the behavior was demonstrated on, at the recognized object position while faithfully executing the learned behavior. In summary, we contribute a novel VLA model, named w 2VLA ( where-what-VLA ), that: ( i) en-ables compositional generalization by decoupling and sequentially processing the declarative and procedural information of each target task, breaking the learned skill-object correlation observed 2Pre-trained VLM DiT                        
+
+> Proj. VFM
+> Transformer
+> Filter
+> Proj.  Visual Mod.
+> Spatial Mod.
+> Skill Mod.
+> Transformer
+> Visual Tokens Proprio Tokens Lang. Tokens Action Tokens
+> VFM ❄
+> V❄L❄
+> Proj.
+> 2T-VLM
+> (a) π0.5 (b) OTTER (c) w 2VLA (ours)
+> V❄L❄
+> 2T-VLM
+> …………
+> ……
+> ………
+> ……
+> ………
+> ……
+> …
+> …
+> ……
+> ……
+> …
+> …
+> …
+> …
+> …
+> Random Noise Localize
+> …
+
+Figure 2: We compare two popular VLA paradigms against our w 2VLA. (a) π0.5 maps all input tokens into the VLM’s input space, which gets fine-tuned during training, followed by a Diffusion Transformer (DiT) action expert. (b) OTTER extracts visual and language tokens from a frozen two-tower VLM (2T-VLM) and performs a textual-aware filtering of the visual features before con-catenating the multimodal tokens into a single input to a causal transformer action expert. Instead of treating all multimodal tokens as a unified sequence, our (c) w 2VLA sequentially modulates the proprioception tokens with visual, spatial, and skill tokens extracted from frozen 2T-VLM and Vi-sion Foundation Model (VFM) backbones. Only w 2VLA demonstrates skill transfer capabilities. in current state-of-the-art models. This allows zero-shot skill transfer between objects from the demonstration data, whereas strong baseline VLAs experience a catastrophic performance collapse; (ii ) maintains this robust execution even when a learned skill is transferred to completely unseen objects; ( iii ) preserves in-domain behavior cloning performance on par with state-of-the-art VLAs employing both fine-tuned ( e.g., π0.5) and frozen ( e.g., OTTER) VLMs as backbone models. We substantiate these claims through comparative evaluations, across numerous real-world tasks. 
+
+## 2 Motivation 
+
+Our work is motivated by the cognitive principle of decoupling perception from action, a concept loosely analogous to the division of labor in the human visual system [20, 21, 22], adapted here for continuous robotic control. Rather than adhering strictly to biological definitions, we conceptualize this division as separating the task’s spatial grounding (the where ) from its motor intent (the what ). As illustrated in Fig. 2, this approach differs fundamentally from the architecture of current state-of-the art VLAs, which employ opaque action experts that process a sequence of visual, language and proprioception tokens, produced by fine-tuned or frozen multimodal encoders, in a unified way to predict subsequent actions. We argue that this naive approach drives the learned policy to overfit to specific skill-object pairs, prohibiting generalization to new combinations that were not seen during training. Earlier work on language-conditioned manipulation [23] has explored a relevant separation between semantic and spatial streams, in the context of a stateless, discrete SE (2) pick-and-place affordance prediction formulation. In contrast, w 2VLA (where-what-VLA) focuses on skill transfer, proposing a more structured decoupling between perceptive and behavioral information, within the high-dimensional, continuous, and temporally-conditioned action policies of modern VLAs. Instead of feeding all multi-modal tokens as a unified input, we treat the sequence transduction process of transformers ( i.e., converting one sequence of data into a new one [24]) as a mapping from a history of observed proprioceptive robot states to a sequence of robot actions. Inside the model, we sequentially modulate these states with the visual, spatial ( where ), and skill ( what ) information of the task (Fig.2(c)). As such, at each timestep, w 2VLA transformer implicitly transforms its hidden states by how much they need to change to guide the robot to a location and clone a behavior . This design decouples the fundamental knowledge learned about a skill from the object that it was demonstrated on, unlocking compositional generalization capabilities in VLAs by achieving skill transfer beyond the scope of the provided task demonstrations, within an immensely low-data envelope. 
+
+## 3 The w 2VLA Model 
+
+In this section, we begin by formulating the skill transfer problem in the context of VLAs (Sec. 3.1), and describe the architectural components (Sec. 3.2) and training mechanism (Sec. 3.3) of our pro-3posed w 2VLA (where-what-VLA) model. w 2VLA is designed to adopt a restructured information flow that decouples declarative from procedural knowledge. At the core of this new architecture lies a novel action expert transformer, equipped with tailored conditioning blocks that sequentially modulate the internal representation with visual , spatial , and skill information, extracted from pre-trained foundation models. This isolation and progressive conditioning on different information components during the mapping process of robot states to actions, is instrumental in enabling skill transfer beyond the demonstration training tasks. The proposed architecture is illustrated in Fig. 3. 
+
+3.1 Problem Formulation 
+
+In order to study the skill transfer capabilities of VLAs we formulate a simple and targeted IL-based manipulation scenario. Specifically, we assume two distinct objects, o 1 and o 2, with randomized initial positions within the robot workspace. Each object is coupled with a distinct skill, s a or sb, that the robot performs on it ( e.g., rotating a carrot or moving back a banana, as in Fig. 1) creating two primary skill-object pairs: ⟨sa, o1⟩ and ⟨sb, o2⟩, each linked with a language instruction describing the target object and skill to be executed. We collect an equal number of expert training demonstrations for each ⟨s, o⟩ pair, for varying object poses. Under this setting, we consider skill transfer to be the successful execution of a skill to new objects, by interchanging the skill-object pairs of the demonstrations, i.e., ⟨sa, o2⟩ and ⟨sb, o1⟩, in the input language instruction. Working with two skill-object pairs allows us to evaluate the utilization of both the declarative knowledge of the VLM ( i.e., if the correct object is selected) and that of the 
+
+procedural knowledge encoded in the policy ( i.e., generating the actions of the instructed skill). However, w 2VLA is a fully general VLA and is capable of extending skill transfer to completely unseen objects, i.e., ⟨sa, o2⟩, ⟨sa, o3⟩, . . . , ⟨sa, oK ⟩ or ⟨sb, o1⟩, ⟨sb, o3⟩, . . . , ⟨sb, oK ⟩; see Sec. 4.3. 
+
+3.2 Model Architecture Model Inputs : At each timestep t, the model receives a temporal history of length T , comprising proprioceptive states P = {pt−T +1 , . . . , p t} and visual observations I = {Ict−T +1 , . . . , I ct } across 
+
+C cameras. Each image is sliced into N patches and processed through two vision encoders with complementary strengths: a VFM extracts D-dimensional patch tokens F ∈ RT ×C×N ×D that pro-vide robust spatial and semantic perception, while a VLM vision encoder extracts patch embeddings 
+
+V ∈ RT ×C×N ×D that are strictly aligned with the text space. To condition the policy, we assume an available language pre-processor that parses the raw language instruction l into isolated skill and ob-ject textual descriptions. These distinct strings are then independently fed to the VLM’s text encoder to produce an object embedding ( eobj ∈ RD ) and a skill embedding ( eskill ∈ RD ). 
+
+Encoding Robot States : The proprioceptive observation sequence P is first mapped via an MLP ( i.e., the Proprio Encoder ) into the policy’s D-dimensional latent space. Then, a tempo-ral positional embedding is added to preserve sequential order, yielding the hidden robot states 
+
+H = {ht−T +1 , . . . , h t}. This sequence serves as the foundational representation which is fed as input to the w 2VLA’s action expert, where it will be subsequently modulated with multi-modal task context, guiding the prediction of next robot actions. 
+
+Visual Modulation : To capture correlations between the observed visual context and robot actions, the hidden robot states H are first modulated with the dense VFM patch tokens F . Prior to that, we employ Attentive Feature Aggregation (AFA) [25, 26, 16], to filter out redundant background information. Using cross-attention with a set of Q trainable queries, AFA compresses the visual features at each timestep t into a concise set of task-relevant summary tokens F ′ = {f ′ 
+
+> τ,q
+
+}, where 
+
+τ ∈ { t − T + 1 , . . . , t } and q ∈ { 1, . . . , Q } indexes the respective query. A cross-attention (CA) layer then integrates this visual context into the robot’s hidden states by treating the summarized tokens F ′ as keys and values, and the hidden states H as queries. This module concludes with a Causal Self-Attention (CSA) block, allowing the visually-modulated tokens to temporally reason (and extrapolate) over the sequence history before propagating to the subsequent stages. 4l: “Rotate the sponge by 90 o”        
+
+> Language Processor
+> CSA
+> FiLM
+> KV
+> CSA
+> Action Head
+> Visual Modulation Spatial Conditioning Skill Conditioning
+> Inputs
+> Skill: rotate 90 o
+> 2-Tower VLM VFM
+> Vision Encoder ❄
+> Masking
+> CSA
+> FiLM
+> Proprio Encoder
+> AFA
+> Lang. Encoder ❄
+> It-T+1 It-2 It-1 It
+> …
+
+…
+
+… … …   
+
+> at
+> at+L-1
+> at+3
+> at+2
+> at+1
+> ht-T+1
+> ht
+> ht-1
+> ht-2
+> CA
+> KV
+> Q
+> …
+> …
+> …
+> …
+> …
+> pt-T+1, ..., pt
+> Vision Encoder ❄
+> Localization
+> Object: sponge
+> …
+> ht-3
+
+Figure 3: w2VLA architecture . Our policy sequentially modulates a sequence of hidden robot state tokens with the decoupled where (i.e., location of interest) and what (i.e., skill to be executed) information of the task. Visual tokens are extracted from a VFM encoder to inform the hidden states of relevant visual cues in the scene. Where (spatial) tokens are computed via attention heatmaps that localize the object of interest in space. What (skill) tokens represent the skill to be executed. 
+
+Conditioning Block : To condition the base representation of hidden robot states on the task’s where 
+
+(target object spatial location) and what (skill to execute), we devise a conditioning block that se-quentially modulates the action expert’s hidden states on an external information signal. To achieve this, we adopt a Feature-wise Linear Modulation (FiLM) [27] based transformer block design, in-spired by how instruction embeddings conditioned RT-1 [28]. Specifically, an MLP projects the target conditioning vector σ into scaling ( γ(σ)) and shifting ( β(σ)) parameters, which apply an affine transformation directly to each state token: h′ 
+
+> τ
+
+= F iLM (hτ , σ ) = γ(σ) ⊙ hτ + β(σ). This dynamically biases the tokens to reflect the precise skill intent or spatial target required at that exact moment. A subsequent CSA block models temporal dynamics, allowing each modulated token to at-tend to its updated history. Crucially, we employ a Pre-LayerNorm architecture [29] within the CSA and a residual connection around it. This allows the modulated features from the preceding FiLM block to bypass normalization, preventing a destructive standardization of the feature space, that would cancel out the injected γ and β modulation parameters: h′′  
+
+> τ
+
+= h′ 
+
+> τ
+
++ CSA (LayerNorm (h′ 
+
+> τ
+
+)) .
+
+Spatial Conditioning ( i.e., the where ): Spatial conditioning is achieved by injecting a sequence of tokens Σspatial τ = {σspatial t−T +1 , . . . , σ spatial t } into the first conditioning block, to ground the location of the target object in each visual observation to its corresponding hidden-space robot state token. We derive these conditioning tokens from spatial localization heatmaps Mτ = {mt−T +1 , . . . , m t}.Specifically, raw similarity scores are computed via the tensor product between the VLM’s multi-camera visual patch embeddings and the textual object embedding: St = Vt · eobj , for each timestep. To transform these similarities into a precise spatial probability distribution, we apply a temperature-scaled Softmax over the spatial dimension independently for each camera: mt = Softmax (St/ζ ),where ζ = 0 .05 is a hyperparameter that controls the sharpness of the attention map. The resulting heatmaps mt are flattened and projected via an MLP into the transformer’s hidden dimension to form the final conditioning tokens σspatial t . By sequentially modulating the robot states with Σspatial , the policy is explicitly biased to focus on the target object’s geometric region independently of the 5Scenario 1     
+
+> (Rotate 90 o, Carrot
+> 🥕 )(Back 5cm, Banana
+> 🍌 )
+> (Plate, Corn
+> 🌽 )(Bowl, Eggplant
+> 🍆 )
+> (Drop, Toothpaste
+> 🪥 )(Forward, Cucumber
+> 🥒 )
+> (Poke, Sponge
+> 🧽 )(Nudge, Toy Car
+> 🚗 )
+> Scenario 2 Scenario 3 Scenario 4
+
+Figure 4: Visualization of all (skill, object) pairs (detailed information in Appendix A.2). object’s appearance and instructed task, successfully decoupling the spatial ( where ) information from the remaining components of skill execution. 
+
+Skill Conditioning ( i.e., the what ): To condition the policy on the behavior intent of the task (e.g., “pick”, “push”), we utilize the skill embedding eskill . As the semantic goal remains con-stant throughout the execution of a given primitive, eskill is projected via an MLP into the trans-former’s hidden dimension to yield a single skill vector per instruction: σskill = MLP (eskill ), that is broadcast within the skill conditioning block, across the temporal dimension T of a rollout. By sequentially routing the hidden states through this second conditioning block, the policy effectively maps the localized object representation, established by the preceding spatial module, to the specific motor trajectory dictated by the language instruction. 
+
+Action Head : Finally, the fully conditioned sequence of hidden robot states is processed by an MLP that predicts a chunk of future actions ˆA = {at+1 , a t+2 , . . . , a t+L}, where L is the chunk length. Without loss of generality, we hereafter parametrize action predictions as end-effector pose deltas. 
+
+3.3 Model Training 
+
+The proposed policy πθ is optimized through imitation learning over a scenario-specific demonstra-tion dataset D, using a standard behavior cloning loss, as: E(pit,I it ,l i,a it)∼D [L1(ait, π θ (pit, I it , l i))] .In order to facilitate the emergence of zero-shot skill transfer capabilities, even under a severely limited number of demonstrations, we complement the restructured information flow of our archi-tecture with two key elements in the adopted training recipe. First, the foundation models employed for vision and language encoding ( i.e., VFM and VLM backbones) remain frozen throughout policy training. This ensures that their rich, pre-trained representations remain undiluted by the tradition-ally low-data regime of IL, maintaining their generalization capabilities that enable the recognition and localization of novel objects beyond the provided demonstration data. Second, we observe that raw visual signals can hinder skill transfer by introducing strong appearance biases tied to specific skill-object pairs observed during training. To mitigate this, we apply a structured dropout approach during training, inspired by [30], masking VFM patches entirely with a probability q = 0 .5. This encourages the model to densely rely on the rich spatial and skill information from the newly intro-duced where and what conditioning modules in order to predict the desired behavior, enforcing the decoupling between the visual appearance of the object/scene and the skill that is executed. 
+
+## 4 Experiments 
+
+We compare w 2VLA against OTTER and π0.5 using a real-world SO-101 robot and the LeRobot framework [31] (see Appendix A.5 for training details). Sec. 4.1 outlines the skill transfer scenarios 6Policy Scenario 1 Scenario 2 Scenario 3 Scenario 4 Avg. SR (%)                                                                  
+
+> (Back , Rotate )(Plate , Bowl )(Poke , Nudge )(Drop , Forward )Seen Transfer Seen Transfer Seen Transfer Seen Transfer Seen Transfer
+> OTTER 97.2 33.3 ✘91.7 25.0 ✘94.4 30.6 ✘91.7 33.3 ✘93.8 30.6 ✘
+> π0.594.4 41.7 ✘97.2 27.8 ✘97.2 44.5 ✘94.4 38.9 ✘95.8 38.2 ✘
+> w2VLA 94.4 91.7 ✔94.4 94.4 ✔97.2 91.7 ✔94.4 88.9 ✔95.1 91.7 ✔
+
+Table 1: Experiment success scores (%). Each scenario tests two distinct skills, originally trained on specific objects. Seen denotes evaluating the skill on its originally paired object, while Transfer 
+
+evaluating the skill on the alternative object within the same scenario. We denote with ✔ the cases where the model qualitatively exhibited the desired skill transfer properties in the majority of rollouts and with ✘ where it did not. All scenarios are visualized in Fig. 4, and detailed in Appendix A.2. setting. Sec. 4.2 evaluates all three VLAs on both in-domain ( i.e., seen (skill, object) pairs) and skill transfer ( i.e., applying skills to other objects in the scene). Finally, Sec. 4.3 assesses w 2VLA’s robustness in both settings, given distractor or completely unseen target objects. Further quantitative and qualitative analysis, and ablations, are presented in the Appendices A.2, A.3 and A.4. 
+
+4.1 Skill Transfer Evaluation 
+
+We use four unique scenarios for collecting data and evaluating the skill transfer capabilities of the studied VLAs. Visualizations of the scenarios are provided in Fig. 4 and further details can be found in Appendix A.2. Each scenario consists of two (skill, object) pairs, in which 16 expert demonstrations are collected for each, with the two objects in varied poses. To gain deeper insight into the perception and skill transfer capabilities of each VLA, we designed a granular scoring system. In each deployment, a trained policy can score up to three points: one point for interacting with the correct object (evaluating the successful utilization of the declarative knowl-edge encoded in the VLM), one point for executing the correct behavior (evaluating the policy’s procedural knowledge), and a final point for successfully completing the task. 
+
+4.2 Skill Transfer via Compositional Generalization 
+
+We evaluate the three VLAs on the seen and unseen (skill, object) pairs of each scene, six times for each combination, varying the initial object poses for every rollout. We report results in Table 1, which summarizes the success score of each model in each of the four scenarios. First, we observe that all models manage to showcase comparable, strong performance for all the seen (skill, object) 
+
+pairs, which provides evidence that w 2VLA can keep up with state-of-the-art VLAs, and that its compositional design does not sacrifice generic VLA capabilities. Second, both OTTER and π0.5
+
+fail to match w 2VLA’s skill transfer ability, which demonstrated performance comparable to the in-domain one ( i.e., 91.7%), scoring on average 30.6% and 38.2%, respectively. The analysis presented in Fig. 5a, sheds more light to this performance gap. Even though all three VLAs successfully interact with the correct object, only w 2VLA generates the instructed skill. On the other hand, in the vast majority of skill transfer cases, both OTTER and π0.5 would recede to imitating the skill that was paired with the target object of interest during training ( e.g., for the unseen instruction (rotate by 90 o, banana) OTTER and π0.5 would execute the seen (place back by 5cm, banana) ). These results substantiate our claim that modern VLAs are susceptible to learning spurious correlations between the declarative and the procedural , an issue w 2VLA addresses without model and dataset scaling. 
+
+4.3 w2VLA Robustness 
+
+We test the performance limits of w 2VLA in two out-of-distribution cases by re-deploying our trained model in the following settings: (a) repeating the evaluation of Scenario 1, with the ad-dition of 3-5 random distractor objects to the scene and (b) repeating the evaluation of Scenario 2, using completely unseen target objects, instead of the eggplant and corn. Figs. A5 and A6 visualize example scenes from both robustness experiments. 7ID ST Object Skill Task   
+
+> 93.8%
+> 30.6%
+> 89.6%
+> 2.1%
+> 0.0%
+> 95.8%
+> 38.2%
+> 95.8%
+> 10.4%
+> 8.3%
+> 95.1%
+> 91.7%
+> 100.0%
+> 97.9%
+> 77.1%
+> OTTER 0.5 w2VLA
+
+(a) Average VLA performance. ID ST Object Skill Task       
+
+> 94.4%
+> 91.7%
+> 100.0%
+> 91.7%
+> 83.3%
+> 77.8%
+> 77.8%
+> 66.7%
+> 100.0%
+> 66.7%
+> S1 S1 w/ distractors
+> ST Object Skill Task
+> 94.4%
+> 100.0%
+> 100.0%
+> 83.3%
+> 86.1%
+> 91.7%
+> 100.0%
+> 66.7%
+> S2 S2 w/ Unseen Obj.
+
+(b) w 2VLA robustness experiment results. 
+
+Figure 5: Breakdown of average performance scores: (a) from OTTER, π0.5, and w 2VLA in-domain (ID), i.e., on seen (skill, object) pairs and on skill transfer (ST), from the experiments of Table 1; (b) from the robustness evaluation of w 2VLA, presented in Sec. 4.3. The metrics “object”, “skill”, and “task” correspond to the success of the models in selecting the correct object, executing the correct skill, and fully completing the task, respectively. 
+
+Robustness to distractors : We repeat the in-domain and skill transfer experiments from Scenario 1, adding 3-5 visually diverse distractor objects to the scene. w 2VLA retains competitive perfor-mance in both settings, with success rates decreasing by 16.6% and 13.9%, respectively. As shown in Fig. 5b, this drop is primarily driven by a lower interaction success rate with the target object (decreasing from 100% to 66.7%), which subsequently impacts overall task completion. Note that the observed failures stemmed mainly from imprecise physical interactions ( e.g., picking mid-air) rather than wrong object selection ( i.e., picking the banana instead of the carrot). As the VLM local-ization heatmaps remain highly precise despite the distractors (Fig. A5), this behavior aligns with findings by [32, 33, 34, 35, 36, 25] regarding the sensitivity of IL policies to visual perturbations. Crucially, w 2VLA still successfully executes the instructed skill in all cases, achieving compara-ble performance between the in-domain and skill transfer cases, demonstrating that it effectively decouples declarative reasoning from procedural execution. 
+
+Skill transfer to novel objects : we repeat the evaluation of our w 2VLA model trained on Scenario 2, replacing the corn and eggplant with random, visually and semantically diverse completely unseen objects ( e.g., soda can and toothpaste). w 2VLA was able to maintain its high success rate, showing a decrease in success score by 8.3%. As is evident from Fig. 5b, in the vast majority of cases, w 2VLA manages to interact with the correct object, even though it has never seen them before. We attribute this behavior to the ability our model to effectively leverage the encoded declarative knowledge of the backbone VLM. Similarly, in all scenarios w 2VLA executed the instructed skill, demonstrating further that it effectively decouples the procedural from the declarative in its parameters. On the other hand, we observe a decrease in the task completion metric, by roughly 16.7%. In all cases, this was caused by an unbridged gap in the geometric properties between the known and unseen objects, calling for notable adaptation to the trajectory of the conducted skill. For example, a different manipulation approach is required when picking up a mug compared to a bottle. 
+
+## 5 Conclusion 
+
+We critically examined the information flow of popular VLAs and provided evidence that even in simplified scenarios ( i.e., with two (skill, object) pairs with minimal object pose variability) the current paradigm struggles to achieve skill transfer ( i.e., perform a known skill to a different object), a crucial capability for generalist agents. These findings provide strong evidence that modern VLAs likely rely on systematic overfitting. We address this lack of compositional generalization with our proposed w 2VLA architecture, that sequentially conditions the action prediction process using decoupled representations of the where of the target object and the what of the desired behavior. Our model relies on the declarative knowledge of pre-trained VLMs, and the procedural knowledge that is encoded in our policy via IL. Ultimately, we hope these findings encourage the community to look beyond scaling models and datasets, and towards identifying the foundational priors and biases necessary to unlock true generalist capabilities. 
+
+Limitations : We currently evaluate w 2VLA on primitive robot skills ( e.g., “pick”, “rotate”, etc.), which alone are insufficient for executing complex real-world long-horizon tasks. Nevertheless, 8w2VLA is well-suited to operate within a hierarchical VLA framework [37, 38, 39], acting as a low-level policy that is able to robustly execute basic transferable skills directed by a high-level planner that decomposes abstract commands. Additionally, w 2VLA’s successful skill transfer currently re-lies on the similar geometric characteristics of the manipulated objects. Handling objects with com-plex affordances and a larger skill transfer gap ( e.g., grasping a mug by its handle, having learned how to grasp a bottle) could pose a significant challenge. To address this, future extensions could add a “how” module, conditioning the policy on unique, fine-grained geometric features ( e.g., lever-aging generated grasp poses from models like AnyGrasp [40]), or adapting the learned task primitive to the new object’s geometry given limited additional demonstrations in a parameter-efficient way. Despite these constraints, we believe that w 2VLA successfully unlocks an new capacity for compo-sitional generalization beyond what is currently possible with popular VLAs. 
+
+Acknowledgments 
+
+This work was supported by the United Kingdom Research and Innovation (grant EP/S023208/1), EPSRC Centre for Doctoral Training in Robotics and Autonomous Systems (RAS). Part of this work was conducted while Nikolaos Tsagkas was conducting an internship at the Samsung AI Center in Cambridge, UK. 
+
+## References 
+
+[1] L. Beyer, A. Steiner, A. S. Pinto, A. Kolesnikov, X. Wang, D. Salz, M. Neumann, I. Alab-dulmohsin, M. Tschannen, E. Bugliarello, et al. Paligemma: A versatile 3b vlm for transfer. 
+
+arXiv:2407.07726 , 2024. [2] P. Wang, S. Bai, S. Tan, S. Wang, Z. Fan, J. Bai, K. Chen, X. Liu, J. Wang, W. Ge, et al. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. 
+
+arXiv:2409.12191 , 2024. [3] A. O’Neill, A. Rehman, A. Maddukuri, A. Gupta, A. Padalkar, A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain, et al. Open x-embodiment: Robotic learning datasets and rt-x models. In International Conference on Robotics and Automation (ICRA) , 2024. [4] A. Khazatsky, K. Pertsch, S. Nair, A. Balakrishna, S. Dasari, S. Karamcheti, S. Nasiriany, M. K. Srirama, L. Y. Chen, K. Ellis, et al. Droid: A large-scale in-the-wild robot manipulation dataset. In RSS 2024 Workshop: Data Generation for Robotics , 2024. [5] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. P. Foster, P. R. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn. Openvla: An open-source vision-language-action model. In Conference on Robot Learning (CoRL) , 2025. [6] J. Bjorck, F. Casta˜ neda, N. Cherniadev, X. Da, R. Ding, L. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, et al. Gr00t n1: An open foundation model for generalist humanoid robots. 
+
+arXiv:2503.14734 , 2025. [7] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Haus-man, B. Ichter, S. Jakubczak, T. Jones, L. Ke, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, L. X. Shi, J. Tanner, Q. Vuong, A. Walling, H. Wang, and U. Zhilinsky. π0: A vision-language-action flow model for general robot control. In Robotics: Science and Sys-tems (RSS) , 2024. [8] K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. R. Equi, C. Finn, N. Fusai, M. Y. Galliker, et al. π0.5: a vision-language-action model with open-world general-ization. In Conference on Robot Learning (CoRL) , 2025. [9] P. Intelligence. π∗
+
+> 0.6
+
+: a vla that learns from experience. arXiv:2511.14759 , 2025. 9[10] M. Shukor, D. Aubakirova, F. Capuano, P. Kooijmans, S. Palma, A. Zouitine, M. Aractingi, C. Pascal, M. Russi, A. Marafioti, et al. Smolvla: A vision-language-action model for afford-able and efficient robotics. arXiv:2506.01844 , 2025. [11] A. Goyal, H. Hadfield, X. Yang, V. Blukis, and F. Ramos. Vla-0: Building state-of-the-art vlas with zero modification. arXiv:2510.13054 , 2025. [12] B. Liu, Y. Zhu, C. Gao, Y. Feng, Q. Liu, Y. Zhu, and P. Stone. Libero: Benchmarking knowl-edge transfer for lifelong robot learning. Advances in Neural Information Processing Systems (NeurIPS) , 2023. [13] T. Chen, Z. Chen, B. Chen, Z. Cai, Y. Liu, Z. Li, Q. Liang, X. Lin, Y. Ge, Z. Gu, et al. Robotwin 2.0: A scalable data generator and benchmark with strong domain randomization for robust bimanual robotic manipulation. arXiv:2506.18088 , 2025. [14] S. Fei, S. Wang, J. Shi, Z. Dai, J. Cai, P. Qian, L. Ji, X. He, S. Zhang, Z. Fei, J. Fu, J. Gong, and X. Qiu. Libero-plus: In-depth robustness analysis of vision-language-action models. 
+
+arXiv:2510.13626 , 2025. [15] X. Zhou, Y. Xu, G. Tie, Y. Chen, G. Zhang, D. Chu, P. Zhou, and L. Sun. Libero-pro: Towards robust and fair evaluation of vision-language-action models beyond memorization. 
+
+arXiv:2510.03827 , 2025. [16] H. Huang, F. Liu, L. Fu, T. Wu, M. Mukadam, J. Malik, K. Goldberg, and P. Abbeel. Otter: A vision-language-action model with text-aware feature extraciton. In International Conference on Machine Learning (ICML) , 2025. [17] X. Yang, R. Dagli, A. Zook, H. Hadfield, A. Goyal, S. Birchfield, F. Ramos, and J. Trem-blay. Robolab: A high-fidelity simulation benchmark for analysis of task generalist policies. 
+
+arXiv:2604.09860 , 2026. [18] S. Grover, A. Gopalkrishnan, B. Ai, H. I. Christensen, H. Su, and X. Li. Enhancing generalization in vision-language-action models by preserving pretrained representations. 
+
+arXiv:2509.11417 , 2025. [19] Y.-S. Chuang, Y. Li, D. Wang, C.-F. Yeh, K. Lyu, R. Raghavendra, J. Glass, L. Huang, J. We-ston, L. Zettlemoyer, et al. Meta clip 2: A worldwide scaling recipe. Advances in Neural Information Processing Systems (NeurIPS) , 2026. [20] M. A. Goodale and A. Milner. Separate visual pathways for perception and action. Trends in Neurosciences , 1992. [21] M. A. Goodale, A. D. Milner, L. S. Jakobson, and D. P. Carey. A neurological dissociation between perceiving objects and grasping them. Nature , 1991. [22] D. Milner and M. Goodale. The visual brain in action , volume 27. Oxford University Press, 2006. [23] M. Shridhar, L. Manuelli, and D. Fox. Cliport: What and where pathways for robotic manipu-lation. In Conference on Robot Learning (CoRL) , 2021. [24] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polo-sukhin. Attention is all you need. In Advances in Neural Information Processing Systems (NeurIPS) , 2017. [25] N. Tsagkas, A. Sochopoulos, D. Danier, S. Vijayakumar, A. Kouris, O. Mac Aodha, and C. X. Lu. Attentive feature aggregation or: How policies learn to stop worrying about robustness and attend to task-relevant visual cues. arXiv:2511.10762 , 2025. 10 [26] L. Fu, H. Huang, G. Datta, L. Y. Chen, W. C.-H. Panitch, F. Liu, H. Li, and K. Goldberg. In-context imitation learning via next-token prediction. In International Conference on Robotics and Automation (ICRA) , 2025. [27] E. Perez, F. Strub, H. de Vries, V. Dumoulin, and A. Courville. Film: visual reasoning with a general conditioning layer. In Association for the Advancement of Artificial Intelligence (AAAI) , 2018. [28] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn, K. Gopalakrishnan, K. Haus-man, A. Herzog, J. Hsu, et al. Rt-1: Robotics transformer for real-world control at scale. In 
+
+Robotics: Science and Systems (RSS) , 2023. [29] R. Xiong, Y. Yang, D. He, K. Zheng, S. Zheng, C. Xing, H. Zhang, Y. Lan, L. Wang, and T. Liu. On layer normalization in the transformer architecture. In International Conference on Machine Learning (ICML) , 2020. [30] K. He, X. Chen, S. Xie, Y. Li, P. Doll´ ar, and R. Girshick. Masked autoencoders are scalable vision learners. In Computer Vision and Pattern Recognition (CVPR) , 2022. [31] R. Cadene, S. Alibert, A. Soare, Q. Gallouedec, A. Zouitine, S. Palma, P. Kooijmans, M. Ar-actingi, M. Shukor, D. Aubakirova, M. Russi, F. Capuano, C. Pascal, J. Choghari, J. Moss, and T. Wolf. Lerobot: State-of-the-art machine learning for real-world robotics in pytorch. 
+
+https://github.com/huggingface/lerobot , 2024. [32] A. Xie, L. Lee, T. Xiao, and C. Finn. Decomposing the generalization gap in imitation learning for visual robotic manipulation. In International Conference on Robotics and Automation (ICRA) , 2024. [33] N. Hansen, Z. Yuan, Y. Ze, T. Mu, A. Rajeswaran, H. Su, H. Xu, and X. Wang. On pre-training for visuo-motor control: Revisiting a learning-from-scratch baseline. In Internation Conference on Machine Learning (ICML) , 2023. [34] K. Burns, Z. Witzel, J. I. Hamid, T. Yu, C. Finn, and K. Hausman. What makes pre-trained visual representations successful for robust manipulation? In Conference on Robot Learning (CoRL) , 2024. [35] N. Houlsby, A. Giurgiu, S. Jastrzebski, B. Morrone, Q. De Laroussilhe, A. Gesmundo, M. At-tariyan, and S. Gelly. Parameter-efficient transfer learning for NLP. In Internation Conference on Machine Learning (ICML) , 2019. [36] X. Lin, J. So, S. Mahalingam, F. Liu, and P. Abbeel. Spawnnet: Learning generalizable visuo-motor skills from pre-trained network. In International Conference on Robotics and Automa-tion (ICRA) , 2024. [37] M. Torne, K. Pertsch, H. Walke, K. Vedder, S. Nair, B. Ichter, A. Z. Ren, H. Wang, J. Tang, K. Stachowicz, et al. Mem: Multi-scale embodied memory for vision language action models. 
+
+arXiv:2603.03596 , 2026. [38] L. X. Shi, B. Ichter, M. Equi, L. Ke, K. Pertsch, Q. Vuong, J. Tanner, A. Walling, H. Wang, N. Fusai, et al. Hi robot: Open-ended instruction following with hierarchical vision-language-action models. In International Conference on Machine Learning (ICML) , 2025. [39] W. Chen, J. S. Bhatia, C. Glossop, N. Mathihalli, R. Doshi, A. Tang, D. Driess, K. Pertsch, and S. Levine. Steerable vision-language-action policies for embodied reasoning and hierarchical control. arXiv:2602.13193 , 2026. [40] H.-S. Fang, C. Wang, H. Fang, M. Gou, J. Liu, H. Yan, W. Liu, Y. Xie, and C. Lu. Any-grasp: Robust and efficient grasp perception in spatial and temporal domains. Transactions on Robotics (T-RO) , 2023. 11 [41] H. Touvron, L. Martin, K. Stone, P. Albert, A. Almahairi, Y. Babaei, N. Bashlykov, S. Ba-tra, P. Bhargava, S. Bhosale, et al. Llama 2: Open foundation and fine-tuned chat models. 
+
+arXiv:2307.09288 , 2023. [42] X. Zhai, B. Mustafa, A. Kolesnikov, and L. Beyer. Sigmoid loss for language image pre-training. In International Conference on Computer Vision (ICCV) , 2023. [43] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark, et al. Learning transferable visual models from natural language supervi-sion. In International Conference on Machine Learning (ICML) , 2021. [44] M. Lan, C. Chen, Y. Ke, X. Wang, L. Feng, and W. Zhang. Clearclip: Decomposing clip representations for dense vision-language inference. In European Conference on Computer Vision (ECCV) , 2024. [45] P. Sundaresan, S. Belkhale, D. Sadigh, and J. Bohg. KITE: Keypoint-conditioned policies for semantic manipulation. In Conference on Robot Learning (CoRL) , 2023. [46] J. Zhang, M. Memmel, K. Kim, D. Fox, J. Thomason, F. Ramos, E. Bıyık, A. Gupta, and A. Li. Peek: Guiding and minimal image representations for zero-shot generalization of robot manipulation policies. In International Conference on Robotics and Automation (ICRA) , 2026. [47] W. Huang, C. Wang, R. Zhang, Y. Li, J. Wu, and L. Fei-Fei. Voxposer: Composable 3d value maps for robotic manipulation with language models. In Conference on Robot Learning (CoRL) , 2023. [48] W. Shen, G. Yang, A. Yu, J. Wong, L. P. Kaelbling, and P. Isola. Distilled feature fields enable few-shot language-guided manipulation. In Conference on Robot Learning (CoRL) , 2023. [49] N. Tsagkas, J. Rome, S. Ramamoorthy, O. Mac Aodha, and C. X. Lu. Click to grasp: Zero-shot precise manipulation via visual diffusion descriptors. In International Conference on Intelligent Robots and Systems (IROS) , 2024. [50] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid, et al. Rt-2: Vision-language-action models transfer web knowledge to robotic control. In 
+
+Conference on Robot Learning (CoRL) , 2023. [51] Octo Model Team, D. Ghosh, H. Walke, K. Pertsch, K. Black, O. Mees, S. Dasari, J. Hejna, C. Xu, J. Luo, T. Kreiman, Y. Tan, L. Y. Chen, P. Sanketi, Q. Vuong, T. Xiao, D. Sadigh, C. Finn, and S. Levine. Octo: An open-source generalist robot policy. In Robotics: Science and Systems (RSS) , 2024. [52] D. Driess, J. Springenberg, B. Ichter, L. Yu, A. Li-Bell, K. Pertsch, A. Ren, H. Walke, Q. Vuong, L. X. Shi, et al. Knowledge insulating vision-language-action models: Train fast, run fast, generalize better. Advances in Neural Information Processing Systems (NeurIPS) ,2026. [53] X. Guo, B. Xie, W. Chai, X. Deng, T. Wang, Z. Wu, and X. Chen. Priorvla: Prior-preserving adaptation for vision-language-action models. arXiv:2605.10925 , 2026. [54] S. Chen, P. Pacaud, and C. Schmid. Pointact: Vision-language-action models with multi-scale point-action interaction. arXiv:2605.21414 , 2026. [55] A. Sochopoulos, N. Malkin, N. Tsagkas, J. Moura, M. Gienger, and S. Vijayakumar. Fast flow-based visuomotor policies via conditional optimal transport couplings. In Conference on Robot Learning (CoRL) , 2025. [56] I. Loshchilov and F. Hutter. Decoupled weight decay regularization. In International Confer-ence on Learning Representations (ICLR) , 2019. 12 Appendix 
+
+## A.1 Related Work 
+
+Vision-Language-Action Models . Inspired by the broad success that LLMs and VLMs have achieved by scaling both model size and training data, the robotics community has increasingly adopted this paradigm in pursuit of a robot foundation model. Currently, the dominant approach for training VLAs involves fine-tuning powerful, pre-trained LLMs and VLMs. Notable examples in this category include: (1) OpenVLA [5], which maps visual and language embeddings to tokens that are processed by a Llama 2 [41] backbone, fine-tuned to output action deltas. (2) π0 [7], which utilizes a pre-trained VLM backbone (PaLiGemma) incorpo-rating SigLIP [42] and Gemma encoders to generate action deltas via a flow-matching action head. (3) π0.5 [8], which extends π0 [7] by co-training on heterogeneous datasets. (4) VLA-0 [11], which represents actions as text to ensure the vocabulary of the backbone VLM remains undiluted. Recently, OTTER [16] challenged this paradigm by employing a two-tower VLM backbone ( i.e., 
+
+CLIP [43] and ClearCLIP [44]) and keeping it entirely frozen during policy training, preserving the encoded declarative knowledge. OTTER extracts text-aware visual features and concatenates them with proprioceptive and language features before passing them to a causal transformer. We argue, however, that this naive feature concatenation can result in the model learning spurious correlations between visual observations and the skill being executed. We benchmark our approach against OTTER and π0.5, selecting them as representative state-of-the-art VLA baselines that encapsulate two distinct paradigms. Specifically, OTTER represents archi-tectures that freeze the VLM backbone to leverage pre-trained declarative semantics, whereas π0.5
+
+exemplifies the end-to-end training paradigm driven by large-scale parameter and dataset scaling. Our approach draws inspiration from OTTER, as we also utilize a frozen, two-tower VLM as the backbone for w 2VLA. However, we propose a novel compositional architecture for conditioning the policy on the object of interest and the desired behavior. By doing so, we prevent these spurious correlations and successfully unlock skill transfer capabilities in VLAs. 
+
+Robot Learning via Minimal Visual Cues . In contrast to recent trends in robot learning, a promis-ing paradigm avoids feeding multiple, rich tokens extracted from large pre-trained foundation mod-els directly into policies. Instead, the intuition is that visual inputs must first be abstracted into a form that is more usable and interpretable for robot policies and planning algorithms. In the context of imitation learning, CLIPort [23] formulated manipulation as discrete, two-step spa-tial primitives conditioned by predicted affordance maps. Similarly, KITE [45] relied on extracted keypoints to execute learned, keypoint-conditioned skills. More recently, PEEK [46] was designed to extract essential keypoints and 2D gripper paths, explicitly overlaying these cues onto the robot’s visual input. Within planning-based approaches, a series of works have fused VFM and VLM features into spa-tial representations to reason about areas of interest in a scene and plan manipulation trajectories. VoxPoser [47] utilized VLMs to compose 3D value maps, grounding language-aligned knowledge into the agent’s observation space. Furthermore, F3RM [48] and C2G [49] fused VFM features into implicit spatial representations to localize interaction areas and optimize end-effector poses for object manipulation. However, by explicitly decoupling perception and planning into multi-stage pipelines or discrete action spaces, these methods sacrifice the high-dimensional, continuous control capabilities inherent to modern VLAs. Drawing inspiration from these methods, our work conditions the policy on low-level visual information ( i.e., localization heatmaps for the object of interest). This abstracts the raw visual signal, guiding the model’s attention strictly to the relevant areas. 
+
+Skill Transfer . In the context of VLAs, skill transfer is often indirectly evaluated through a model’s ability to generalize to unseen instructions. For instance, RT-1 [28] evaluated zero-shot generaliza-13 tion across novel tasks, environments, and objects, demonstrating notable robustness. However, this generalization was explicitly achieved by scaling the training data to a massive volume of roughly 130,000 real-world robot trajectories covering over 700 distinct tasks, collected over 17 months. Similarly, RT-2 [50] almost doubled generalization performance to unseen objects. This was achieved by co-fine-tuning large vision-language models on Internet-scale web data alongside robot data and expressing robot actions as text tokens, thereby inheriting broad semantic reasoning but relying heavily on massive model and data scaling. OCTO [51] tackled cross-embodiment gen-eralization by pretraining a diffusion policy on an aggregated 800,000 robot trajectories from the Open X-Embodiment dataset. More recently, OpenVLA [5] achieved state-of-the-art generalist ma-nipulation by training a 7B parameter model on a diverse collection of 970,000 real-world robot demonstrations. Similarly, π0 utilized a flow-matching architecture on top of a pre-trained VLM to generate continuous actions. Its extension, π0.5, introduced co-training on heterogeneous tasks to unlock better generalization, scaling the dataset even more. As is evident, the current trend in the robot learning community relies on scaling parameters and massive datasets to yield emergent behaviors that afford skill transfer capabilities. However, this is computationally expensive and, as our experiments prove, does not natively allow for the zero-shot transfer of procedural mechanics from a single (skill, object) pair in low-data regimes. Recently, OTTER demonstrated that VLAs can diverge from the massive-scale finetuning paradigm by freez-ing the two-tower VLM backbone to effectively utilize pre-trained declarative knowledge. As an emergent property, they reported successful execution of unseen instructions ( e.g., executing a seen skill on an unseen object). Nevertheless, we argue that this is largely the result of visual interpola-tion. For example, their “poke” and “pour” primitives were trained across multiple distinct object and color combinations, enabling the model to interpolate a generalized physical behavior onto a new semantic target within a dense training manifold. Our experiments showcase that such an archi-tecture, which concatenates features into a unified sequence, is still susceptible to learning spurious correlations between objects and demonstrated skills when restricted to a low-data envelope. In contrast, w 2VLA advocates for the incorporation of internal compositional structure within VLAs, sequentially decoupling the spatial where from the procedural what , rather than relying on massive, opaque, end-to-end models and dataset scaling alone. 14 A.2 Skill Transfer Scenarios 
+
+In this section, we provide additional details about the four skill transfer scenarios we designed capabilities of VLAs. Each scenario consists of two unique (skill, object) pairs. 
+
+Scenario 1 — (place back 5cm, banana ) & (rotate by 90 o, carrot ): The banana and the carrot lie in front of the robot base. We collect 16 demonstrations in which the robot picks, lifts, and rotates the carrot by 90 ◦ counterclockwise, before placing it back down in the same location. An additional 16 demonstrations are collected where we pick up and place back the banana by roughly 5cm. We consider task completion successful if the robot managed to pick up the object and, depending on the given instruction, rotated the it by roughly 90 o or placed it back by roughly 5cm. In Fig. A1, we present the performance for the three VLAs for the seen (skill, object) pairs and for skill transfer. In-Domain Skill Transfer Object Skill Task 
+
+0
+
+50 
+
+100 
+
+> 97.2%
+> 33.3%
+> 100.0%
+> 0.0%
+> 0.0%
+> 94.4%
+> 41.7%
+> 100.0%
+> 16.7%
+> 8.3%
+> 94.4%
+> 91.7%
+> 100.0%
+> 91.7%
+> 83.3%
+
+OTTER 0.5 w2VLA 
+
+Figure A1: Scenario 1 average results : Average scores for the OTTER, π0, and w 2VLA for the seen (skill, object) pairs and the skill transfer case. For the latter, we also provide average scores for: choosing the correct object to interact with (“Object”), imitating the correct behavior (“Skill”), and finally, managing to complete the task (“Task”) 
+
+Scenario 2 — (place on plate, corn ) & (place on bowl, eggplant ): The corn and the eggplant are placed in front of the robot base. Also, a plate and a bowl are positioned on the left and right of the robot base, respectively, at a distance of approximately 10cm. We collect 16 demonstrations in which the eggplant is picked and placed into the black bowl, and 16 more for picking and placing the corn on to the light-blue plate. We consider task completion successful if the robot managed to pick up the object and, depending on the given instruction, placed it in the bowl or plate. In Fig. A2, we present the performance for the three VLAs for the seen (skill, object) pairs and for skill transfer. In-Domain Skill Transfer Object Skill Task 
+
+0
+
+50 
+
+100 
+
+> 91.7%
+> 25.0%
+> 75.0%
+> 0.0%
+> 0.0%
+> 97.2%
+> 27.8%
+> 83.3%
+> 0.0%
+> 0.0%
+> 94.4%
+> 94.4%
+> 100.0%
+> 100.0%
+> 83.3%
+
+OTTER 0.5 w2VLA 
+
+Figure A2: Scenario 2 average results : Average scores for the OTTER, π0, and w 2VLA for the seen (skill, object) pairs and the skill transfer case. For the latter, we also provide average scores for: choosing the correct object to interact with (“Object”), imitating the correct behavior (“Skill”), and finally, managing to complete the task (“Task”) 15 Scenario 3 — (poke, sponge ) & (nudge, toy car ): The sponge and the toy car are placed in front of the robot base. We collect 16 demonstrations in which the robot approaches the sponge from above with the gripper fingers closed, descents to poke it, and then ascents again. Another 16 are collected in which the gripper, with the fingers closed again, approaches the toy car from the back and swings the entire end-effector to nudge the object. We consider task completion successful if the robot managed to, depending on the given instruction, swing the end-effector from the back of the object, making it flip forward, or coming down vertically on the top of the object. In Fig. A3, we present the performance for the three VLAs for the seen (skill, object) pairs and for skill transfer. In-Domain Skill Transfer Object Skill Task 
+
+0
+
+50 
+
+100 
+
+> 94.4%
+> 30.6%
+> 83.3%
+> 8.3%
+> 0.0%
+> 97.2%
+> 44.4%
+> 100.0%
+> 16.7%
+> 16.7%
+> 97.2%
+> 91.7%
+> 100.0%
+> 100.0%
+> 75.0%
+
+OTTER 0.5 w2VLA 
+
+Figure A3: Scenario 3 average results : Average scores for the OTTER, π0, and w 2VLA for the seen (skill, object) pairs and the skill transfer case. For the latter, we also provide average scores for: choosing the correct object to interact with (“Object”), imitating the correct behavior (“Skill”), and finally, managing to complete the task (“Task”) 
+
+Scenario 4 — (drop on plate, toothpaste ) & (place forward, cucumber ): The two objects are positioned in front of the robot base, and a paper plate is positioned approximately 10cm on the right of the robot. We collect 16 demonstrations in which the robot picks up the toothpaste box, brings it on top of the plate and drops it. Another 16 are collected in which the robot picks up the cucumber and places it 5cm forward. We consider task completion successful if the robot managed to pick up the object and, depending on the given instruction, drops it on the plate or places it forward by roughly 5cm. In Fig. A4, we present the performance for the three VLAs for the seen (skill, object) 
+
+pairs and for skill transfer. In-Domain Skill Transfer Object Skill Task 
+
+0
+
+50 
+
+100 
+
+> 91.7%
+> 33.3%
+> 100.0%
+> 0.0%
+> 0.0%
+> 94.4%
+> 38.9%
+> 100.0%
+> 8.3%
+> 8.3%
+> 94.4%
+> 88.9%
+> 100.0%
+> 100.0%
+> 66.7%
+
+OTTER 0.5 w2VLA 
+
+Figure A4: Scenario 4 average results : Average scores for the OTTER, π0, and w 2VLA for the seen (skill, object) pairs and the skill transfer case. For the latter, we also provide average scores for: choosing the correct object to interact with (“Object”), imitating the correct behavior (“Skill”), and finally, managing to complete the task (“Task”) 16 A.3 w2VLA Robustness Evaluation 
+
+We provide more information about the w 2VLA robustness experiments, described in Sec. 4.3 in the main paper. In Sec. A.3.1, we provide more details about the modification of Scenario 1, where we added additional random distractors to the scene during deployment, which were not present when we collected the training demonstrations. In Sec. A.3.1, we further discuss the modification of Scenario 2, where during deployment we replaced the banana and carrot target objects with unseen, visually different ones. 
+
+A.3.1 Scenario 1 with Distractor Objects 
+
+Fig. A5 visualizes four representative scenes of Scenario 1 with random distractor objects, as dis-cussed in Sec. 4.3. Along with pictures from these cases, we also provide localization heatmaps, which are used for conditioning the where module. As is evident, the features from the deployed VLM ( i.e., MetaCLIP2), are powerful enough to ignore the distractors and provide feature maps that can condition w 2VLA on a specific location for interaction. Banana 🍌 Carrot 🥕 
+
+Figure A5: Example distractor scenes : We provide representative scenes from Scenario 1 with random distractor objects. Along with each view, a localization heatmap is provide that showcases the robustness of the backbone VLM in spatially conditioning w 2VLA on the area of interaction. 
+
+A.3.2 Scenario 2 with Unseen Objects 
+
+Fig. A6 visualizes four representative scenes of Scenario 2 with the two original target objects ( i.e., 
+
+banana and carrot) with visually diverse ones ( e.g., a coca cola can), as discussed in Sec. 4.3. Sim-ilarly to Sec. A.3.1, we provide localization heatmaps, which are used for conditioning the where 
+
+module, and showcase that the VLM has no problem localizing the new objects with precision. Thus, task completion failure came from the robot manipulating the target object in an inaccurate way, due to geometric discrepancies. In Table A.1 we summarize the different combinations of unseen (skill, object) pairs, providing the complete language instructions.                         
+
+> Instruction
+> Place the banana on the plate Place the carrot in the bowl Place the lemon on the plate Place the tomato in the bowl Place the strawberry in the bowl Place the potato on the plate Place the sponge on the plate Place the toy car on the plate Place the cucumber the plate Place the toothpaste box on the plate Place the Coca Cola can in the bowl Place the Fanta can in the bowl
+> Skill Plate Bowl Plate Bowl Bowl Plate Plate Bowl Plate Plate Bowl Bowl
+> Object Banana Carrot Lemon Tomato Strawberry Potato Sponge Toy Car Cucumber Toothpaste Coca Cola Fanta
+
+Table A.1: List of all (skill, object) pairs, with unseen objects from the experiments in Sec. A.3.2, tested during the robustness evaluation of w 2VLA. Each column corresponds to a unique rollout. 17 Fanta Orange Juice 🥤 Coca Cola Can 🥫 
+
+Strawberry 🍓 Tomato 🍅 Figure A6: Example scenes with unseen objects : We provide representative scenes from Scenario 2 with unseen target objects. Along with each view, a localization heatmap is provide that showcases the robustness of the backbone VLM in spatially conditioning w 2VLA on the area of interaction. 
+
+## A.4 w2VLA Ablation 
+
+We conduct ablations w 2VLA, using the dataset collected from Scenario 2, to validate the effective-ness of our design choices for the full w 2VLA ( i.e., using Visual Modulation + Patch Masking for visual conditioning and where → what for the module sequence). First, we investigate the importance of strong visual signals in w 2VLA ( e.g., patch tokens from a VFM) compared to low-level, abstract visual cues ( i.e., heatmaps in the where module). We compare three training configurations: (a) without the Visual Modulation (VM) component, relying solely on VLM heatmaps to determine interaction locations, (b) with Visual Modulation, summarizing VFM patch tokens using AFA modules, and (c) combining Visual Modulation with the proposed random Patch Masking during training. Results are summarized in Table A.2. We find that omitting visual modulation qualitatively en-ables skill transfer, but results in imprecise manipulation and significantly lower in-domain and skill transfer success rates. Nonetheless, the moderate performance of the ablated w 2VLA variant with-out visual modulation indicates the effectiveness of the compositional design of our w 2VLA, where the spatial and skill conditioning modules undertake a significant proportion of the action predic-tion process. Conversely, including the VFM signal improves in-domain performance but does not allow our model to perform skill transfer reliably and consistently. We attribute this to spurious correlations learned from the dataset: without direct supervision, the model relies on visual modu-lation to infer which skill to perform. Random patch masking mitigates this issue by discouraging over-reliance on specific visual cues. VM Masking Seen (%) ST (%) 66.7 52.8 
+
+✓ 100 58.3 
+
+✓ ✓ 100 94.4 Table A.2: Visual modulation ablation : We evaluate the importance of Visual Modulation (VM) and the effectiveness of masking on seen (skill, object) pairs and unseen ones, via skill transfer (ST). Second, we investigate whether the ordering of the where and what modules influences the perfor-mance of w 2VLA. Our findings indicate that successful skill transfer heavily relies on applying the 
+
+where visual conditioning earlier in the sequence. We hypothesize that this ordering effect is akin to the masking mechanism, explored in the previous ablation. As dense visual signals are inherently 18 noisy, they can easily trigger the wrong behavior to be generated. By positioning the where module first, the architecture grounds the spatial area of interaction before the what module specifies the tar-get skill to be executed. Interestingly, this computational mechanism mirrors human sensorimotor coordination, where an individual must first visually locate an object before planning and executing a targeted physical interaction. These results are summarized in Table A.3. Module Sequence Seen (%) ST (%) VM+Mask → where → what 100 94.4 VM+Mask → what → where 100 55.6 Table A.3: Module order ablation : Ablating the order of w 2VLA where and what , modules for seen (skill, object) pairs and successful skill transfer (ST). 
+
+## A.5 Implementation Details 
+
+A.5.1 w2VLA and Baselines 
+
+We evaluate our approach against two state-of-the-art baselines representing distinct VLA paradigms: OTTER (frozen backbone with explicit feature extraction) and π0.5 (massive-scale pre-training). In Fig. 2, we illustrate how most VLAs utilize the same information differently. 
+
+OTTER : Selected for its conceptual similarities to our method, OTTER also preserves pre-trained semantic priors by freezing its two-tower VLM backbone. It achieves visual grounding by comput-ing cosine similarities between intermediate visual patch features and language tokens, extracting only the text-aligned visual information. These text-aware features are compressed via AFA [25], concatenated with the encoded proprioceptive state in a unified sequence, and fed into a causal transformer to predict actions. For a rigorously fair comparison, we upgrade OTTER’s default CLIP backbone to MetaCLIPv2-ViT-L/16, matching the visual encoder used in our model. Nevertheless, we follow OTTER’s method for extracting visual text-aligned features from the visual encoder of a two-tower VLM (inspired by ClearCLIP [44]), using the last self-attention block’s attention fea-ture map. Note that this is also how we extract VLM features for w 2VLA for creating localization heatmaps to condition the where module. Visualizations like the ones in Fig. A5 and Fig. A6 are evidence that truly these feature maps are well aligned with text, allowing for precise localization of objects, even in cluttered scenes. Based on our configuration, OTTER consists of 67.11M trainable parameters in total. 
+
+π0.5: Representing the paradigm of massive, heterogeneously pre-trained VLAs, π0.5 utilizes a 3B-parameter PaliGemma VLM [1] with joint attention layers between visual, language, and pro-prioceptive tokens, coupled with a flow-matching action expert. As fully fine-tuning such a large model end-to-end in our low-data IL regime risks severe overfitting and catastrophic forgetting, we adopt the knowledge insulation strategy [52]. Specifically, we completely freeze the discrete 3B-parameter PaliGemma foundation backbone (generally a common finetuning strategy [10, 53, 54, 6]) to stop gradient flow from the continuous action predictions. We restrict fine-tuning exclusively to the action expert and its associated continuous temporal projection layers ( e.g. , action in proj ,
+
+time mlp in ). Based on our architectural configuration, this limits the trainable footprint to exactly 693.42M parameters. This insulation prevents continuous flow-matching gradients from degrad-ing the VLM’s discretely pre-trained semantic representations, preserving its broad generalization capabilities while allowing a fair assessment of its ability to acquire new procedural skills. 
+
+w2VLA : Our configuration resulted in 55.17M trainable parameters, making it the smaller of the three studied VLAs, even though its size remain comparable to that of OTTER. A breakdown of these parameters is included in Table A.4. As mentioned above, w 2VLA incorporates the same VLM feature extraction process of ClearCLIP [44]. It should be noted here that w 2VLA is readily extensible to incorporate more complex conditioning signals ( e.g., instead of performing spatial conditioning with 2D heatmaps, one can utilize localization in 3D spatial representations [49]) or swap the action head with action flow matching [6, 55, 8, 9]. 19 Figure A7: Real-world robot setup : our setups consists of an SO-101 unit and a ZED2i camera, positioned overlooking the scene.             
+
+> Module Robot State Enc. Visual Modulator Where What Action Head Total No. Params 0.27M 14.18M 15.22M 21.52 3.99M 55.17M
+
+Table A.4: w 2VLA number of trainable parameters per module. 
+
+A.5.2 Training Details 
+
+Below we report the training recipes for the three VLAs tested. Given the similarities between OTTER and w 2VLA, we follow the same recipe for those two models and have a separate discussion for π0.5.
+
+OTTER & w2VLA : We train both OTTER and w 2VLA for a total of 15 , 000 steps with a batch size of 32 on an NVIDIA GeForce RTX 4090. Optimization is conducted via the AdamW [56] optimizer with a peak learning rate of 1 × 10 −4 and a weight decay of 1 × 10 −4. The learning rate follows a cosine decay schedule, warming up for 200 steps before stepping down to a minimum of 
+
+1 × 10 −5. For temporal processing, both architectures ingest an identical observation history length of 8 steps and feature an action execution horizon of 10 steps. Both architectures also route their final representations through a 4-layer MLP action head configured with a hidden dimension of 512 
+
+to decode continuous joint control vectors. 
+
+π0.5: We fine-tune the model for a total of 10 , 000 steps with a batch size of 8 on an NVIDIA GeForce RTX 4090. Optimization is performed using the AdamW optimizer with a peak learning rate of 1.5 × 10 −5, coefficients β = (0 .9, 0.95) , an epsilon value of ϵ = 10 −8, and a weight decay of 
+
+0.01 . Gradients are clipped to a maximum norm threshold of 1.0. The learning rate is regulated via a cosine decay schedule with a warmup phase for the first 1, 000 steps before decaying to a minimum learning rate of 2.5 × 10 −6 at 40 , 000 . For observation and action processing, input camera frames are resized to a target resolution of 224 × 224 pixels, and the language tokenizer max sequence length is constrained to 200 tokens. The policy utilizes an action prediction chunk size (horizon) and execution step parameter of 50 .
+
+A.5.3 Hardware Information 
+
+We run all our experiments on an SO-101 (leader/follower setup). We mount a ZED2i stereo camera to overlook the scene in a top-down view. From this camera we only utilize the input from the left lens and make no use of the depth perception. The input is center-cropped, with the final resolution being 256x256. A visualization of our real-world setup is provided in Fig. A7 20

@@ -1,0 +1,12 @@
+{
+  "date": "2026-06-17 ~ 2026-06-26",
+  "mode": "standard",
+  "generated_at": "2026-06-26T01:59:23.161924+00:00",
+  "recommend_path": "/Users/thuannguyen/Desktop/RobotLearning/daily-paper-reader/archive/20260617-20260626/recommend/arxiv_papers_20260617-20260626.standard.json",
+  "recommend_exists": true,
+  "deep_count": 39,
+  "quick_count": 11,
+  "total_count": 50,
+  "docs_dir": "/Users/thuannguyen/Desktop/RobotLearning/daily-paper-reader/docs",
+  "day_readme": "/Users/thuannguyen/Desktop/RobotLearning/daily-paper-reader/docs/20260617-20260626/README.md"
+}

@@ -1,0 +1,418 @@
+Title: Benchmarking Action Spaces in Reinforcement Learning for Vision-based Robotic Manipulation
+
+URL Source: https://arxiv.org/pdf/2606.18594v1
+
+Published Time: Thu, 18 Jun 2026 00:27:08 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Benchmarking Action Spaces in Reinforcement Learning for Vision-based Robotic Manipulation 
+
+Seyed Alireza Azimi 1,∗ Homayoon Farrahi 1 Abhishek Naik 2 Colin Bellinger 3,4,† A. Rupam Mahmood 1,5,6
+
+> 1
+
+Department of Computing Science, University of Alberta 
+
+> 2
+
+National Research Council Canada 
+
+> 3
+
+School of Electrical Engineering and Computer Science, University of Ottawa 
+
+> 4
+
+Vector Institute 
+
+> 5
+
+Alberta Machine Intelligence Institute (Amii) 
+
+> 6
+
+Canada CIFAR AI Chair 
+
+> †
+
+This work was conducted while at the National Research Council Canada. 
+
+> ∗
+
+Corresponding author: sazimi@ualberta.ca 
+
+Demo video: https://youtu.be/MmXEexVRa18 
+
+Code: https://github.com/RL-Sim-to-Real/training 
+
+Abstract — In real-world reinforcement learning (RL), the choice of action space can play a key role in shaping motion smoothness, safety, and overall task performance. In this study, we evaluate pose increment, pose velocity, joint position increment, and joint velocity across two vision-based manipu-lation tasks: object picking and pushing. We train policies in simulation and deploy them to the real world using sim-to-real transfer. We find that action-space representation indeed significantly affects sim-to-real performance. In particular, we find that the joint velocity action space is best for the vision-based picking and pushing tasks in terms of smoothness and final task performance. We also provide practical guidance for RL practitioners in choosing action spaces for both simulation and real-world experiments. 
+
+I. I NTRODUCTION 
+
+Reinforcement learning (RL) is an effective framework for learning control policies for robotic tasks. Despite this, RL has faced challenges with real-world practicality, safety, and motion smoothness in robotic manipulation [1]–[3]. A central design choice in any RL formulation is the action space, which has been shown to affect factors such as mo-tion smoothness, sample efficiency, and sim-to-real transfer performance [4]–[6]. Despite the importance of action-space design, prior work has largely conducted this study without vision-based ob-servations and has often limited its study to simulation [2, 4, 6, 7]. Vision-based manipulation introduces partial observability and perceptual noise, which can substantially alter learning dynamics and real-world behavior. These chal-lenges are further amplified in sim-to-real transfer, where mismatches in dynamics and sensing can expose sensitivities that remain hidden in idealized simulation environments. In this work, we investigate the impact of action-space design in vision-based robotic manipulation. Vision provides rich sensory input, enabling robots to perceive and interact with their environment. We study this problem using two vision-based manipu-lation tasks on the Franka Emika Panda robot arm: Pan-daPickCuboid and PandaPushCuboid. PandaPickCuboid is a prehensile manipulation task in which the agent must pick up a red cuboid using visual input from a wrist-mounted camera. Object picking is a fundamental robotic manipulation task [8]–[11] that naturally decomposes into reaching, grasping, and lifting, making it both challenging and important. Panda-PushCuboid is a non-prehensile manipulation task in which the agent must push the same cuboid within a specified boundary. Pushing is another core manipulation task that enables object displacement without grasping and involves interactions with friction and mass [3, 4]. Policies are trained in simulation using PPO and evaluated on a physical Franka Emika Panda robot via sim-to-real transfer. Simulation training allows us to safely exploit the exploratory nature of RL, particularly in contact-rich tasks, while enabling rapid experimentation and large-scale data collection. To mitigate discrepancies between simulated and real-world dynamics and visual appearance, we employ domain randomization [8, 12]. We adopt PPO due to its compatibility with vision-based actor–critic architectures [13, 14], and demonstrated effectiveness in sim-to-real robotic learning [4, 6, 15]–[17]. Additionally, PPO’s ability to lever-age large numbers of parallel simulation environments makes it time-efficient for training. We compare four commonly used action-space representa-tions: pose increment, pose velocity, joint velocity, and joint position increment. Our results show that the choice of action space affects final sim-to-real performance, and that joint velocity performs best in terms of smoothness and final task performance. 
+
+> arXiv:2606.18594v1 [cs.RO] 17 Jun 2026
+
+II. R ELATED WORK 
+
+Action-space design plays a critical role in reinforcement learning for robotic manipulation, influencing learning effi-ciency, motion quality, and robustness to sim-to-real transfer. A growing body of work has investigated how different action representations affect policy learning and performance across a variety of robotic tasks and embodiments. Aljalbout et al. [4] conducted a comprehensive study of action-space design for sim-to-real robotic manipula-tion, comparing action representations across joint-space, Cartesian-space, and incremental formulations. Using Proxi-mal Policy Optimization (PPO), they trained policies in sim-ulation on a Franka Emika Panda robot and evaluated them on reaching and pushing tasks, considering metrics such as episodic return, constraint violations, task accuracy, and trajectory error. The authors found that action-space choice significantly affects both learning dynamics and transfer per-formance, with joint-velocity control achieving the strongest overall sim-to-real results while requiring minimal actuator tuning. Our work builds on these findings by extending the evaluation of action spaces to vision-based manipulation and contact-rich picking and pushing tasks. Mart´ ın-Mart´ ın et al. [6] examined the effect of action-space design on contact-rich manipulation in simulation, comparing joint torque, joint velocity, joint position, and Cartesian impedance control across path following, door opening, and surface wiping tasks. Using PPO, they demon-strated that action-space choice impacts sample efficiency, energy consumption, and safety, with Cartesian impedance actions performing favorably across tasks. While their study focuses on simulation-only settings with state-based obser-vations, we extend this line of work to real-world evaluation via sim-to-real transfer and vision-based sensing. Similarly, Varin et al. [7] compared several action rep-resentations—including torque control, joint-space propor-tional–derivative (PD) control, inverse dynamics control, and task-space impedance control—across simulated manipula-tion tasks such as peg insertion, hammering, and pushing. Policies were trained using both PPO and Soft Actor-Critic (SAC), with task-space impedance control consistently achieving high performance and strong sample efficiency. In contrast to their simulation-focused evaluation, our study evaluates action spaces in the real world under partial ob-servability induced by visual input. Beyond manipulation, action-space design has also been studied in the context of locomotion and control of artic-ulated figures. Peng et al. [18] investigated action repre-sentations for planar articulated figures in simulation, com-paring torque control, musculotendon unit activations, PD target angles, and joint velocity commands. They showed that action spaces incorporating intrinsic feedback—such as PD targets and velocity control—improve learning speed and robustness compared to direct torque control. However, their experiments were limited to two-dimensional simulated systems and did not include real-world evaluation. Chen et al. [19] demonstrated that torque control outper-forms joint position control in quadruped locomotion tasks under varying gain parameters, although position-based con-trol exhibited superior sample efficiency. Note that sample efficiency would primarily be a concern if it affects training time. Similarly, Kim et al. [5] showed that torque-based policies achieve stronger sim-to-real transfer for bipedal locomotion compared to position-based control, albeit at the cost of reduced sample efficiency. They mitigate this issue through pretraining with gravity compensation and highlight the drawback of position control in requiring careful gain tuning across tasks and embodiments—a challenge we also encountered. Schneider et al. [20] studied the effect of action represen-tations on policy gradient methods across several simulated environments. For the Gymnasium Reacher task involving a simple two-joint robotic arm, they found that joint velocity control outperformed both torque and joint position control, with torque control performing the worst. Their results further demonstrate that action-space choice can substantially affect learning outcomes across a range of control tasks, including Pendulum and Walker-Walk [21]. III. S IM -TO -R EAL SYSTEM OVERVIEW 
+
+In this section, we describe critical components in our sim-to-real pipeline. In particular, the learning algorithm, simulator, and the real-robot control system. 
+
+A. Proximal Policy Optimization 
+
+Proximal Policy Optimization (PPO) is an on-policy deep reinforcement learning method designed on the idea of a clipped surrogate objective that confines policy updates to the boundaries of a trust region [13]: 
+
+LCLIP (θ) := Eπ [ min( ρt(θ) Ht, clip (ρt(θ), 1 − ϵ, 1 + ϵ) Ht)] ,
+
+(1) where ρt(θ) = π(At|St,θ) 
+
+> π(At|St,θold )
+
+and Ht is the generalized advantage estimate. We utilize PPO for three reasons: (1) it is a deep reinforce-ment learning algorithm well suited to continuous state and action spaces, as well as high-dimensional observations such as images; (2) it is widely adopted in prior sim-to-real work [4, 6, 15]–[17]; and (3) it is time efficient as it can leverage a large number of parallel environments and perform simple updates [13]. In our experiments, we use PPO implemented by [14]. 
+
+B. Dynamics-based Simulation 
+
+We utilize MuJoCo [22] to train our policies in simulation. MuJoCo is a torque-based simulator that faithfully captures real-world dynamics through three important computational functions that are used sequentially: actuator, dynamics, and integrator. Actuators are functions that map actuation to torque ( τ ), the dynamics function maps from applied torque to acceleration, and the integrator updates the state of the simulator by computing next positions and velocities (Fig. 1). Integrator Dynamics Actuator                   
+
+> Actuation Computation Fig. 1. MuJoCo state transition. action is the action produced by the policy. q′tand v′tare the target joint positions and velocities, respectively.
+> qtand vtare the current joint positions and velocities. τtis the applied torque and atis the current acceleration. qt+1 ,vt+1 are the updated joint positions and velocities.
+
+Actuator. In our work, we consider two actuation models that are described as follows: 
+
+f ac pos := Kp(q′ − q) − Kv v, (position actuator) (2) 
+
+f ac vel := Kv (v′ − v), (velocity actuator) , (3) where Kp denotes the diagonal matrix of proportional gains or stiffness, and Kv represents the diagonal matrix of damping coefficients. Here, q′ and v′ are the target joint position and velocity, while q and v are the current joint position and velocity. f ac pos is a PD-controller with target velocity v′ = 0 and f ac vel is a P-controller. 
+
+Dynamics Function. The dynamics function is then used to compute joint accelerations at from applied torque and other forces in the system using the following equation: 
+
+at = M −1(τ + J⊤f − c), (4) where M is inertia in joint space, τ is the applied force consisting of actuator torque, passive force, and external forces, f is the constraint force, and c is the bias force consisting of Coriolis, centrifugal, and gravitational forces. 
+
+JT maps forces from the constraint space of the simulator to the joint space of the robot. 
+
+Integrator. MuJoCo advances the simulator from time step t to t+1 using one of several numerical integrators (semi-implicit Euler, implicit-in-velocity, fast implicit-in-velocity, or RK4). In all experiments, we use the fast implicit-in-velocity integrator, which provides a practical trade-off between stability and computational cost [22]. This integrator performs an implicit velocity update that can be written as 
+
+vt+1 = vt + δt cM−1Ma t, cM := M − δt D, (5) where M is the joint-space inertia matrix and D := ∂a/∂ v.Under the fast implicit-in-velocity integration scheme, the velocity-dependent term is approximated as D ≈ ∂τ 
+
+> ∂v
+
+, where 
+
+D denotes the Jacobian of the applied torques with respect to joint velocities. In all experiments, we employ MuJoCo’s fast implicit-in-velocity integrator. Joint positions are then updated via 
+
+qt+1 = qt + δt vt+1 . (6) 
+
+C. Real Robot Control System 
+
+For real-world experiments, we control the Franka Emika Panda using the Franka ROS Interface via the Python  
+
+> Fig. 2. Top row: PandaPickCuboid. Bottom row: PandaPushCuboid.
+
+API wrapper introduced by [23]. We utilize two actu-ation interfaces: set joint positions velocities 
+
+and set joint velocities .The set joint positions velocities interface employs a joint impedance controller 
+
+f ac  
+
+> imp
+
+:= τ c + Kp(q′ − q) + Kv (v′ − v), (7) where τ c denotes the Coriolis torque, q and q′ are the current and target joint positions, v and v′ are the current and target joint velocities, and Kp and Kv are diagonal matrices of stiffness and damping gains. Setting v′ = 0 yields 
+
+f ac  
+
+> pos
+
+:= τ c + Kp(q′ − q) − Kv v, (8) which closely matches the PD position controller used in simulation (Eq. 2). The main difference is the omission of 
+
+τ c, which is implicitly handled by the dynamics function in MuJoCo (Eq. 4). The set joint velocities interface commands tar-get joint velocities directly. Although its actuator model is not explicitly documented, it can be inferred to correspond to velocity P-control of the form f ac  
+
+> vel
+
+:= τ c + Kv (v′ − v).
+
+The computed torque values are then mapped to electrical currents used to move the joint servos of the physical robot. IV. T ASKS 
+
+We evaluate our action spaces on two tasks: PandaPick-Cuboid and PandaPushCuboid . PandaPickCuboid is a pre-hensile manipulation task in which the robot must reach, grasp, and lift a red cuboid to a minimum height of 17 cm. Object picking is a fundamental manipulation task that requires precise, multi-stage execution of reaching, grasping, and lifting. In simulation, the episode terminates upon suc-cessful lift or timeout. In the real world, episodes additionally terminate if the end-effector exits predefined workspace boundaries or exceeds 10 unsuccessful grasp attempts. PandaPushCuboid is a non-prehensile manipulation task where the agent must push the same red cuboid across a white base (Fig. 2) as much as possible, emphasizing direc-tional control and interaction with object friction and mass. Episodes terminate after a 12 s timeout in both simulation and real-world settings, and additionally if the end-effector exits workspace boundaries in the real world. TABLE I REWARD COMPONENTS FOR PANDA PICK CUBOID . δTARGET DENOTES THE DISTANCE BETWEEN THE BLOCK AND A FIXED TARGET POSITION LOCATED VERTICALLY ABOVE ITS INITIAL POSE AT 0.2 M. δROT IS THE BLOCK UPRIGHT ORIENTATION ERROR . δGRIPPER IS THE GRIPPER –BLOCK DISTANCE . hBLOCK IS THE BLOCK HEIGHT .                             
+
+> Reward WDescription
+> g(1) =1−tanh  5(0 .9δtarget +0.1δrot )4Pose tracking
+> g(2) = 1 −tanh  5δgripper
+> 8Gripper-block dis-tance penalty
+> g(3) =I[no floor collision ]0.25 Collision penalty
+> g(4) =I[|hblock −0.2|<0.03] 2.0 Lift success
+
+A. Reward Functions 
+
+PandaPickCuboid Reward. The reward function we use to train the robot is as follows: 
+
+rt := max 
+
+n
+
+0 , g sum  
+
+> t
+
+− max  
+
+> 1≤i≤t−1
+
+gsum 
+
+> i
+
+o
+
+, (9) where gsum t := P4 
+
+> i=1
+
+wi · g(i) 
+
+> t
+
+is a weighted sum of the reward components with wi being the weight for the ith component (Table I). This formulation ensures that if the reward at time step t is lower than the maximum reward observed in previous steps, the reward for that step is set to zero, effectively considering only improvements in the reward. This formulation was introduced by [24], and we adapted our implementation from [8]. 
+
+PandaPushCuboid Reward. We utilize the following reward function to train policies for the PandaPushCuboid 
+
+task: 
+
+rt = 5 Iin  
+
+> t
+
+rdisp  
+
+> t
+
+− 0.5 rdist  
+
+> t
+
+− 0.1 Ifloor  
+
+> t
+
+, (10) where rdisp  
+
+> t
+
+denotes the planar displacement of the block at time step t. The indicator function Iin  
+
+> t
+
+returns 1 if the block remains within the boundaries of the white base and 0
+
+otherwise; this is to ensure displacement reward is only given when the block is within the boundaries of the base. The term 
+
+rdist  
+
+> t
+
+is the Euclidean distance between the block and the end-effector, designed to encourage the agent to reach the block, while Ifloor  
+
+> t
+
+returns 1 if the end-effector makes contact with the floor and 0 otherwise. 
+
+B. Observation Spaces 
+
+The observation space comprises four components: (1) an RGB image of size 64 × 64 × 3, (2) a proprioception vector containing joint positions q, joint velocities v, and grasp status, (3) the end-effector height, and (4) the previous action. Joint positions and velocities are linearly scaled to 
+
+[−1, 1] using q = 2 q−qmin 
+
+> qmax −qmin
+
+− 1 and v = 2 v−vmin  
+
+> vmax −vmin
+
+− 1.We empirically observed that scaling improved sim-to-real performance. For PandaPushCuboid, the grasp-status signal is omitted, as grasping is not required. 
+
+C. Action Spaces 
+
+The Franka Emika Panda has 7 joints, allowing for 7 degrees of freedom. In the PandaPickCuboid task, our ac-tion space has dimensionality 8, with the final dimension     
+
+> TABLE II ACTION SCALING FACTORS FOR PANDA PICK CUBOID (P ICK )
+> AND PANDA PUSH CUBOID (P USH )
+
+Pick Push Action Sim Real Sim Real Pose inc. ( δx) 0.05 0.02 0.05 0.02 Pose vel. ( ˙x) 0.05 0.01 0.05 0.01 Joint pos. inc. ( δq) 0.05 0.06 0.05 0.05 Joint vel. ( v) 1.0 0.20 1.0 0.15 
+
+reserved for controlling the grasping mechanism. In the Pan-daPushCuboid task, the dimensionality is 7. All action values are bounded to the range (-1,1), and all action spaces have a cycle time of δt = 40 ms . We consider four action spaces: pose increment ( δx), pose velocity ( ˙x), joint velocities ( v), and joint position increments ( δq ). These action spaces were selected because they are agnostic to the absolute joint and end-effector positions, making them suitable for our partially observable setup and commonly used in robotic manipulation [1, 4, 8]. 
+
+Joint Space. Actions are vector outputs from the policy, and the actuator gives them meaning. We define actuators as functions that map actuation to torque. In v, we utilize velocity actuators and map the target velocities scaled by a constant (c) to torque ( f ac vel : c. vtarget 7 → τ ) (Table II). For 
+
+δq, target joint positions are computed as qtarget = q + c.δ q
+
+and passed to a position actuator ( f ac pos : qtarget 7 → τ ). 
+
+Cartesian Space. For our Cartesian action spaces, the δx
+
+representation is actuated using position actuators, whereas ˙x
+
+applies incremental commands through velocity actuators. In the δx action space, the first three components correspond to position increments, which specify the desired change in the end-effector’s current position. The next three components correspond to rotational increments about the three Cartesian axes. The seventh component specifies the rotation increment of the robot’s seventh degree of freedom, which is common between all action spaces. Target pose is then computed as 
+
+xtarget = x ⊕ c.δ x. This target pose is then passed to an analytical inverse kinematics solver proposed by [25] and we use the implementation by [8], which maps xtarget to target joint positions (IK : xtarget 7 → qtarget ), then a position actuator is used ( f ac pos : qtarget 7 → τ ). The primary difference between δx and ˙x lies in how the resulting joint commands are actuated. For ˙x, we reuse the same target joint positions qtarget produced by the inverse kinematics solver, but approximate joint velocities using the current joint positions and the action cycle time, given by 
+
+vtarget ≈ qtarget −q 
+
+> δt
+
+which then uses a velocity actuator that maps from target velocity to torque ( f ac vel : vtarget 7 → τ ). 
+
+Gripper Control In PandaPickCuboid, once a policy outputs an action vector a, the final value of this vector is used to command the gripper into a closed or open state to grasp the object. Gripper activation at a given time step t
+
+can be expressed using the following step-wise function: grasp t := 
+
+
+
+1, if ag < λ 1 
+
+> g
+
+,
+
+0, if ag ≥ λ2 
+
+> g
+
+,
+
+grasp t−1, otherwise .
+
+(11) where ag is the scalar gripper action output and λg is the grasp activation threshold. A value of 1 corresponds to closing the gripper, and a value of 0 corresponds to opening it. During simulation training, we set λ1 
+
+> g
+
+= λ2 
+
+> g
+
+= 0 and we adjusted the thresholds during real-time trials to improve grasping performance by setting them to λ1 
+
+> g
+
+= −0.2 and 
+
+λ2 
+
+> g
+
+= 0 .9. In the case of δx, we set λ1 
+
+> g
+
+= −0.1 to improve grasping performance and reduce false grasp attempts. V. E XPERIMENTAL SETUP 
+
+In this section, we discuss the real-world setup of the cam-era and arm, the neural networks, and domain randomization used in our experiments. 
+
+A. Real World Setup 
+
+Our real-world setup consists of a red block with dimen-sions 4 × 4 × 6 cm, an Intel RealSense D405 camera, and the Franka Emika Panda robot arm mounted to the robot’s wrist (Fig. 4). In all real-world trials, the block is placed well within the arm’s dexterous workspace and within the camera’s field of view. 
+
+B. Neural Networks 
+
+We employ vision-based actor–critic networks that jointly process RGB image observations and vector-valued obser-vations. Visual features from the image are extracted using a convolutional encoder implemented by [14] composed of three convolutional layers with ReLU activations. The visual feature vector is concatenated with additional non-visual vector-valued observations, including proprioception, the previous action, the end-effector height, and the grasp status (depending on the task: pick vs push). The critic network consists of the convolutional encoder and concatenated observations, followed by a fully connected multilayer perceptron (MLP) head that outputs a scalar state-value estimate. The actor network shares the same structure but differs in its output head, where two fully connected layers parameterize a Gaussian policy by predicting the mean (μ) and standard deviation ( σ) of the action distribution. 
+
+C. Domain Randomization 
+
+To improve robustness and facilitate sim-to-real transfer, we apply domain randomization [3, 12, 26]. During training, we randomize both visual and dynamic parameters. Visual perturbations include camera pose, lighting position and intensity, and image-level properties such as contrast and saturation. We also randomize the block’s initial pose and overlay randomized wooden textures to better match the real-world surface. We inject Gaussian noise into joint position and velocity readings and randomize stiffness and damping. 
+
+D. Actuator Tuning 
+
+When using impedance control on the real robot, appropri-ately tuned stiffness and damping gains are critical for safe, stable operation. Poorly tuned gains can lead to excessive vibrations, unstable motion, and safety-triggered shutdowns. In our experiments, we reduced stiffness to reduce vibrations and prevent erratic motion. VI. R EAL -W ORLD RESULTS 
+
+PandaPickCuboid. We train each policy in simulation using PPO over 10 independent seeds with 1024 parallel environments. Fig. 3 presents 10 deterministic evaluation runs performed during simulation training. Individual runs are displayed for episodic return, success rate, and episode length. Each action space is denoted by a unique color, and the median run is highlighted. All individual runs are displayed to better portray variation in performance [27]. In simulation, all action spaces achieve comparable final performance, with success rates in the range [0 .98 , 1.00] . The primary distinction lies in the episodic length, which, in this case, is the time required to complete the task. The pose increment action space ( δx) achieves the shortest episodes, followed by joint position increment ( δq). For real-world evaluation, we conduct 12 deterministic trials per action space (Table III). For each action space, we select the top two policies with the highest final episodic return and report results from the policy with the best real-world success. A trial is considered successful if the cuboid reaches at least a target height of 17 cm. Trials terminate upon 10 failed grasp attempts, violation of workspace con-straints, or a timeout of 30 s. Joint velocity ( v) achieves a 100% success rate with a median completion time of 3.58 s. It consistently avoids collisions and exhibits the lowest measured jerk among the evaluated action spaces. Joint position increments ( δq)also achieve a 100% success rate and the fastest median completion time of 2.12 s; however, stable real-world deploy-ment required careful impedance tuning. We also tested our scripted pick policy, which achieves a 100% success rate and a median trial time of 15 .91 seconds. In contrast, pose increments ( δx) demonstrate degraded real-world performance. The policy frequently dragged the cuboid toward the robot base before lifting. To mitigate this behavior, we imposed a lower bound of 0.45 m on the end-effector x position during evaluation. Despite this modification, the action space achieved a 41.67% success rate. Pose velocity ( ˙x) performed worst in real-world trials, often drifting into unstable configurations or exiting the workspace. It did not successfully complete the task in any trial. Overall, the simulation results did not fully translate to the real-world experiments. In simulation, δx lifted the block more rapidly, whereas on the real robot, it frequently failed to complete the lifting motion. Likewise, ˙x failed in all real-world trials. These findings suggest that our Cartesian action spaces are more sensitive to sim-to-real discrepancies. 0.00 0.25 0.50 0.75 1.00 1.25 1.50 Environment steps 1e7 25 50 75 100 125 150 Episode Length 
+
+PandaPickCuboid 0.00 0.25 0.50 0.75 1.00 1.25 1.50 Environment steps 1e7 0246810 12 Episodic Return 
+
+PandaPickCuboid            
+
+> x(Pose Increment) x(Pose Velocity) v(Joint Velocity) q(Joint Increment)
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50
+
+Environment steps 1e7 0.90 0.92 0.94 0.96 0.98 1.00 Success 
+
+PandaPickCuboid Fig. 3. PandaPickCuboid simulation training results consisting of episodic return, success rate, and episodic length. 10 independent runs are shown with the median curve highlighted. TABLE III REAL -WORLD EVALUATION RESULTS FOR PandaPickCuboid AND PandaPushCuboid . F OR Pick , SUCCESS REPORTS MEAN ± STANDARD ERROR , AND OTHER METRICS REPORT MEDIAN ± IQR. F OR Push , VALUES ARE REPORTED AS MEDIAN ± IQR. ↑ INDICATES A HIGHER VALUE IS PREFERRED . ↓
+
+> INDICATES A LOWER VALUE IS PREFERRED
+
+. B EST PERFORMERS ARE BOLDED .
+
+PandaPickCuboid PandaPushCuboid Action Space Success (%) ↑ Time (s) ↓ Collision ↓ Jerk ( m/s 3) ↓ Distance (m) ↑ Collision ↓ Jerk ( m/s 3) ↓
+
+Pose Inc. ( δx) 41 .67 ± 14 .23 14 .78 ± 11 .38 0.0 ± 0.0 26 .88 ± 17 .96 0.050 ± 0.051 0.0 ± 0.0 60 .27 ± 13 .61 
+
+Pose Vel. ( ˙x) 0.00 ± 0.00 8.98 ± 17 .65 0.0 ± 0.0 24 .55 ± 10 .33 0.000 ± 0.003 2.5 ± 22 .0 24 .85 ± 5.47 
+
+Joint Pos. Inc. ( δq) 100 ± 0.00 2.12 ± 0.59 0.0 ± 0.0 52 .59 ± 15 .41 0.104 ± 0.071 0.0 ± 0.0 24 .37 ± 2.38 
+
+Joint Vel. ( v) 100 ± 0.00 3.58 ± 0.23 0.0 ± 0.0 16 .03 ± 1.34 0.405 ± 0.289 8.0 ± 14 .5 14 .25 ± 0.99 
+
+Pick Script 100 ± 0.00 15 .91 ± 1.57 0.0 ± 0.0 11 .43 ± 0.88 – – –
+
+Fig. 4. Real-world setup and wrist-mounted camera. 
+
+A key difference is that the Cartesian actions rely on an in-verse kinematics (IK) mapping to generate joint commands. Even when analytical IK is used, this introduces a kinematic transformation layer. Any discrepancies in link parameters between simulation and reality will propagate through the IK mapping, generating inaccurate joint targets. Furthermore, IK-generated joint trajectories can be highly demanding or abrupt—particularly near singularities. While the simulator’s idealized actuators can execute these commands, real-world actuators bounded by physical joint friction, latency, and imperfect impedance gains may struggle to track them accu-rately, leading to amplified errors. 
+
+PandaPushCuboid. We train each policy in simulation 0.0 0.5 1.0 1.5 2.0 
+
+Environment steps 1e7 
+
+> 40
+> 20
+> 0
+> Episodic Return
+
+PandaPushCuboid     
+
+> x(Pose Increment)
+> x(Pose Velocity)
+> v(Joint Velocity)
+> q(Joint Increment)
+
+Fig. 5. PandaPushCuboid episodic return in simulation training. 10 independent runs are displayed. The median curve is highlighted. 
+
+using PPO over 10 independent seeds with 1024 parallel environments. Fig. 5 reports episodic return for 10 deter-ministic evaluations collected throughout simulation train-ing. All individual runs are displayed. Each action space is represented using a unique color. The median run is highlighted. In simulation, joint position increment ( δq) and pose increment ( δx) achieve higher median episodic returns than joint velocity ( v) and pose velocity ( ˙x), probably due to generating faster trajectories that displace the block more from point-to-point. δx and ˙x exhibit some failed runs, potentially due to the emergence of singularities in the IK solution that stall the robot’s motion. For real-world evaluation, we conduct 10 trials per action space using deterministic policies (Table III). For each action space, we select the policy with the highest final episodic return and evaluate zero-shot sim-to-real performance. Each trial runs for 12s or terminates if the end-effector exits predefined workspace boundaries that are larger than the white base’s boundaries. Aggregate block distance over the trial duration is used as the performance metric. Joint velocity (v) achieves the largest median aggre-gate block distance of 0.405 m. Although this action space produces the lowest jerk, we observe multiple collisions, primarily due to forceful contact with the cuboid edges. Joint position increments ( δq) achieve the second-highest displacement (median 0.104 m). In contrast, pose increment ( δx) and pose velocity ( ˙x)perform poorly in terms of block distance. However, δx
+
+and δq exhibit fewer forceful contact events and appear more compliant during interaction. This compliance does not arise from explicit contact avoidance, but rather from the tuned joint-impedance controller used for position-based actuation, which reduces stiffness and attenuates excessive forces during contact. VII. T RAINING RESULTS ON JERK AND COLLISION 
+
+Figure 6 reports episodic floor collisions and average jerk per time step during simulation training, averaged over 1024 parallel environments. These results can inform us of what can happen during learning in the real world. A collision is registered when the gripper body contacts the floor in simulation. Across both PandaPickCuboid and PandaPushCuboid, joint velocity yields the lowest floor-collision counts at convergence, exhibiting more precision during simulation training and exhibiting the smallest jerk. We approximate jerk at time step t using a finite difference of acceleration of consecutive time steps, Jt ≈ || at−at−1 
+
+> δt
+
+|| 2.
+
+Since joint acceleration is proportional to the applied torque, jerk reflects step-to-step changes in torque. Consequently, larger torque variations across consecutive time steps lead to larger observed jerk. We will now provide a plausible explanation for why joint velocity has the lowest jerk. Under position actuation, torque is generated by a position actuator acting on the position error. The resulting torque variation depends on changes in both the position error and joint velocity. In particular, fluctuations in the desired position directly perturb the position error, which is scaled by the proportional gains Kp. When Kp values are large, variations in the commanded position can produce substantial torque changes and, therefore, larger jerk. Under velocity actuation, torque is instead driven by the velocity tracking error and scaled by the velocity gain Kv . In our experiments, 
+
+kp > k v for all joints. Hence, for comparable command vari-ations, position control can induce larger torque differences than joint velocity. Additionally, with position actuation, the policy directly specifies a desired position (or position in-crement), so high-frequency fluctuations in the policy output immediately affect the position error and are amplified by the proportional gain. In contrast, velocity actuation produces target velocities, and joint positions evolve via integration, 
+
+qt+1 = qt + v′
+
+> t
+
+δt. This integration acts as a low-pass filter: high-frequency components in the velocity command are attenuated when mapped to position, introducing temporal smoothing. VIII. C ONCLUSION 
+
+In this work, we benchmarked four commonly used action space representations in vision-based robotic manipulation: joint position increments ( δq), joint velocity ( v), pose in-crements ( δx), and pose velocity ( ˙x). Policies were trained in simulation on two vision-based tasks, PandaPickCuboid and PandaPushCuboid, and deployed on a physical Franka Emika Panda using sim-to-real transfer. Across both tasks, joint-space action spaces demonstrated better real-world performance. In particular, joint velocity ( v)achieved the strongest zero-shot sim-to-real results, reaching a 100% success rate in PandaPickCuboid and the highest cuboid displacement in PandaPushCuboid. Joint position increments ( δq) achieved comparable picking performance, although stable deployment required impedance tuning. In terms of safety and compliance, action spaces oper-ating through the tuned impedance controller ( δq and δx)exhibited more compliant behavior and reduced collision severity during contact. However, joint velocity produced the smoothest trajectories overall, achieving the lowest measured jerk and yielding the most natural motion profiles. These results suggest that joint velocity provides a strong balance of robustness, smoothness, and sim-to-real performance. IX. L IMITATION AND FUTURE WORK 
+
+A limitation of this work is that we consider single-object manipulation tasks involving a single cuboid. Extending the proposed sim-to-real pipeline to diverse objects with varying geometries, sizes, and appearances, as well as to multi-object or cluttered scenes, and complex manipulation tasks like screwing, hammering, and manipulating objects with significant variation in mass and friction, remains future work. In particular, object selection in cluttered environments presents a scalability challenge. One possible direction is to incorporate object detection to define regions of interest (ROIs) for target selection [12]. Alternatively, mask-based goal conditioning and ROI selection could enable specifica-tion and manipulation of target objects in cluttered scenes [28]. This paper considers four commonly used action spaces for robots; there are more, such as joint position or torque control. We did in fact experiment with torque-based control, but found it was more difficult to train and led to unstable behavior in simulation. In real-world deployment, torque control required explicit gravity and Coriolis compensa-tion, complicating stable lifting during the picking task. A systematic evaluation of torque control for contact-rich manipulation is left for future investigation. Finally, this study focuses on object manipulation; a line of future work is to perform a similar action-space comparison in other classes of robotic tasks, such as locomotion and other embodiments, such as drones and humanoid robots. x (Pose Increment) x (Pose Velocity) v (Joint Velocity) q (Joint Increment)        
+
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 Environment steps 1e7 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 Collision
+
+PandaPickCuboid 0.00 0.25 0.50 0.75 1.00 1.25 1.50 Environment steps 1e7 0500 1000 1500 2000 2500 3000 Jerk 
+
+PandaPickCuboid 0.0 0.5 1.0 1.5 2.0 Environment steps 1e7 012345Collision 
+
+PandaPushCuboid 0.0 0.5 1.0 1.5 2.0 Environment steps 1e7 0500 1000 1500 2000 Jerk 
+
+PandaPushCuboid Fig. 6. Simulation training metrics: floor collisions and jerk per step for picking and pushing tasks. 10 independent runs are displayed, and the median curve is highlighted for each action space. 
+
+ACKNOWLEDGEMENT 
+
+We would like to thank anonymous reviewers for their constructive comments and feedback, which helped improve this work. We would like to thank Shivam Garg, Mustafa Heidarbhai, and Haruto Tanaka for helpful discussions. This research was supported in part by the National Research Council Canada (NRC) and by the CIFAR AI Chair program. We are also appreciative of the computing resources provided by the Digital Research Alliance of Canada and the financial support from the RLAI laboratory and Amii. REFERENCES [1] A. R. Mahmood, D. Korenkevych, B. J. Komer, and J. Bergstra, “Setting up a reinforcement learning task with a real-world robot,” in 
+
+IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2018. [2] A. R. Mahmood, D. Korenkevych, G. Vasan, W. Ma, and J. Bergstra, “Benchmarking reinforcement learning algorithms on real-world robots,” in Conference on Robot Learning (CoRL) , 2018, pp. 561– 591. [3] X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel, “Sim-to-real transfer of robotic control with dynamics randomization,” in IEEE International Conference on Robotics and Automation (ICRA) , 2018, pp. 1–8. [4] E. Aljalbout, F. Frank, M. Karl, and P. van der Smagt, “On the role of the action space in robot manipulation learning and sim-to-real transfer,” IEEE Robotics and Automation Letters , vol. 9, no. 6, pp. 5895–5902, 2024. [5] D. Kim, G. Berseth, M. Schwartz, and J. Park, “Torque-based deep reinforcement learning for task- and robot-agnostic learning on bipedal robots using sim-to-real transfer,” IEEE Robotics and Automation Letters , vol. 8, no. 10, pp. 6251–6258, 2023. [6] R. Mart´ ın-Mart´ ın, M. A. Lee, R. Gardner, S. Savarese, J. Bohg, and A. Garg, “Variable impedance control in end-effector space: An action space for reinforcement learning in contact-rich tasks,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,2019, pp. 1010–1017. [7] P. Varin, L. Grossman, and S. Kuindersma, “A comparison of action spaces for learning manipulation tasks,” arXiv preprint arXiv:1908.08659 , 2019. [8] K. Zakka, B. Tabanpour, Q. Liao, M. Haiderbhai, S. Holt, J. Y. Luo, A. Allshire, E. Frey, K. Sreenath, L. A. Kahrs, C. Sferrazza, Y. Tassa, and P. Abbeel, “MuJoCo playground,” arXiv preprint arXiv:2502.08844 , 2025. [9] Z. Xu, Y. Li, X. Yang, Z. Zhao, L. Zhuang, and J. Zhao, “Open-source reinforcement learning environments implemented in MuJoCo with franka manipulator,” in IEEE International Conference on Advanced Intelligent Mechatronics (AIM) , 2024, pp. 709–714. [10] S. Levine, P. Pastor, A. Krizhevsky, J. Ibarz, and D. Quillen, “Learn-ing hand-eye coordination for robotic grasping with deep learning and large-scale data collection,” International Journal of Robotics Research , vol. 37, no. 4-5, pp. 421–436, 2018. [11] M. A. Lee, Y. Zhu, K. Srinivasan, P. Shah, S. Savarese, L. Fei-Fei, A. Garg, and J. Bohg, “Making sense of vision and touch: Self-supervised learning of multimodal representations for contact-rich tasks,” in IEEE International Conference on Robotics and Automation (ICRA) , 2019, pp. 8943–8950. [12] J. Tobin, R. Fong, A. Ray, J. Schneider, W. Zaremba, and P. Abbeel, “Domain randomization for transferring deep neural networks from simulation to the real world,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2017, pp. 23–30. [13] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [14] C. D. Freeman, E. Frey, A. Raichuk, S. Girgin, I. Mordatch, and O. Bachem, “Brax: A differentiable physics engine for large-scale rigid-body simulation,” 2021. [Online]. Available: https: //github.com/google/brax [15] J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bo-hez, and V. Vanhoucke, “Sim-to-real: Learning agile locomotion for quadruped robots,” in Robotics: Science and Systems (RSS) , 2018. [16] Y. Chebotar, A. Handa, V. Makoviychuk, M. Macklin, J. Issac, N. D. Ratliff, and D. Fox, “Closing the sim-to-real loop: Adapting simulation randomization with real world experience,” in IEEE International Conference on Robotics and Automation (ICRA) , 2019, pp. 8973– 8979. [17] OpenAI, I. Akkaya, M. Andrychowicz, M. Chociej, M. Litwin, B. McGrew, A. Petron, A. Paino, M. Plappert, G. Powell, R. Ribas, J. Schneider, N. Tezak, J. Tworek, P. Welinder, L. Weng, Q. Yuan, W. Zaremba, and L. Zhang, “Solving rubik’s cube with a robot hand,” 
+
+arXiv preprint arXiv:1910.07113 , 2019. [18] X. B. Peng and M. van de Panne, “Learning locomotion skills using deeprl: Does the choice of action space matter?” in ACM SIGGRAPH / Eurographics Symposium on Computer Animation (SCA) , 2017, pp. 12:1–12:13. [19] S. Chen, B. Zhang, M. W. Mueller, A. Rai, and K. Sreenath, “Learning torque control for quadrupedal locomotion,” in IEEE-RAS Interna-tional Conference on Humanoid Robots (Humanoids) , 2023, pp. 1–8. [20] J. Schneider, P. Schumacher, D. F. B. H¨ aufle, B. Sch¨ olkopf, and D. B¨ uchler, “Investigating the impact of action representations in policy gradient algorithms,” arXiv preprint arXiv:2309.06921 , 2023. [21] S. Tunyasuvunakool, A. Muldal, Y. Doron, S. Liu, S. Bohez, J. Merel, T. Erez, T. Lillicrap, N. Heess, and Y. Tassa, “dm control: Software and tasks for continuous control,” Software Impacts , vol. 6, p. 100022, 2020. [22] E. Todorov, T. Erez, and Y. Tassa, “MuJoCo: A physics engine for model-based control,” in IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2012, pp. 5026–5033. [23] S. Sidhik, “Franka ros interface: A ros/python api for controlling and managing the franka emika panda robot (real and simulated).” 2020. [24] A. Petrenko, A. Allshire, G. State, A. Handa, and V. Makoviychuk, “DexPBT: Scaling up Dexterous Manipulation for Hand-Arm Systems with Population Based Training,” in IEEE International Conference on Robotics and Automation (ICRA) , 2023. [25] Y. He and S. Liu, “Analytical inverse kinematics for franka emika panda: A geometrical solver for 7-dof manipulators with unconven-tional design,” in International Conference on Control, Mechatronics and Automation (ICCMA) , 2021, pp. 194–199. [26] X. Chen, J. Hu, C. Jin, L. Li, and L. Wang, “Understanding domain randomization for sim-to-real transfer,” in Tenth International Confer-ence on Learning Representations (ICLR) , 2022. [27] H. Tanaka and A. R. Mahmood, “Performance variation in deep reinforcement learning,” arXiv preprint arXiv:2606.06746 , 2026. [28] F. Shahriar, C. Wang, A. Azimi, G. Vasan, H. H. Elanwar, A. R. Mah-mood, and C. Bellinger, “General and efficient visual goal-conditioned reinforcement learning using object-agnostic masks,” arXiv preprint arXiv:2510.06277 , 2025.

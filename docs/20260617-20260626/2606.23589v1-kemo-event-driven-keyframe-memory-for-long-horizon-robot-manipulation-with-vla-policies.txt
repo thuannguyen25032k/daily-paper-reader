@@ -1,0 +1,334 @@
+Title: KEMO: Event-Driven Keyframe Memory for Long-Horizon Robot Manipulation with VLA Policies
+
+URL Source: https://arxiv.org/pdf/2606.23589v1
+
+Published Time: Tue, 23 Jun 2026 03:43:52 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# KEMO: Event-Driven Keyframe Memory for Long-Horizon Robot Manipulation with VLA Policies 
+
+Yihan Zeng 1,3,4, Minghao Ye 3,5, Yiyuan Chen 3,Yide Shentu 3, Philipp Wu 3, Zike Yan 1,2, Zhongyu Li 1,21Hong Kong Embodied AI Lab 2The Chinese University of Hong Kong 3xdof.ai 
+
+> 4
+
+University of Electronic Science and Technology of China 5Shanghai Jiao Tong University Emails: zengyh@std.uestc.edu.cn,zhongyuli@cuhk.edu.hk , Website: https://Hatty-z.github.io/KEMO 
+
+Figure 1: We propose a plug-in event-driven keyframe memory framework that detects task-relevant event keyframes from robot states and visual observations, and stores the selected keyframes in a memory bank to provide history evidence for VLA policies. Left: Various memory-dependent dual-arm manipulation tasks realized by our method in the real world, spanning average trajectory durations of 28 to 95 seconds and average trajectory lengths of 830 to 2846 steps. Right: Aggregate Task Success Rate (TSR) and Stage Completion Rate (SCR) across the six tasks (12 trials per task), comparing KEMO with memory-free and memory-augmented baselines. 
+
+Abstract: Long-horizon robot manipulation remains challenging because similar observations may occur at different execution stages, while the appropriate action depends on previously completed operations. Memory can address this ambigu-ity by enabling policies to infer task progress from execution history. However, existing memory-augmented approaches often either retain dense histories that re-quire compression or rely primarily on recent context that may discard earlier task-relevant events. In this work, we propose propose KEMO , a lightweight plug-in memory framework that automatically selectively preserves keyframes associated with task-relevant state changes for VLA policies. KEMO combines robot kine-matics with visual filtering to detect events, encodes the selected keyframes as compact temporally ordered memory tokens, and integrates them with current visual features through cross-attention and gated residual fusion for VLA train-ing. The detected events also define higher-weight training samples near criti-cal transitions. We evaluate KEMO on various real-world dual-arm manipula-tion tasks spanning 2 to 6 scored subtasks, and trajectory length ranging from 830 steps to 2846 execution steps (durations from 28 to 95 seconds). Compared with the memory-free baseline ( e.g. , π0.5), KEMO improves aggregate Task Suc-cess Rate by 23.6% and Stage Completion Rate by 34.1%. Ablations show that event-driven keyframe selection outperforms uniform sampling and recent-frame retention, while the proposed gated fusion and keyframe-aligned loss weighting provide complementary gains. 
+
+Keywords: Robot Learning, Long Horizon Task And Motion Planning 
+
+> arXiv:2606.23589v1 [cs.RO] 22 Jun 2026
+
+# 1 Introduction 
+
+Long-horizon robot manipulation requires executing sequences of interdependent subtasks over ex-tended time horizons. In such tasks, robots often face stage ambiguity and partial observability: visually similar observations may appear at different execution stages, while the correct action de-pends on what has already happened. Vision-Language-Action (VLA) policies [1–5] that condition only on the current observation therefore struggle to determine the proper action at these disam-biguation points. A natural solution is to equip policies with memory of past execution history to provide evidence of completed task stages and previously observed information, thereby disambiguating visually similar current states. Existing memory-augmented VLA methods mainly follow two directions. Dense memory methods store all the past or recent frames, but must compress history through token merg-ing [6], recurrent states [7], or fixed-size latent representations [8], which may mix sparse task-state transitions with large amounts of redundant observations and make critical events less distinguish-able in the compressed memory representation. Task-decomposition methods use Vision-Language Models (VLMs) or high-level modules [9] [10] to track progress. However, these methods may require subtask-level supervision, introduce additional online inference cost, and propagate errors from generated semantic summaries or subgoals from the task decompositors. These limitations motivate a lightweight memory mechanism that directly preserves sparse task-relevant events, with-out compressing dense observation histories or relying on explicit task decomposition and additional online high-level reasoning. We propose KEMO , a plug-in memory framework for long-horizon manipulation. Our key insight is that event keyframes, corresponding to task-relevant state transitions, provide compact and explicit evidence of execution history, which could disambiguate visually similar observations and support stage-appropriate action prediction. We detect such keyframes by combining kinematic cues with visual change verification: motion-based saliency identifies candidate transition moments, while a visual deduplication filter removes candidates that do not correspond to meaningful scene changes. The selected keyframes are encoded into a compact memory bank and fused with the current visual representation through cross-attention, enabling the VLA policy to predict actions using both current observations and historical transition evidence. The same keyframes are also used to define high-weight supervision windows during training, aligning memory construction with learning emphasis at critical moments. We evaluate KEMO on various challenging long-horizon dual-arm manipulation tasks in the real world, spanning from 2 to 6 scored subtasks and average trajectory durations from 28 to 95 sec-onds. Across all tasks, KEMO improves aggregate Task Success Rate (TSR) by 23.6% and average Stage Completion Rate (SCR) by 34.1% over the memory-free π0.5 baseline. Compared with Mem-oryVLA, KEMO improves TSR by 50.0% points and SCR by 60.9%. Event-driven keyframe selec-tion also outperforms alternative memory selection strategies such as uniform sampling and recent-frame retention. On the Cover Blocks task, removing gated memory fusion decreases TSR and SCR by 75.0% and 87.5%, respectively, while removing keyframe-aligned loss weighting decreases them by 50.0% and 45.8%. These results isolate the complementary contributions of event-based memory selection, gated fusion, and transition-aligned supervision. In summary, our contributions are three-fold: (1) A novel plug-in event-driven keyframe mem-ory framework for long-horizon manipulation using VLA policies. We introduce a keyframe memory module that stores task-relevant keyframes and injects compressed keyframe tokens into the visual representation, providing explicit history evidence to existing VLA policies. (2) A new task-agnostic keyframe detector based on robot states and visual observations. We propose a lightweight detector that identifies stage-critical event moments by combining robot motion patterns with visual change verification, without requiring task-specific stage annotations or additional online VLM task decomposition which may introduce latency and propagated hallucinations. (3) Strong empirical results on real-world long-horizon tasks. We evaluate our method on six challenging long-horizon real-robot tasks with 2 to 6 subtasks, trajectory durations ranging from 28s to 95s 2(trajectory length ranging from 830 steps to 2846 steps), demonstrating consistent improvements over memory-free and memory-augmented VLA baselines, with ablations validating the benefits of event-driven selection and keyframe-aligned supervision. 
+
+# 2 Related Work 
+
+Long-horizon manipulation with keyframe-based memory involves two closely related problems: (1) detecting task-critical moments as “keyframes” from continuous robot trajectories, and (2) in-corporating the selected keyframes into policy learning and action prediction. We review prior work along these two directions. 
+
+Keyframe Detection for Manipulation. Keyframes provide a sparse, behaviorally meaningful ab-straction of a manipulation trajectory, isolating moments of task-relevant transition from redundant intermediate frames. Existing approaches fall into two categories. VLM-based detection reasons over visual content to identify keyframes. BPP [11] queries an off-the-shelf VLM to flag task-relevant events and conditions a downstream diffusion policy on the detected frames. MemER [9] fine-tunes a video-VLM that jointly nominates keyframes and emits language subgoals, folding detection into the policy itself. While these methods capture semantic events with the strong rea-soning capacity from VLMs, they introduce per-step high VLM inference costs and large model dependency, and the hallucination from VLMs could propagate to the robot policies. Kinematic heuristics instead mark a frame whenever the gripper toggles or joint velocities drop near zero, cap-turing grasps, releases, and stationary poses. Such rules are adopted by C2F-ARM [12], PerAct [13], SAM2Act [14], and TGM-VLA [15] for supervision extraction, and generalized by FrameSkip [16] into a continuous importance score driven by action variation and gripper transitions. These rules are cheap, deterministic, and effective at capturing manipulation-critical moments. Our method adopts kinematic cues for the same reasons. However, since they fire only on actor motion and produce redundant keyframes during repetitive gripper activity, we further introduce a visual signal to filter out uninformative frames and retain only those reflecting genuine task-relevant stage changes. 
+
+Memory Augmented VLA Policies . VLA policies provide high-capacity visual-language represen-tations for action prediction, making them natural backbones for incorporating temporal memory in long-horizon tasks.Equipping VLA models with memory has emerged as a direct approach to non-Markovian tasks. Methods differ primarily in memory granularity and representation. Dense and compressed memory methods retain all or a fixed window of recent observations. ContextVLA [17] compresses past frames into a single context token. HAMLET [18] maintains a fixed window of time-contrastive moment tokens. ReMem-VLA [19] uses dual-level EMA recurrent queries up-dated at frame and chunk boundaries. RoboFlamingo [20] and SeedPolicy [21] propagate history via LSTM and gated attention. MEM [22] combines a video encoder with a self-updating language summary, while MemoryVLA [6] consolidates per-step features through token merging. As the observation history grows, these methods must either discard older observations or compress them into a bounded representation, which may remove sparse decision-relevant information. Sparse keyframe memory methods retain only semantically significant frames. BPP [11] prompts an off-the-shelf VLM to flag keyframes. SAM2Act+ [14] augments a manipulation transformer with a SAM2-inspired memory bank. Keyframe-Chaining VLA [23] learns a Keyframe Selection Module with FiLM task modulation. MemER [9] fine-tunes a VLM to jointly select keyframes and emit language subgoals. Mem-0 [10] keeps one frame per completed subtask for high-level planning, with short buffers at execution. Our method likewise builds memory from keyframes, fusing it with the current observation through masked cross-attention and gated residual fusion. 
+
+# 3 Method 
+
+In this section, we introduce our KEMO framework, a plug-in framework that augments VLA poli-cies with historical keyframe evidence for long-horizon robot manipulation. As shown in Fig. 2, we posit that not all historical frames are equally useful: the most informative memories are event 3Figure 2: Event-driven keyframe memory framework. The keyframe detector module uses robot states and visual observations to select task-relevant event keyframes, which are stored in a keyframe memory bank. The memory integration module retrieves the stored keyframes and fuses them with the current visual representation, enabling the VLA backbone to predict actions using both current observations and historical transition evidence. Right: module details for keyframe detection and memory integration. keyframes where robot actions produce task-relevant scene changes. Based on this principle, our framework detects event keyframes from kinematic and visual cues, stores them in a compact mem-ory bank, and injects the memory into the current visual representation through cross-attention. We formulate the memory-conditioned policy in Sec. 3.1, describe event-driven keyframe detection in Sec. 3.3, present keyframe memory integration in Sec. 3.4, and introduce keyframe-consistent train-ing in Sec. 3.5. 
+
+3.1 Problem Formulation 
+
+We consider long-horizon robot manipulation tasks characterized by stage ambiguity and partial observability. At each timestep t, the robot receives an observation ot = {It, s t} consisting of color (RGB) images It from multiple cameras and proprioceptive state st ∈ Rd, together with a language instruction ℓ, and then executes an action chunk at:t+H ∈ RH×D over a prediction horizon H.We define stage ambiguity as the case where similar current observations correspond to different task states and therefore require different actions. This ambiguity arises because the current observation may not reveal which operations have already been completed or what task-relevant information was observed earlier. For example, as illustrated in Fig. 1, similar observations in different stages of Cover Blocks require actions toward different target objects. To resolve this ambiguity, the policy conditions on a history memory Mt:
+
+πθ (at:t+H | ot, ℓ, Mt) , (1) where at:t+H ∈ RH×D denotes the H-step action chunk predicted from timestep t. Rather than retaining the complete observation history, we construct Mt as a temporally ordered set of event keyframes detected up to the current timestep t. Each keyframe corresponds to a task-relevant state transition induced by the robot’s interactions, such as covering, removing, placing, or replacing an object. The resulting memory provides compact historical evidence of completed task progress and previously observed task-relevant relationships for subsequent action prediction. 
+
+3.2 Framework Overview 
+
+As illustrated in Fig. 2a, our method augments a VLA policy with an event-driven keyframe memory pipeline. At each timestep, the current multi-view visual observations and robot states are first processed by the keyframe detector. The detector uses kinematic cues to identify candidate transition moments and visual change to remove redundant candidates. Its output is a sequence of accepted event keyframes together with their timestep indices. The accepted keyframes are then encoded into compact visual tokens and stored in the temporally ordered memory bank Mt. The memory integration module takes the current visual tokens as queries and the stored keyframe tokens as historical context. Through masked cross-attention and 4(a) Keyframe Detection (b) Keyframe Memory Integration Module 
+
+Figure 3: Event-driven keyframe detection and memory integration. (a) The keyframe detector computes an event saliency score from robot motion, identifies candidate keyframes through causal peak detection, and applies a visual deduplication filter to keep only candidates associated with meaningful scene changes. Selected keyframes are stored, while visually redundant or non-transition frames are filtered out. (b) The memory integration module encodes stored keyframes with the visual encoder, applies spatial pooling and temporal positional embeddings, retrieves keyframe memory tokens, and fuses them with the current visual representation through masked cross-attention and gated residual fusion before action prediction by the VLA backbone. gated residual fusion, it produces a memory-augmented visual representation, which is subsequently combined with the current robot state and language instruction by the VLA backbone to predict the next action chunk. The detected keyframe indices also provide a training signal. In addition to determining which observations are stored in Mt, they define higher-weight supervision windows around task-relevant transitions. Consequently, keyframe detection provides both the memory content used for action prediction and the temporal signal used for keyframe-consistent training. We describe the event-driven keyframe detector in Sec. 3.3. Its selected keyframes are used to con-struct and update the memory bank introduced in Sec. 3.4. The resulting memory tokens are fused with the current visual representation before action prediction, while the same keyframe indices are reused by the loss-weighting objective in Sec. 3.5. 
+
+3.3 Event-Driven Keyframe Detection 
+
+Reliably identifying stage transitions without task-specific annotation is the central challenge. As shown in Fig. 3a, our method scores each timestep using kinematic signals and applies a visual filter to retain only semantically meaningful candidates. 
+
+Event Saliency Score . We define an event saliency score based on recent motion features: 
+
+St = 11 + ¯δt
+
+, (2) where ¯δt = 1
+
+> w
+
+Pw−1 
+
+> i=0
+
+∥qt−i − qt−i−1∥2 is the mean joint-space displacement over a sliding window of length w, and qt denotes the robot joint-position vector at timestep t. The additive constant in the denominator prevents division by zero and yields the maximum score St = 1 when no joint displace-ment is observed within the window. A high score indicates that the robot action has slowed down recently, which commonly occurs near key manipulation events such as grasping, placing, covering, or releasing an object, where deliberate deceleration ensures refined execution before transitioning to the next stage. 
+
+Causal Peak Detection . Given the event saliency sequence St, we identify candidate keyframes as local peaks of St. During online execution, a candidate peak is confirmed after observing a short temporal window. These peaks correspond to moments where the robot motion locally slows down, yielding candidate event keyframes. 5Visual Deduplication Filter . Motion-based keyframe candidates may also arise from pauses or adjustments that do not produce a meaningful change in the scene. We therefore compare each can-didate frame ci with the most recently accepted keyframe ki−1 using a frozen DINOv2 encoder [24]: 
+
+vi = 1 − ϕ(Ici )⊤ϕ(Iki−1 )
+
+∥ϕ(Ici )∥2 ϕ(Iki−1 ) 2
+
+, (3) where ϕ(·) denotes the global image embedding produced by the frozen encoder. The candidate is accepted as the next keyframe only if vi > ϵ , where ϵ is a predefined visual-dissimilarity threshold. Otherwise, it is discarded, and ki−1 remains the reference for the next candidate. This step removes visually redundant motion candidates for which the observed scene remains largely unchanged. Finally, we enforce a minimum refractory period of r frames between consecutive accepted keyframes to avoid repeated detections within the same sustained transition. 
+
+3.4 Keyframe Memory Integration 
+
+After detecting event keyframes, the next challenge is how to make them useful for action prediction. A keyframe only becomes effective memory if it can be represented compactly to reduce redundant spatial information and computational overhead, ordered temporally, and fused with the current observation in a way that preserves the base VLA policy. We therefore design a memory integration module that encodes detected keyframes into compact visual tokens, stores them in a temporally ordered memory bank, and injects the memory into the current visual representation through cross-attention and gated fusion, shown in Fig. 3b. 
+
+Keyframe Encoding . Given the detected keyframe indices for each training trajectory, we encode keyframe images using the same SigLIP[25] visual encoder as the base policy. For each keyframe at index ki, the encoder produces patch-level tokens: Zki = SigLIP (Iki ) ∈ RN ×D , where N = 256 
+
+is the number of spatial patches and D is the embedding dimension. To reduce computational cost while preserving spatial structure, we apply 4×4 spatial average pooling to obtain Fki ∈ R16 ×D,reducing each keyframe from 256 to 16 tokens. 
+
+Keyframe Memory Bank Construction . At timestep t, the memory bank Mt contains up to the K
+
+most recent accepted keyframes whose indices satisfy ki ≤ t. When fewer than K keyframes have occurred, the bank is padded with the most recent keyframe and a binary padding mask m ∈ { 0, 1}K
+
+is maintained to suppress padded slots during attention. The slot-level mask is expanded over the 16 pooled tokens associated with each keyframe. We set K according to subtask transitions of each task. 
+
+Temporal Positional Encoding . To convey stage ordering, each keyframe slot receives a learnable temporal position embedding indexed by its position in the bank: ˜Fki = Fki + PE (i) ∈ R16 ×D,where PE( i) is the learnable embedding of the i-th temporal slot, and is broadcast to all 16 pooled tokens of the corresponding keyframe. This allows the policy to distinguish the first completed stage from the second, resolving the ordering ambiguity that arises when multiple keyframe embeddings are visually similar. 
+
+Memory Injection via Cross-Attention . Keyframe memory is injected at the visual encoding stage, before the language model processes the observation. For each camera, let Xt ∈ RN ×D
+
+denote the current frame’s patch tokens from SigLIP. The keyframe bank tokens are projected and concatenated across the K slots to form Keys and Values: KV = [ ˜Fk1 ; ˜Fk2 ; · · · ; ˜FkK ] ∈
+
+R(K·16) ×D . Cross-attention is then applied with the current frame tokens as queries: X′ 
+
+> t
+
+=
+
+CrossAttn (Xt, KV , mask = m), where m masks padded slots. The output is fused into the current representation via a learned residual gate: ˆXt = Xt + σ(g([ Xt; X′
+
+> t
+
+])) · X′ 
+
+> t
+
+, where g(·) is a linear projection with negative bias initialization to suppress the memory contribution at the start of train-ing. This design ensures that early in training, when keyframe embeddings are not yet informative, the gate remains nearly closed and the base policy behavior is preserved. The updated tokens ˆXt
+
+are passed to the language model in place of the original image tokens, with no change to the prefix sequence length or the language model architecture. 63.5 Keyframe-Consistent Training 
+
+A key observation motivating our design is that stage-critical moments, which are stored as keyframes, are also the moments where policy errors are most consequential. An incorrect ac-tion at a stage transition propagates through all subsequent stages. We therefore up-weight the flow matching loss at keyframe-adjacent timesteps: 
+
+L =
+
+P 
+
+> t
+
+wt · ℓt
+
+P 
+
+> t
+
+wt
+
+, wt =
+
+λ if min i |t − ki| ≤ δ
+
+1 otherwise , (4) where ℓt = 1
+
+> H
+
+PHh=1 ∥vht − uht ∥22 is the per-timestep flow-matching loss, vht and uht denote the predicted and target flow velocities at horizon step h, respectively. δ is a window radius around each keyframe, and λ > 1 is the keyframe weight. Crucially, the same keyframe indices that define wt also determine the contents of Mt at inference time. This keyframe consistency encourages the policy to be accurate near the events that will later be stored as memory. The supervision weights and memory contents are therefore derived from the same event indices. 
+
+# 4 Experiments 
+
+Having devloped our KEMO, we now evaluate our method on real-world dual-arm experiments, ad-dressing the following main research questions: Q1 : Does event-driven keyframe selection provide advantages over alternative frame selection strategies? Q2 : Do the individual components of our design each contribute to the final performance? Q3 : Does our method outperform other state-of-the-art baselines on memory-dependent tasks? 
+
+4.1 Experimental Setup 
+
+Our KEMO policy is initialized from the pretrained VLA backbone π0.5 and fine-tuned via super-vised fine-tuning (SFT) on the collected demonstration data. Baselines. We compare against two baselines: (1) π0.5 [1], which is fine-tuned on the same demonstration data using the same base training recipe as KEMO, but without memory augmentation; and (2) MemoryVLA [6], which serves as a memory-augmented reference baseline. 
+
+Task Design. We design six challenging memory-dependent robot manipulation tasks in the real world, presented in increasing order of average trajectory duration. These tasks span from 2 to 6 scored subtasks and durations from 28 to 95 seconds which consists 830 to 2846 execution steps. 
+
+Swap Foods involves exchanging food items between two plates and requires remembering their original locations. Find Block involves covering three colored blocks and later uncovering the cup containing the target block, requiring memory of the target block’s location after occlusion. 
+
+Cover Blocks involves covering three blocks in sequence and then uncovering them in reverse order, requiring tracking of the current task stage. Box Refill involves removing items from several boxes and later refilling each box with a matching item, requiring memory of the item–box associations. 
+
+Make Sandwich involves alternating bread placement and sauce application, requiring tracking of the current assembly progress. Drawer Items Replacement involves removing items from drawers and later placing matching new items back into the corresponding drawers, requiring memory of the drawer–item associations. Detailed task procedures, subtask definitions, and evaluation criteria are provided in the Appendix B. 
+
+Training and Evaluation Setup. Real-world experiments are conducted using YAM dual robot arms. Each task is trained with 100–200 demonstration data and evaluated from randomized initial states. Each method is evaluated over 12 trials using two metrics: Task Success Rate (TSR) and 
+
+Stage Completion Rate (SCR) . TSR is the fraction of trials in which all task stages are completed successfully and in the correct order. For a task with N stages, SCR measures the average number of consecutively completed stages from the beginning of the task, reported out of N . Once a stage fails, subsequent stages are not counted, even if they are later completed. Thus, TSR measures 7Figure 4: Swap Foods. Trajectory length: 28 seconds (830 steps). Two food items and two plates are placed on the table. Using the proposed method, the robot exchanges the food items between the two plates: the food originally on the left plate should be moved to the right plate, and the food originally on the right plate should be moved to the left plate. 
+
+Figure 5: Find Block. Trajectory length: 40 seconds (1186 steps).Three blocks (red, green, blue) and three cups are placed on the table. The robot sequentially covers all three blocks with cups, then identify and uncover only the cup hiding the green block, using the proposed method. 
+
+Figure 6: Cover Blocks . Trajectory length: 50 seconds (1480 steps).The robot must sequentially cover all three blocks with cups from left to right, then uncover them in reverse order from right to left, comprising six stage transitions in total. 
+
+Figure 7: Box Refill. Trajectory length: 50 seconds (1480 steps). Three boxes are placed on the table. At the beginning of each episode, two objects from two different categories are placed into two of the boxes. Using the KEMO framework, the robot first removes the original objects from the boxes and place them in the left region of the table. It then selects new objects from the right region and place each new object into the box that originally contained the same category. 8Figure 8: Make Sandwich. Trajectory length : 54 seconds (1616 steps). Using the proposed method, the robot makes a layered sandwich by adding salad sauce, placing a bread slice, adding honey mustard sauce, and placing the final bread slice. 
+
+Figure 9: Drawer Items Replacement. Trajectory length: 95 seconds (2846 steps).Two objects are placed in two of the three drawers, with their initial drawer locations randomized across episodes. Using the proposed KEMO VLA, the robot inspects the drawers from top to bottom, removes the two objects, and later places matching replacement objects into their original drawers. Depending on the initial object locations, an episode contains four or five execution subtasks. The illustrated episode contains five subtasks because the middle drawer is empty and must be inspected between the two object-containing drawers. Evaluation uses four object-relevant scored stages: two removal stages and two replacement stages. full-task completion, while SCR provides a finer-grained measure of sequential progress. Further implementation and evaluation details are provided in Appendix C. 
+
+4.2 Effect of Memory Selection Strategy 
+
+To address Q1, we compare event-driven keyframe selection with uniform sampling and recent-frame retention on the Cover Blocks task. Retrieval and gated fusion are fixed across all variants, while keyframe-aligned loss weighting is disabled to isolate the effect of memory selection. Results are shown in Table 1. Uniform sampling selects frames at evenly spaced intervals from the observed history. However, retries during inference can lengthen the trajectory and shift the temporal posi-tions selected by uniform sampling relative to training, resulting in inconsistent historical context. It achieves a TSR of 0/12 (0%) and an SCR of 1.833/6 (30.6%). The recent-frame baseline retains the K most recent observations, preserving dense short-term context while discarding earlier obser-vations. It achieves a TSR of 1/12 (8.3%) and an SCR of 0.700/6 (11.7%). Event-driven keyframe selection retains frames associated with action-induced task-state changes. It achieves the best per-formance, with a TSR of 3/12 (25.0%) and an SCR of 2.500/6 (41.7%). These results show that the proposed event-driven selection is more effective than uniform sampling or recent-frame retention. 
+
+4.3 Module Contribution Analysis 
+
+For Q2, we performed a component-wise ablation by individually disabling each module to isolate its contribution, with results in Table 1. 
+
+Fusion Mechanism. Without gating, the cross-attention output is directly added to the current visual tokens, which can cause memory features to dominate the visual representation and weaken infor-9Table 1: Memory selection and component ablations on the Cover Blocks task. For memory selection, retrieval and gated fusion are fixed, while keyframe-aligned loss weighting is disabled. For component ablation, event-driven keyframes are used while gated fusion or loss weighting is individually removed. TSR is reported as successful trials out of 12, and SCR as the average number of sequentially completed stages out of 6. 
+
+Memory Selection Strategy 
+
+Method TSR ↑ SCR ↑
+
+Uniform Sampling 0/12 1.833/6 Recent Frames 1/12 0.700/6 
+
+Event Keyframes 3/12 2.500/6 
+
+Component Ablation 
+
+Method TSR ↑ SCR ↑
+
+w/o Gated Fusion 0/12 0.000/6 w/o Loss Weighting 3/12 2.500/6 
+
+Ours 9/12 5.250/6 
+
+Table 2: Performance comparison on the six real-world manipulation tasks. Each method is evaluated over 12 trials per task. TSR is reported as successful trials out of 12, and SCR as the average number of sequentially completed stages over the task-specific total number of stages. Method Task Swap Foods Find Block Cover Blocks TSR ↑ SCR ↑ TSR ↑ SCR ↑ TSR ↑ SCR ↑
+
+π0.5 6/12 1.500/2 0/12 0.353/4 0/12 1.333/6 MemoryVLA 1/12 0.750/2 0/12 1.000/4 0/12 0.333/6 
+
+Ours 8/12 1.580/2 2/12 3.167/4 9/12 5.250/6 
+
+Method Task Box Refill Make Sandwich Drawer Items Replacement TSR ↑ SCR ↑ TSR ↑ SCR ↑ TSR ↑ SCR ↑
+
+π0.5 4/12 2.580/4 10/12 3.330/4 0/12 0.000/4 MemoryVLA 0/12 0.000/4 0/12 1.000/4 0/12 0.000/4 
+
+Ours 7/12 3.330/4 11/12 3.750/4 0/12 1.417/4 
+
+mation from the current observation. This is undesirable because action prediction still requires an accurate understanding of the robot’s present state and scene configuration, while memory should serve as complementary history evidence rather than replacing the current perception. The learned gate adaptively controls the contribution of retrieved keyframe memory, allowing the policy to pre-serve current-observation features when they are sufficient and rely more on memory when history is needed for disambiguation. 
+
+Loss Weighting. Adding keyframe-aligned loss weighting increases TSR from 3/12 to 9/12 and SCR from 2.50 /6 to 5.25 /6. This improvement shows that assigning greater training weight to samples near detected keyframes provides a complementary benefit to the memory mechanism and leads to more reliable sequential task execution. Overall, the full KEMO model outperforms both ablated variants, confirming that gated memory fusion and keyframe-aligned loss weighting provide complementary benefits for long-horizon task execution. 
+
+4.4 Comparison with Baselines 
+
+Regarding Q3, we benchmark our method against both memory-free and memory-augmented VLA baselines across six real-world memory-dependent manipulation tasks. Table 2 summarizes the results. Across all tasks, π0.5 achieves an aggregate TSR of 27.8%, while MemoryVLA achieves 1.4%. In comparison, our method achieves 51.4%, corresponding to an absolute improvement of 23.6 percentage points over π0.5. Our method also improves SCR from 42.3% to 76.4%, a gain of 34.1 percentage points. These results show that the proposed KEMO improves both full-task completion and sequential progress across tasks. 10 5 Limitations 
+
+While our method demonstrates consistent improvements on memory-dependent tasks, several lim-itations remain. First, our method requires hyperparameter tuning, such as the sliding-window size 
+
+w, peak-detection window, and refractory period r, to achieve optimal performance across different tasks. Second, the memory bank capacity K is currently set manually based on the expected number of stage transitions per manipulation task. Future work will investigate learned event selection and dynamically sized memory to improve transfer across tasks. 
+
+# 6 Conclusion 
+
+In summary, we presented an KEMO framework for long-horizon memory-dependent robot manipu-lation. By combining kinematic and visual cues, the proposed lightweight keyframe detector identi-fies task-relevant events without online VLM inference or task-specific annotations while providing significant improvements over both memory-free and memory-augmented baselines. The selected keyframes provide historical evidence for memory-augmented action prediction and are also used to emphasize event-related samples during training. Across various challenging long-horzion dual-arm manipulation tasks in the real world, our method improves aggregate TSR by 23.6% and SCR by 34.1% over the memory-free baseline. Ablation studies further demonstrate the benefits of event-driven keyframe selection, gated memory fusion, and keyframe-aligned loss weighting during VLA training. These results highlight event memory as an effective approach for improving sequential progress and full-task completion in long-horizon manipulation. 11 Acknowledgments 
+
+This study was supported by the InnoHK initiative of the Innovation and Technology Commission of the Hong Kong Special Administrative Region Government via the Hong Kong Centre for Logistics Robotics. The authors thank xdof.ai for supporting our data collection and real-world experiments. The authors also thank Yufeng Ji and Prof. Mengdi Xu for insightful discussions. 
+
+# References 
+
+[1] P. Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, M. Y. Galliker, D. Ghosh, L. Groom, K. Hausman, B. Ichter, S. Jakubczak, T. Jones, L. Ke, D. LeBlanc, S. Levine, A. Li-Bell, M. Mothukuri, S. Nair, K. Pertsch, A. Z. Ren, L. X. Shi, L. Smith, J. T. Springenberg, K. Stachowicz, J. Tanner, Q. Vuong, H. Walke, A. Walling, H. Wang, L. Yu, and U. Zhilinsky. π0.5: a vision-language-action model with open-world generalization, 2025. URL https://arxiv.org/abs/2504.16054 .[2] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn. Openvla: An open-source vision-language-action model, 2024. URL 
+
+https://arxiv.org/abs/2406.09246 .[3] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, X. Chen, K. Choromanski, T. Ding, D. Driess, A. Dubey, C. Finn, P. Florence, C. Fu, M. G. Arenas, K. Gopalakrishnan, K. Han, K. Hausman, A. Herzog, J. Hsu, B. Ichter, A. Irpan, N. Joshi, R. Julian, D. Kalashnikov, Y. Kuang, I. Leal, L. Lee, T.-W. E. Lee, S. Levine, Y. Lu, H. Michalewski, I. Mordatch, K. Pertsch, K. Rao, K. Reymann, M. Ryoo, G. Salazar, P. Sanketi, P. Sermanet, J. Singh, A. Singh, R. Soricut, H. Tran, V. Vanhoucke, Q. Vuong, A. Wahid, S. Welker, P. Wohlhart, J. Wu, F. Xia, T. Xiao, P. Xu, S. Xu, T. Yu, and B. Zitkovich. Rt-2: Vision-language-action models transfer web knowledge to robotic control, 2023. URL https://arxiv.org/abs/2307.15818 .[4] C. Chi, Z. Xu, S. Feng, E. Cousineau, Y. Du, B. Burchfiel, R. Tedrake, and S. Song. Diffusion policy: Visuomotor policy learning via action diffusion, 2024. URL https://arxiv.org/ abs/2303.04137 .[5] M. J. Kim, C. Finn, and P. Liang. Fine-tuning vision-language-action models: Optimizing speed and success, 2025. URL https://arxiv.org/abs/2502.19645 .[6] H. Shi, B. Xie, Y. Liu, L. Sun, F. Liu, T. Wang, E. Zhou, H. Fan, X. Zhang, and G. Huang. Memoryvla: Perceptual-cognitive memory in vision-language-action models for robotic ma-nipulation. arXiv preprint arXiv:2508.19236 , 2025. [7] Y. Dai, H. Fu, J. Lee, Y. Liu, H. Zhang, J. Yang, C. Finn, N. Fazeli, and J. Chai. Robomme: Benchmarking and understanding memory for robotic generalist policies, 2026. URL https: //arxiv.org/abs/2603.04639 .[8] H. Li, S. Yang, Y. Chen, X. Chen, X. Yang, Y. Tian, H. Wang, T. Wang, D. Lin, F. Zhao, and J. Pang. Cronusvla: Towards efficient and robust manipulation via multi-frame vision-language-action modeling, 2025. URL https://arxiv.org/abs/2506.19816 .[9] A. Sridhar, J. Pan, S. Sharma, and C. Finn. Memer: Scaling up memory for robot control via experience retrieval. arXiv preprint arXiv:2510.20328 , 2025. [10] T. Chen, Y. Wang, M. Li, Y. Qin, H. Shi, Z. Li, Y. Hu, Y. Zhang, K. Wang, Y. Chen, H. Wang, R. Xu, R. Wu, Y. Mu, Y. Yang, H. Dong, and P. Luo. Rmbench: Memory-dependent robotic manipulation benchmark with insights into policy design, 2026. URL https://arxiv.org/ abs/2603.01229 .12 [11] M. S. Mark, J. Liang, M. Attarian, C. Fu, D. Dwibedi, D. Shah, and A. Kumar. Bpp: Long-context robot imitation learning by focusing on key history frames. arXiv preprint arXiv:2602.15010 , 2026. [12] S. James and P. Abbeel. Coarse-to-fine q-attention with learned path ranking. arXiv preprint arXiv:2204.01571 , 2022. [13] M. Shridhar, L. Manuelli, and D. Fox. Perceiver-actor: A multi-task transformer for robotic manipulation. In Conference on Robot Learning , pages 785–799. PMLR, 2023. [14] H. Fang, M. Grotz, W. Pumacay, Y. R. Wang, D. Fox, R. Krishna, and J. Duan. Sam2act: In-tegrating visual foundation model with a memory architecture for robotic manipulation. arXiv preprint arXiv:2501.18564 , 2025. [15] F. Pu, L. Jiang, and W. Yang. Tgm-vla: Task-guided mixup for sampling-efficient and robust robotic manipulation. arXiv preprint arXiv:2603.00615 , 2026. [16] B. Yu, S. Lian, X. Lin, Z. Shen, Y. Wei, C. Wu, H. Yuan, H. Liu, B. Wang, C. Huang, et al. Frameskip: Learning from fewer but more informative frames in vla training. arXiv preprint arXiv:2605.13757 , 2026. [17] H. Jang, S. Yu, H. Kwon, H. Jeon, Y. Seo, and J. Shin. Contextvla: Vision-language-action model with amortized multi-frame context. arXiv preprint arXiv:2510.04246 , 2025. [18] M. Koo, D. Choi, T. Kim, K. Lee, C. Kim, Y. Seo, and J. Shin. Hamlet: Switch your vision-language-action model into a history-aware policy. arXiv preprint arXiv:2510.00695 , 2025. [19] H. Li, F. Shen, D. Chen, L. Yang, X. Wang, J. Shi, Z. Bing, Z. Liu, and A. Knoll. Remem-vla: Empowering vision-language-action model with memory via dual-level recurrent queries. 
+
+arXiv preprint arXiv:2603.12942 , 2026. [20] X. Li, M. Liu, H. Zhang, C. Yu, J. Xu, H. Wu, C. Cheang, Y. Jing, W. Zhang, H. Liu, H. Li, and T. Kong. Vision-language foundation models as effective robot imitators. arXiv preprint arXiv:2311.01378 , 2023. [21] Y. Gui, Y. Zhou, S. Cheng, X. Yuan, H. Fan, P. Cheng, and S. Liu. Seedpolicy: Horizon scaling via self-evolving diffusion policy for robot manipulation. arXiv preprint arXiv:2603.05117 ,2026. [22] M. Torne, K. Pertsch, H. Walke, K. Vedder, S. Nair, B. Ichter, A. Z. Ren, H. Wang, J. Tang, K. Stachowicz, K. Dhabalia, M. Equi, Q. Vuong, J. T. Springenberg, S. Levine, C. Finn, and D. Driess. Mem: Multi-scale embodied memory for vision language action models, 2026. URL https://arxiv.org/abs/2603.03596 .[23] Y. Chen, W. Tan, L. Zhu, F. Li, J. Li, G. Yang, and H. T. Shen. Non-markovian long-horizon robot manipulation via keyframe chaining. arXiv preprint arXiv:2603.01465 , 2026. [24] M. Oquab, T. Darcet, T. Moutakanni, H. Vo, M. Szafraniec, V. Khalidov, P. Fernandez, D. Haz-iza, F. Massa, A. El-Nouby, M. Assran, N. Ballas, W. Galuba, R. Howes, P.-Y. Huang, S.-W. Li, I. Misra, M. Rabbat, V. Sharma, G. Synnaeve, H. Xu, H. Jegou, J. Mairal, P. Labatut, A. Joulin, and P. Bojanowski. Dinov2: Learning robust visual features without supervision, 2024. URL 
+
+https://arxiv.org/abs/2304.07193 .[25] X. Zhai, B. Mustafa, A. Kolesnikov, and L. Beyer. Sigmoid loss for language image pre-training, 2023. URL https://arxiv.org/abs/2303.15343 .13 Figure 10: Real-World Experimental Setup. Demonstrations are collected through leader–follower teleoperation, where two 6-DoF leader arms control the corresponding two 6-DoF follower arms. During policy inference and autonomous evaluation rollouts, the leader arms are not used, and only the follower arms execute the predicted actions. Visual observations are captured by three Decxin RGB cameras: one fixed top-view camera and two wrist-mounted cameras attached to the left and right follower arms. 
+
+# A Real-World Experimental Setup 
+
+Figure 10 shows the real-world dual-arm manipulation setup used for demonstration collection and policy evaluation. The system consists of two 6-DoF leader arms and two 6-DoF follower arms. During demonstration collection, the leader arms are used to teleoperate the corresponding follower arms. During policy evaluation, the follower arms execute the predicted actions autonomously with-out human intervention. Visual observations are captured by three Decxin RGB cameras: one fixed top-view camera observ-ing the entire workspace and two wrist-mounted cameras attached to the left and right follower arms. The top-view camera provides a global observation of the scene, while the wrist cameras provide close-range views of the manipulated objects and end-effector interactions. 
+
+# B Task Details 
+
+B.1 Swap Foods Task Description. As shown in Fig. 4, two food items and two plates are placed on the table. The robot must exchange the food items between the two plates: the food originally on the left plate should be moved to the right plate, and the food originally on the right plate should be moved to the left plate. 
+
+Language Instruction. Swap the two food items between the plates. 
+
+Subtask Definition. 
+
+• Subtask 1: Move the food item originally on the left plate to the right plate. • Subtask 2: Move the food item originally on the right plate to the left plate. 14 Success Criteria. TSR requires both food items to be placed on the opposite plates relative to their initial positions. SCR awards one point for each food item correctly transferred to its target plate. 
+
+Data. Approximately 100 demonstrations are collected via teleoperation. Each trajectory has an average duration of 28 seconds and an average length of 830 steps. 
+
+B.2 Find Block Task Description. As shown in Fig. 5, three blocks (red, green, blue) and three cups are placed on the table. The robot must sequentially cover all three blocks with cups, then identify and uncover only the cup hiding the green block. 
+
+Language Instruction. Cover the blocks from left to right using the cups, and then uncover the cup which covers the green block. 
+
+Subtask Definition. 
+
+• Subtask 1–3 (Cover phase): Place cup over each block in sequence. • Subtask 4 (Identify and uncover): Lift the cup covering the green block. 
+
+Success Criteria. TSR requires all four subtasks to be completed correctly, including identifying the correct cup at stage 4. Uncovering the wrong cup at stage 4 counts as a failure regardless of earlier progress. SCR awards one point per correctly completed subtask. 
+
+Data. Approximately 160 demonstrations collected via teleoperation. Each trajectory has an average duration of 40 seconds and an average length of 1186 steps. 
+
+B.3 Cover Blocks Task Description. As shown in Fig. 6, three blocks and three cups are placed on the table. The robot must sequentially cover all three blocks with cups from left to right, then uncover them in reverse order from right to left, comprising six stage transitions in total. 
+
+Language Instruction. Cover the blocks from left to right using the lids, and then uncover them again from right to left. 
+
+Subtask Definition. 
+
+• Subtask 1–3 (Cover phase): Place cup over block 1 (left), block 2 (middle), block 3 (right), in order. • Subtask 4–6 (Uncover phase): Remove cup from block 3 (right), block 2 (middle), block 1 (left), in order. 
+
+Success Criteria. TSR requires all six subtasks to be completed in the correct order. SCR awards one point per correctly completed subtask in sequence; out-of-order completions do not receive credit. 
+
+Data. Approximately 200 demonstrations collected via teleoperation. Each trajectory has an average duration of 50 seconds and an average length of 1480 steps. 
+
+B.4 Box Refill Task Description. As shown in Fig. 7, three boxes are placed on the table. At the beginning of each episode, two objects from two different categories are placed into two of the boxes. The robot must first remove the original objects from the boxes and place them in the left region of the table. It must then select new objects from the right region and place each new object into the box that originally contained the same category. 
+
+Language Instruction. Empty the boxes, then refill each box with a new object of the same category as before. 15 Subtask Definition. 
+
+• Subtask 1–2 (Remove phase): Remove the two original objects from their boxes and place them in the left table region. • Subtask 3–4 (Refill phase): Place new objects from the right table region into the corre-sponding boxes according to the original box-category assignment. 
+
+Success Criteria. TSR requires both boxes to be refilled with objects matching their original cate-gories. SCR awards one point for each correctly completed remove or refill subtask in sequence. A refill subtask is counted as correct only if the new object category matches the category originally contained in that box. 
+
+Data. Approximately 150 demonstrations are collected via teleoperation. Each trajectory has an average duration of 50 seconds and an average length of 1480 steps. 
+
+B.5 Make Sandwich Task Description. As shown in Fig. 8, three bread slices and one tray are placed on the table. Initially, one bread slice is placed on the left side of the tray as the sandwich base, while two additional bread slices are stacked on the right side. The robot must make a sandwich by alternating sauce-adding and bread-stacking operations. The right arm first adds salad sauce onto the base bread and places one bread slice from the right side on top of it. The left arm then adds honey mustard sauce onto the new top bread layer, and the right arm places the final bread slice on top to complete the sandwich. 
+
+Language Instruction. Make a layered sandwich by adding salad sauce, placing a bread slice, adding honey mustard sauce, and placing the final bread slice. 
+
+Subtask Definition. 
+
+• Subtask 1: The right arm adds salad sauce onto the base bread. • Subtask 2: The right arm places one bread slice from the right side of the tray onto the sauced base bread. • Subtask 3: The left arm adds honey mustard sauce onto the current top bread layer. • Subtask 4: The right arm places the final bread slice on top to complete the sandwich. 
+
+Success Criteria. TSR requires all four subtasks to be completed in the correct order: salad sauce, bread slice, honey mustard sauce, and final bread slice. SCR awards one point for each correctly completed subtask in sequence. 
+
+Data. Approximately 100 demonstrations are collected via teleoperation. Each trajectory has an average duration of 54 seconds and an average length of 1616 steps. 
+
+B.6 Drawer Items Replacement Task Description. As shown in Fig. 9, one drawer unit with three drawers is on the table. Two objects from different categories are placed in two of the three drawers, while the remaining drawer is empty. The robot must open each drawer from top to bottom, remove the item and place it on the left region of the table, then open each drawer again and place a matching new item from the right region into the correct drawer. 
+
+Language Instruction. From top to bottom, open each drawer, pick out the item inside and remem-ber what type of item belongs in that drawer. Then put a matching new item from the table into the same drawer. 
+
+Subtask Definition. Depending on the initial object locations, the resulting trajectory contains four or five execution subtasks. Evaluation uses four object-relevant subtasks: 16 • Subtask 1–2 (Remove phase): Open each drawer top to bottom, remove item, if present, place on left table region. • Subtask 3–4 (Replace phase): Open each drawer top to bottom, place a matching new item from right table region into the corresponding drawer. 
+
+Success Criteria. TSR requires all four object-relevant subtasks to be completed correctly: remov-ing the two objects from their drawers and placing the two matching new objects into the corre-sponding drawers. SCR awards one point for each correctly completed subtask. 
+
+Data. Approximately 120 demonstrations collected via teleoperation. Each trajectory has an average duration of 95 seconds and an average length of 2846 steps. 
+
+# C Implementation Details 
+
+C.1 Training Configuration 
+
+Table 3: Training hyperparameters for π0.5 .Hyperparameter Value Optimizer AdamW Peak learning rate 2.5 × 10 −5
+
+Minimum learning rate 2.5 × 10 −6
+
+Warmup steps 1000 Total steps 30000 Batch size 32 Action horizon 50 Action space Joint-space Table 4: Training hyperparameters for π0.5 with event-driven keyframe memory. Module Hyperparameter Value Training Optimizer AdamW Peak learning rate 2.5 × 10 −5
+
+Minimum learning rate 2.5 × 10 −6
+
+Warmup steps 1000 Total steps 30000 Batch size 32 Action horizon 50 Action space Joint-space Loss Weighting Keyframe weight λ 8.0 Window radius δ 3Keyframe Memory Spatial pooling 4 × 4
+
+We follow a unified training recipe for π0.5 and our method to ensure a fair comparison. Both π0.5
+
+and our method are trained for 30K steps with a global batch size of 32 on 2 ×A100 GPUs. For visual observations, we use three camera views: a top-view camera, a left-wrist camera, and a right-wrist camera. The detailed training hyperparameters for the base policy are shown in Table 3, and those for our memory-augmented policy are shown in Table 4. 
+
+C.2 Training Details for MemoryVLA 
+
+We trained MemoryVLA for 40K steps with a global batch size of 128 on 8×A100 GPUs. Following the default MemoryVLA setting, we use a single camera as the visual input, here we use a single top-view camera. The detailed configuration is summarized in Table 5. 17 Table 5: Training hyperparameters for MemoryVLA . Hyperparameter Value Base VLM Prismatic VLM Batch size 128 Total steps 40000 Future action window 50 Action space Joint-space 
+
+# D Keyframe Detector Details 
+
+The keyframe detector uses the same detection pipeline across tasks: it first computes an event saliency score from recent robot states, then identifies candidate peaks, and finally applies a visual deduplication filter to remove visually redundant candidates. The detector contains three main hyperparameters: the sliding-window size w for computing the motion-based event saliency score, the peak-detection window for identifying local maxima, and the refractory period r for suppressing repeated detections within the same transition. The DINOv2 visual deduplication threshold is shared across tasks and set to ϵ = 0 .05 . Task-specific values of w,the peak-detection window, and r are summarized in Table 6. Table 6: Task-specific keyframe detector parameters. Parameter Task Cover Blocks Find Block Drawer Items Replacement Swap Foods Box Refill Make Sandwich Sliding window w 30 40 30 10 10 10 Peak detection window 20 20 20 60 60 60 Refractory period r 8 8 60 8 8 818

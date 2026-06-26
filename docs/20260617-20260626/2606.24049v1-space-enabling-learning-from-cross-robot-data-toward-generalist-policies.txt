@@ -1,0 +1,613 @@
+Title: SPACE: Enabling Learning from Cross-Robot Data Toward Generalist Policies
+
+URL Source: https://arxiv.org/pdf/2606.24049v1
+
+Published Time: Wed, 24 Jun 2026 00:22:56 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# SPACE: Enabling Learning from Cross-Robot Data Toward Generalist Policies 
+
+Haeone Lee 1˚ Byeongguk Jeon 1,2 Suchae Jeong 1,2 Jian Kim 3 Kimin Lee 1,21KAIST 2Config 3Yonsei University 
+
+Abstract: In robot learning, scaling training datasets across diverse embodiments and environments has become a dominant paradigm for learning generalizable robot policies. These policies are commonly trained via behavior cloning to imi-tate actions from pre-collected demonstrations. However, since robot actions are tied to the dynamics of the data collection robot, different robots may require dif-ferent actions to achieve the same motion. This discrepancy hinders both policy training and deployment across diverse robots. To address this, we propose us-ing Cartesian state delta as a universal action representation across robots, and introduce State Prediction and Adaptive Command Execution ( SPACE ) frame-work. SPACE handles robot dynamics variation at three levels: across different embodiments, across hardware units of the same embodiment, and within a single robot during operation. It consists of two components: (i) a Cartesian state delta policy that predicts geometric end-effector displacement, and (ii) Action Adapter, which converts the predicted Cartesian state delta into robot-specific control com-mands. Experiments show that SPACE substantially outperforms policies that directly predict control commands when learning from data collected across dif-ferent embodiments and across hardware units of the same embodiment. SPACE also remains robust under dynamics shifts at deployment, including changes in control frequency, object weight, and controller gains. The project page is avail-able at http://haeone.site/space-website/ .
+
+Keywords: Imitation learning, Action space, Cross-robot 
+
+## 1 Introduction 
+
+Foundation models have achieved remarkable success in vision and language by leveraging large-scale, diverse data [1, 2, 3]. Recent work extends this paradigm to robotics, training generalizable policies on datasets that span diverse environments and embodiments [4, 5, 6] or many hardware units of a single embodiment [7, 8]. These policies are typically trained via behavior cloning, pre-dicting the actions recorded in the dataset [4, 9, 10, 11, 12]. A key challenge in leveraging these datasets is that robot actions are inconsistent across them. Differ-ent datasets adopt different action spaces (e.g., joint-space versus end-effector commands), and even within a shared action space, the same action produces different motions across robots [13, 14]. The root cause is that actions are defined as input commands to the underlying controller [7, 9, 15, 16], whose implementation varies across embodiments and even across individual units of the same em-bodiment. Furthermore, robot wear-and-tear and manufacturing variability affect the robot motion for the same action. As a result, a trajectory recorded on one robot is a noisy or even invalid super-vision signal for other robots, hindering learning from cross-robot data. In this work, we present SPACE, a unified framework to address this challenge, consisting of two components: (i) a Cartesian state delta policy that predicts end-effector displacement, a controller-independent quantity recoverable directly from recorded trajectories; and (ii) Action Adapter, a 
+
+> ˚
+
+Correspondence to haeone.lee@kaist.ac.kr     
+
+> arXiv:2606.24049v1 [cs.RO] 23 Jun 2026 Different Embodiments …
+> Hardware Variation
+> (Same Embodiment)
+> …
+> Dynamics & Conditions Stiffness & Gains
+> Payload (Weight)
+> Wear & Tear / Variability
+> …
+> Heterogeneous Robot Data SPACE
+> Fast execution
+> (e.g., high control Hz)
+> New robot /embodiment
+> Dynamics adaptation
+> (e.g., different payloads)
+> VLA Model
+> Output: Cartesian State Delta Δ
+> p
+> Action Adapter
+> Online Adaptation (Per Robot)
+> (end-effector displacement)
+
+Figure 1: Illustration of SPACE, a framework comprising a Cartesian state-delta policy and Action Adapter. SPACE shares data across embodiments and hardware, supporting deployment on new robots, faster execution (high-frequency control), and dynamics adaptation (different payloads). lightweight linear model that converts the predicted displacement into a robot-specific control com-mand at deployment time. Predicting Cartesian state deltas enables data sharing across robots with different dynamics and kinematics by expressing motion in a shared end-effector space. However, prediction alone is insufficient: executing the predicted displacement on a target robot is non-trivial, since the resulting motion depends on the robot’s controller and dynamics. Action Adapter closes this gap, enabling the same policy to be executed on different target robots. We evaluate SPACE in three settings. First, in a cross-embodiment setup where a Franka robot policy is co-trained with UR5 data and with human hand-held gripper data, SPACE improves success rates over a command-predicting policy by an average of 30% and 50%, respectively. Second, when learning from DROID [7], which spans many hardware units of the same Franka, we achieve an average 54% gain by absorbing unit-to-unit command discrepancies. Third, we show that SPACE remains effective under shifts in control frequency, payload, and controller gains. These results show that SPACE provides a practical recipe for reliable policy learning and deployment across robots. 
+
+## 2 Related Work 
+
+Cross-embodiment policy learning. Several prior works learn policy by combining datasets from different embodiments [4, 9, 10, 11, 12, 16, 17]. A few lines of work learn embodiment-specific action heads [12, 15, 18] or condition embodiment information in the policy [19]. Still, this does not fundamentally address the dynamic differences between robots, but separates the effect by training per robot. Recent works also attempt policy training in latent action, which is shareable across different embodiments [13, 20]. However, the latent action policy requires fine-tuning to be executed in target robots. Domain randomization [21, 22, 23, 24] trains policies under varied robot dynamics to enable adaptation at deployment, but assumes that a simulation of the target task is available. 
+
+Learning from observations. Prior works have attempted policy learning without relying on com-mands provided in datasets. BCO [25] and SOIL [26] learn a command-predicting policy by labeling commands from observation-only demonstrations using an inverse dynamics model of target robot. Meanwhile, we train policy to directly output Cartesian state delta, which is universal across dif-ferent robots. SAIL [27] and RACE [28] also learn policies that predict reached states in datasets instead of commands. Still, they do so for the purpose of speeding up policy execution and require high-stiffness gains [27] or a path optimization algorithm [28] to execute the resulting policy. Sim-ilar to our work, UMI [29] and FastUMI [30] learn a policy to predict Cartesian state delta of a human hand-held gripper trajectory. However, they rely on engineering techniques such as latency measures to execute the resulting policy and focus on the transfer between human to robot only. 
+
+## 3 Problem Formulation 
+
+We first describe robot policy learning via imitation learning and discuss common action space choices (Section 3.1). We then highlight the limitations of control commands as the action space when learning across different embodiments and hardware units (Section 3.2). 23.1 Preliminaries: Imitation Learning and Action Spaces 
+
+We formulate robot control as a sequential decision-making problem in which a policy outputs an action given an observation. Formally, at timestep t, a policy π receives an observation ot from the environment and outputs an action at. The observation ot “ t pt, I t, l tu consists of the robot’s end-effector pose pt (or other proprioception input), a camera image It, and a language instruction lt.We adopt a behavior cloning [31] setting, in which the policy is trained from a precollected dataset of demonstrations. The dataset D “ t τ iuNi“1 consists of N trajectories, where each trajectory 
+
+τ i “ t o0, a 0, . . . , o T , a T u is a sequence of observations and actions up to the terminal timestep T .The policy is parameterized by a neural network with parameters θ and is trained to maximize the likelihood of the demonstrated actions as max θ Eτ „D, pot,a tq„ τ rlog πθ pat | otqs .Prior work has explored a variety of action spaces for policy learning. Actions are typically defined along two axes: the modality (joint or end-effector) and the temporal axis (absolute or delta) [7, 9, 11, 32]. Combining these axes yields four commonly used action spaces. Joint absolute commands a target joint position, while joint delta commands a target joint displacement. Cartesian absolute 
+
+commands a target end-effector pose (Cartesian position and orientation), while Cartesian delta 
+
+commands a target pose displacement. 2
+
+Control commands vs. achieved motion. Beyond the modality and temporal axis, the action 
+
+at predicted by the policy is conventionally defined as the control command sent to the robot’s underlying controller (e.g., an operational-space controller [33]). However, the control command and the robot’s actual motion are not the same: due to imperfect command tracking, a robot often moves less than what the command specifies, and the command thus should be larger than the desired motion to achieve it [14, 27, 28]. To make this concrete, consider the Cartesian delta action space. Let ut denote the Cartesian delta control command at timestep t, and let pt “ p xt, rtq denote the end-effector pose, where xt is its Cartesian position and rt is its orientation in Euler angles. When the controller does not perfectly track the commanded motion, }ut} ą } ∆pt} holds for the achieved motion ∆pt “ pt`1 ´ pt. This discrepancy is common across robots. For instance, it occurs throughout DROID [7], as we show in our experiments. 
+
+3.2 Inconsistency of Control Commands across Robots 
+
+Recent work has scaled robot learning by training policies on data from multiple embodiments [4, 9, 15], often using the Cartesian delta action space [9, 15] since it is less dependent on robot-specific kinematics and invariant to base-frame translation [32, 34]. In practice, this is typically realized by predicting Cartesian delta control commands ut that are fed to the underlying robot controller [9, 15]. Same target position   
+
+> UR5 FR3
+> Same target position Achieved movement
+> Control command
+
+Figure 2: Different robots (e.g., UR5 vs. Franka Research 3) require different commands to per-form the same movement. However, different robots require different con-trol commands to achieve the same motion (Figure 2). This holds not only across dif-ferent embodiments, e.g., Franka Research 3 vs. UR5, but even across different hard-ware units of the same embodiment, due to wear, manufacturing variability, and differ-ences in low-level controllers or their gains [13, 14, 35]. Consequently, control commands recorded in one robot’s trajectory τ “to0, u 0, o 1, u 1, . . . , o T , u T u are not directly valid on other robots, harming both training across multiple robots and deployment on target robots. Beyond inconsistency, Cartesian delta control commands are not even guaranteed to exist in many demonstration datasets. For example, leader-follower teleoperation systems [36] often record con-trol commands in the leader arm’s joint space rather than in Cartesian space. Robots teleoperated via 
+
+> 2
+
+For manipulators, a gripper action is typically appended to each of these action spaces; we omit it from our notation for clarity. 
+
+3kinesthetic teaching [37, 38] produce no explicit control commands, since the robot is manipulated directly by a human. Similarly, human motion data and data collected with hand-held grippers (e.g., UMI [29]) contain only recorded trajectories without explicit robot commands. In this work, we address these issues so that policies can effectively be trained and deployed on diverse robots. 
+
+## 4 State Prediction and Adaptive Command Execution (SPACE) 
+
+In this section, we present SPACE, a unified framework that consists of a Cartesian state delta policy and Action Adapter that can handle dynamic variations across embodiments, across hardware units of the same robot embodiment, and within a single robot during operation. 
+
+4.1 Cartesian State Delta Policy 
+
+Modern robot demonstration datasets are collected from heterogeneous sources: across different embodiments (e.g., Open-X [4]) and across many hardware units of the same robot embodiment (e.g., DROID [7]). Since control commands are not consistent across these robots, we instead train the policy to predict the actual robot motion recorded in each demonstration. Concretely, we predict the Cartesian state delta ∆pt “ pt`1 ´ pt, the displacement between current and next end-effector poses. 3 Since it expresses only end-effector motion, the Cartesian state delta is agnostic to robot dynamics. It can be obtained from any robot that provides end-effector Cartesian poses, regardless of the control commands used during teleoperation. Moreover, it is invariant to robot kinematics and base-frame translation, and can therefore be shared across different embodiments and hardware units. This leads to the following behavior cloning objective: 
+
+max  
+
+> θ
+
+Eτ „D, pot,∆ptq„ τ rlog πθ p∆pt | otqs ,
+
+where ot “ t pt, I t, l tu consists of the end-effector pose, camera image, and language instruction. We refer to a policy learned with this objective as a Cartesian state delta policy . However, naively commanding the predicted Cartesian state delta from the policy does not always produce the desired motion on the target robot due to imperfect tracking (see Section 3.1 for details). We resolve this in Section 4.2 with Action Adapter. 
+
+4.2 Action Adapter 
+
+Action Adapter translates the Cartesian state delta predicted by the policy into a control command for a target robot. Given a target robot, Action Adapter learns a mapping from a Cartesian state delta 
+
+∆p to the control command u that realizes it. Action Adapter is parameterized as a linear model, 
+
+ˆu “ W0∆p ` b0,
+
+and fit its parameters by minimizing a least-squares objective: 
+
+min 
+
+> W0,b 0
+
+ÿ
+
+> p∆p,u qP Dcal
+
+}W0∆p ` b0 ´ u}22 , (1) where Dcal denotes the calibration trajectories used to train Action Adapter. To collect Dcal , we roll out a random scripted policy πrand and gather M trajectories of length K. This calibration step typically takes less than one minute on a Franka Research 3 robot with M “ 10 and K “ 50 ,and Action Adapter is fit in negligible time via linear regression. However, as the policy rolls out, changes in robot configuration can make the learned parameters W0 and b0 inaccurate. For example, when the robot approaches a singularity or holds a heavy object, the same control command ut may produce a smaller actual movement. To handle this, we continuously update Action Adapter during deployment using the least mean squares (LMS) algorithm [39]. Let πθ be the learned Cartesian state delta policy. At rollout timestep              
+
+> 3For the rotational component, rtand rt`1are converted to rotation matrices Rtand Rt`1to compute the relative rotation ∆Rt“Rt`1RJ
+> t, which is then converted back to Euler angles to obtain ∆rt.
+
+4t, the policy outputs ∆ptarget  
+
+> t
+
+„ πθ p¨ | otq, which Action Adapter converts into a control command 
+
+ˆut “ Wt∆ptarget  
+
+> t
+
+` bt. After executing ˆut, we observe the actual robot motion ∆pobs  
+
+> t
+
+“ pt`1 ´ pt
+
+and define the prediction error as et “ Wt∆pobs  
+
+> t
+
+` bt ´ ˆut. Note that the error is defined using ∆pobs 
+
+> t
+
+rather than ∆ptarget  
+
+> t
+
+, since no ground-truth control command is available for ∆ptarget  
+
+> t
+
+. The adapter is then updated via LMS: 
+
+Wt`1 “ Wt ´ μe tp∆pobs  
+
+> t
+
+qJ, bt`1 “ bt ´ μe t,
+
+where μ is the learning rate. This update is equivalent to one step of online gradient descent on the squared error }et}22. Algorithm 1 in Appendix A summarizes the full procedure for executing the Cartesian state delta policy with Action Adapter. 
+
+## 5 Experiments 
+
+We design our experiments to investigate the following: (i) Does SPACE improve performance over a policy predicting control commands in cross-embodiment learning? (Section 5.1) (ii) Does SPACE improve performance when learning across multiple hardware units of the same embodiment? (Section 5.2) (iii) Does SPACE remain robust under a dynamics shift at deployment? (Section 5.3) We conduct all experiments on a real Franka Research 3 (FR3) robot using the DROID [7] platform, a widely used FR3 robot setup [9, 10, 40, 41]. We mainly compare SPACE against a policy that predicts control commands, which we refer to as the control command policy . We adopt π0.5 [11], a state-of-the-art vision-language-action model, as our main policy and fine-tune it for 20k steps with a batch size of 64 unless otherwise specified. To initialize the weights W0 and b0 of Action Adapter, we collect M “ 10 random trajectories of length K “ 50 and perform linear regression. The learning rate of Action Adapter is set to μ “ 0.2 across all experiments. We refer readers to Appendix B for further details in experiments. We use the robot controller from DROID [7] with the Cartesian delta control command modality, which commands the desired end-effector pose displacement. 4 Action Adapter therefore converts the predicted Cartesian state delta into a Cartesian delta control command. The success rate is evaluated over 50 rollouts, and Action Adapter is reset to the initial W0 and b0 fitted from Dcal 
+
+before each rollout to ensure independence between rollouts. Cup Tiger Cloth    
+
+> Cloth
+> Train: UR5 + FR3 Train: UR5 only
+> No FR3 Data
+> Cup Doll Bottle
+> Train: UMI + FR3 Execution: FR3
+> PnP Marker
+
+Figure 3: We study co-training between UR5 and FR3 robot for 3 different tasks, and zero-shot transfer from UR5 to FR3 for the Cloth task. We also study the transfer between data collected by a human hand-held gripper (UMI) and the FR3 robot in the pick-and-place (PnP) marker task. 
+
+5.1 Does SPACE Improve Cross-Embodiment Learning? 
+
+We evaluate whether SPACE more effectively leverages datasets from different embodiments than the control command policy. 
+
+> 4
+
+Note that this is different from the “Cartesian velocity” command in DROID, which is a normalized version of the “Cartesian delta” command in r´ 1, 1s.
+
+5Transfer from UR5 to FR3. We use 250 demonstrations from the UR5 robot in the Berkeley UR5 Demonstration dataset [42] to train policies for the FR3 robot on four tasks: Bottle , Cup , Doll , and 
+
+Cloth . As shown in Figure 3, the robot places a bottle into the pot (Bottle), stacks a blue cup on top of the brown cup (Cup), places a doll from the red bowl into the white bowl (Doll), and sweeps the cloth to the left side of the table (Cloth). For the Bottle, Cup, and Doll tasks, we collect 20 FR3 demonstrations and co-train with the 250 UR5 demonstrations, balancing the datasets so FR3 and UR5 are sampled equally per batch. For the Cloth task, we use only UR5 data and evaluate zero-shot transfer to the FR3. Bottle Cup Doll  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> FR3 Success Rate (%)
+> 68%
+> 48%
+> 58%
+> 40%
+> 32%
+> 12%
+> 24%
+> 8% 8%
+> SPACE (train: UR5 + FR3)
+> Control command (train: UR5 + FR3)
+> Control command (train: FR3 only)
+
+(a) UR5 + FR3 co-training Cloth  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> FR3 Success Rate (%)  92%
+> 0%
+> SPACE (train: UR5)
+> Control command (train: UR5)
+
+(b) UR5 only training PnP Marker  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> FR3 Success Rate (%)  94%
+> 44%
+> 20%
+> SPACE (train: UMI + FR3)
+> Control command (train: UMI + FR3)
+> Control command (train: FR3 only)
+
+(c) UMI + FR3 co-training 
+
+Figure 4: Success rate for cross-embodiment experiments. We study (a) co-training on FR3 and UR5 data, (b) zero-shot transfer from UR5 to FR3, and (c) co-training on UMI and FR3 data. In the co-training setting (Figure 4a), SPACE achieves the highest success rate across all three tasks, outperforming both co-training with the control command policy and training on FR3 data alone, with an average improvement of 30% over the control command policy. Moreover, when trained solely on the UR5 dataset, SPACE enables zero-shot transfer with a 92% success rate on the Cloth task, whereas training with UR5 control commands leads to significant under-reaching in the FR3 robot, resulting in a 0% success rate (Figure 4b). In addition, replaying UR5 trajectories using recorded Cartesian state deltas with Action Adapter achieves the lowest tracking errors, whereas re-playing UR5 control commands leads to large deviations in FR3 (Appendix C.1). This confirms that SPACE effectively bridges the control command discrepancy between UR5 and FR3. In addition, directly executing the Cartesian state delta policy without Action Adapter achieves a 0% success rate across all tasks due to under-reaching, highlighting the necessity of Action Adapter. 
+
+Transfer from human hand-held gripper data. We further test whether SPACE is also effective for utilizing hand-held gripper data, specifically from the FastUMI dataset [30] (which we refer to as “UMI data” for simplicity). Since UMI data lacks control command, we naturally adopt the Cartesian state delta as an action space. We study co-training with UMI and robot data to enable execution in different domains beyond UMI data collection. We use the “PnP marker” task, which comprises 550 UMI trajectories in which a marker is grasped and placed into a bowl, and co-train with 10 FR3 robot trajectories collected for the same task. As shown in Figure 4c, SPACE (i.e., co-training with Cartesian state delta) outperforms co-training with control command from robot data by 50%. This confirms that using the Cartesian state delta as a robot data action leads to better transfer with UMI data by matching the data action space. 
+
+5.2 Does SPACE Improve Cross-Hardware Learning? 
+
+In this section, we test whether SPACE improves performance when training and deploying across different hardware units of the same embodiment. 
+
+Hardware-induced dynamics variation. Even though the embodiment (i.e., robot model) and controller implementation are the same, we hypothesize that different hardware units exhibit dis-crepancies in dynamics due to wear, manufacturing variability, and subtle different in setup (e.g., cable tension). To demonstrate this, we collect a single trajectory of 180 timesteps from FR3 6Robot 1 and replay it on FR3 Robot 2 from the same initial pose 50 times. For each replay, we either send the original control commands or execute the Cartesian state deltas ( ∆p) through Action Adapter. Figure 5 shows the resulting trajectories averaged over the 50 replays. Re-playing with control commands produces a position tracking error of 32.6 mm on Robot 2, much larger than the 6.3 mm error on Robot 1. This shows that control commands recorded on Robot 1 produce less accurate motion when replayed on Robot 2, due to differences in dynamics. In contrast, replaying with Cartesian state deltas through Action Adapter on Robot 2 yields a sub-stantially smaller error, demonstrating our framework’s ability to adapt to the new hardware. x (m)  
+
+> -0.2
+> -0.1
+> 0.0
+> 0.1
+> 0.2
+> y (m)
+> -0.2
+> -0.1
+> 0.0
+> 0.1
+> -0.4
+> -0.2
+> 0.0
+> 0.2
+> z (m)
+> Replay ( Δp+ Action Adapter) (Avg err: 14.6mm)
+> Replay (Control command) (Avg err: 32.6mm)
+> Original Traj.
+
+Figure 5: FR3 trajectory replayed on a differ-ent hardware from the collection time. Errors are averaged over timesteps and trajectories, and ∆p denotes Cartesian state delta. 
+
+Transferring a policy across hardware units. To evaluate the impact of these dynamics differences on policy performance, we compare SPACE and the control command policy, trained using 50 demon-strations of the PnP Box task where the robot moves a box from the floor onto the desk. The resulting policies are evaluated on both the original robot used for data collection (Seen) and a new hardware unit (Unseen). As shown in Figure 6, the control com-mand policy’s success rate drops from 98% on the original robot to 18% on the new hardware unit. This confirms that control commands are coupled to the data collection robot’s dynamics and fail to gener-alize across hardware. In contrast, SPACE remains relatively robust, achieving an 84% success rate on the new hardware unit by learning a Cartesian state delta that is agnostic to data collection dynamics. PnP Box   
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)  96%
+> 84%
+> 98%
+> 18%
+> Robot 1 (Seen) Robot 2 (Unseen)
+> SPACE Control command
+
+Figure 6: Success rate on new hardware. Data is collected on Robot 1; the policy is evaluated on Robot 1 and Robot 2. Marker to Cup Remove Marker from Cup   
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)  84%
+> 92%
+> 4% 8%
+> 18% 20%
+> 44%
+> 24%
+> SPACE
+> Control command
+> Joint velocity
+> Joint position
+
+Figure 7: Success rate in DROID. We compare SPACE against policies trained using different action spaces available in DROID. 
+
+Learning from multi-hardware data. While the above results show that SPACE enables trans-fer from one hardware unit to another, an equally important scenario is training a policy on data collected from many hardware units simultaneously. To test this, we use the DROID dataset [7], a large-scale open-source dataset of FR3 robot demonstrations collected across multiple labs and hard-ware units. Since DROID aggregates data from many hardware units, the control commands reflect a mixture of dynamics, providing a noisier supervision signal for the policy. To reduce training cost, we filter DROID trajectories whose instructions contain “marker”, yielding 6614 trajectories with 1.4M samples, on which we fine-tune π0.5 for 5 epochs with a batch size of 64. The learned policy is evaluated on two tasks, “Marker to Cup” and “Remove Marker from Cup”, in which the robot moves a marker into a cup on the tray and moves a marker inside the cup onto the tray, respectively. As shown in Figure 7, SPACE significantly outperforms the control command policy, with gaps of 80% on Marker to Cup and 84% on Remove Marker from Cup. 5 It also outperforms policies using 
+
+> 5
+
+In the DROID experiment, the control command policy uses the Cartesian velocity command, since the original DROID dataset does not provide Cartesian delta commands. 
+
+7other control command modalities such as joint velocity and joint position. This confirms SPACE addresses subtle dynamics differences across hardware units that affect policy performance. 
+
+5.3 Does SPACE Work under Dynamics Shift from Training Time? 
+
+We also test whether SPACE can handle dynamics variations within a single robot during operation. These include changes in control frequency relative to training, as well as environmental variations such as object weight and controller gains. For example, increasing the control frequency above that used during data collection sends control commands to the robot more frequently, causing it to execute faster. Specifically, we take the π0.5 model trained on the PnP Box task in Section 5.2 and increase the ex-ecution frequency from 15Hz (used during data collection) to 30Hz. As shown in Figure 8, SPACE allows execution at this higher frequency: the task completion time is significantly reduced from 12.4s to 8.1s, while maintaining task performance. In contrast, increasing the execution frequency for the control command policy causes a 48% drop in success rate. This is because the control com-mands are tied to the control frequency used during data collection; executing the same commands at a higher frequency causes the robot to under-reach. Unlike prior work that accelerates policy execution by increasing the control frequency [27, 28], SPACE achieves this without controller gain tuning [27] or path optimization algorithm [28]. 15 Hz   
+
+> (Train)
+> 30 Hz
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)
+> 96% 94%
+> 98%
+> 50%
+> 15 Hz
+> (Train)
+> 30 Hz
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> Execution Time (s)  12.4s
+> 8.1s
+> 12.2s
+> 10.4s
+> PnP Box
+> SPACE Control command
+
+Figure 8: Success rate and time taken until task completion in different execution Hz. PnP Box PnP Box (Heavy)  
+
+> Box weight: 90g Box weight: 530g
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)
+> 92%
+> 0%
+> PnP Box (Heavy)
+> SPACE
+> Control command
+
+Figure 9: Success rate after increasing the object weight. 0 25 50 75 100 125 150    
+
+> Step (t)
+> 0.00
+> 0.02
+> 0.04 bt(z-axis)
+> Box weight (90g) Box weight (530g)
+
+Figure 10: Action Adapter bias ( bt)z-axis visualization in PnP Box task. Heavy box weight leads to an increase in z-axis value after grasping (high-lighted by yellow). The value is aver-aged over three rollouts. We also show that the SPACE can handle dynamics changes driven by environmental factors such as object weight. Specifically, we use the same PnP Box task and add metal pieces to the box, increasing its weight from 90g to 530g. As shown in Figure 9, this drops the con-trol command policy’s success rate to 0%; qualitatively, the robot grasps the box but fails to lift it. In contrast, SPACE adapts its control commands online to compen-sate for the heavier box, achieving a 92% success rate, closely matching that of the empty-box case. To examine this adaptation, we visualize the z-component of the bias 
+
+bt in Action Adapter ( Wt∆p ` bt) across timestep t dur-ing online rollout, which captures the upward correction applied against gravity. As shown in Figure 10, this com-ponent rises above 0.03 after the heavy box is grasped (highlighted in yellow), compared to under 0.02 for the empty box. This indicates that the online update actively compensates for the added weight. We also test whether SPACE remains robust when executed with different controller gains from training time. Using the same PnP Box task, we vary proportional gains ( Kp) in DROID con-troller [7] by 0.5ˆ and 1.5ˆ from the training time. Table 1 displays policy success rates under those changed gains measured over 20 rollouts. 8PnP Box Kp (Train) Kp (0.5 ˆ) Kp (1.5 ˆ)      
+
+> SPACE 96% 95% 100% Control command 98% 25% 0%
+
+Table 1: Success rates on the PnP Box task under con-troller stiffness gains multiplied by different factors from training. As shown in the table, increasing propor-tional gains by only 1.5ˆ drops the policy success rate from 98% to 0% for the control command policy. Qualitatively, the robot over-reaches the box and fails to grasp it in all cases. Similarly, reducing proportional gains by 0.5 ˆ also reduces the success rate to 25% . The robot fails to place the box on the desk by being stuck on the edge of the desk. Meanwhile, SPACE achieves similar success rates to the execution under the original gains, demonstrating the capability of dynamics adaptation. This is because Action Adapter adapts to the different controller gain settings from calibration and online update steps. 
+
+## 6 Conclusion 
+
+In this work, we introduced SPACE, a framework that consists of a Cartesian state delta policy and Action Adapter, which can effectively leverage datasets collected in different embodiments and robot hardware units. Compared to conventional policies that predict command input to the un-derlying controller, the Cartesian state delta policy predicts the recorded end-effector displacement, decoupling actions from robot-specific dynamics. Action Adapter then outputs robot commands that achieve the predicted Cartesian state delta in the target robot. By addressing discrepancies in commands across multiple robots, SPACE improves policy performance for training across different embodiments and different hardware units. Furthermore, SPACE remains robust under varying en-vironment dynamics such as control Hz, payload, and controller gain variations. This demonstrates that SPACE enables reliable learning and deployment of policy across multiple robots. 
+
+## 7 Limitations and Future Works 
+
+Force-aware manipulation. While Cartesian state delta is a generalizable modality across different robot dynamics, it may not accurately reflect a force applied to an object when the same displacement can be achieved by applying different forces. To address this, future work could explore predicting the desired force for policy as in addition to the desired Cartesian state delta. 
+
+Different control modality conversion. In this work, Cartesian state delta is converted to Cartesian delta control command since they share the same modality. Deploying Cartesian state delta policy in robots that do not support Cartesian delta control commands will require converting Cartesian state delta to different control modalities (e.g., joint), which is not yet explored in this work. 9Acknowledgments 
+
+The authors thank Seonghyeon Ye, Dongkyu Shin, and Jaehwi Song for providing helpful comments for improving the work. 
+
+## References 
+
+[1] R. Bommasani, D. A. Hudson, E. Adeli, R. Altman, S. Arora, S. von Arx, M. S. Bernstein, J. Bohg, A. Bosselut, E. Brunskill, et al. On the opportunities and risks of foundation models. 
+
+arXiv preprint arXiv:2108.07258 , 2021. [2] J. Achiam, S. Adler, S. Agarwal, L. Ahmad, I. Akkaya, F. L. Aleman, D. Almeida, J. Altenschmidt, S. Altman, S. Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. [3] G. Comanici, E. Bieber, M. Schaekermann, I. Pasupat, N. Sachdeva, I. Dhillon, M. Blistein, O. Ram, D. Zhang, E. Rosen, et al. Gemini 2.5: Pushing the frontier with advanced rea-soning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 , 2025. [4] A. O’Neill, A. Rehman, A. Maddukuri, A. Gupta, A. Padalkar, A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain, et al. Open x-embodiment: Robotic learning datasets and rt-x models. In International Conference on Robotics and Automation , 2024. [5] H.-S. Fang, H. Fang, Z. Tang, J. Liu, C. Wang, J. Wang, H. Zhu, and C. Lu. Rh20t: A compre-hensive robotic dataset for learning diverse skills in one-shot. In International Conference on Robotics and Automation , 2024. [6] K. Wu, C. Hou, J. Liu, Z. Che, X. Ju, Z. Yang, M. Li, Y. Zhao, Z. Xu, G. Yang, et al. Robomind: Benchmark on multi-embodiment intelligence normative data for robot manipulation. arXiv preprint arXiv:2412.13877 , 2024. [7] A. Khazatsky, K. Pertsch, S. Nair, A. Balakrishna, S. Dasari, S. Karamcheti, S. Nasiriany, M. K. Srirama, L. Y. Chen, K. Ellis, et al. Droid: A large-scale in-the-wild robot manipulation dataset. arXiv preprint arXiv:2403.12945 , 2024. [8] Q. Bu, J. Cai, L. Chen, X. Cui, Y. Ding, S. Feng, S. Gao, X. He, X. Hu, X. Huang, et al. Agibot world colosseo: A large-scale manipulation platform for scalable and intelligent embodied systems. arXiv preprint arXiv:2503.06669 , 2025. [9] M. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn. Openvla: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 , 2024. [10] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter, et al. π0: A vision-language-action flow model for general robot control. arXiv preprint arXiv:2410.24164 , 2024. [11] K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fu-sai, et al. π0.5: a vision-language-action model with open-world generalization. arXiv preprint arXiv:2504.16054 , 2025. [12] J. Bjorck, F. Casta˜ neda, N. Cherniadev, X. Da, R. Ding, L. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, et al. Gr00t n1: An open foundation model for generalist humanoid robots. arXiv preprint arXiv:2503.14734 , 2025. [13] J. Zheng, J. Li, D. Liu, Y. Zheng, Z. Wang, Z. Ou, Y. Liu, J. Liu, Y.-Q. Zhang, and X. Zhan. Universal actions for enhanced embodied foundation models. In Computer Vision and Pattern Recognition Conference , 2025. 10 [14] A. Bronars, Y. Park, and P. Agrawal. Tune to learn: How controller gains shape robot policy learning. arXiv preprint arXiv:2604.02523 , 2026. [15] O. M. Team, D. Ghosh, H. Walke, K. Pertsch, K. Black, O. Mees, S. Dasari, J. Hejna, T. Kreiman, C. Xu, et al. Octo: An open-source generalist robot policy. arXiv preprint arXiv:2405.12213 , 2024. [16] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn, K. Gopalakrishnan, K. Haus-man, A. Herzog, J. Hsu, et al. Rt-1: Robotics transformer for real-world control at scale. In 
+
+Robotics: Science and Systems , 2023. [17] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid, et al. Rt-2: Vision-language-action models transfer web knowledge to robotic control. In 
+
+Conference on Robot Learning , 2023. [18] J. Wen, Y. Zhu, J. Li, Z. Tang, C. Shen, and F. Feng. Dexvla: Vision-language model with plug-in diffusion expert for general robot control. In Conference on Robot Learning , 2025. [19] J. Zheng, J. Li, Z. Wang, D. Liu, X. Kang, Y. Feng, Y. Zheng, J. Zou, Y. Chen, J. Zeng, et al. X-vla: Soft-prompted transformer as scalable cross-embodiment vision-language-action model. 
+
+arXiv preprint arXiv:2510.10274 , 2025. [20] S. Ye, J. Jang, B. Jeon, S. J. Joo, J. Yang, B. Peng, A. Mandlekar, R. Tan, Y.-W. Chao, B. Y. Lin, et al. Latent action pretraining from videos. In International Conference on Learning Representations , 2025. [21] X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel. Sim-to-real transfer of robotic con-trol with dynamics randomization. In International Conference on Robotics and Automation ,2018. [22] M. Andrychowicz, B. Baker, M. Chociej, R. Jozefowicz, B. McGrew, J. Pachocki, A. Petron, M. Plappert, G. Powell, A. Ray, et al. Learning dexterous in-hand manipulation. The Interna-tional Journal of Robotics Research , 39(1):3–20, 2020. [23] A. Kumar, Z. Fu, D. Pathak, and J. Malik. Rma: Rapid motor adaptation for legged robots. 
+
+arXiv preprint arXiv:2107.04034 , 2021. [24] H. Qi, A. Kumar, R. Calandra, Y. Ma, and J. Malik. In-hand object rotation via rapid motor adaptation. In Conference on Robot Learning , 2023. [25] F. Torabi, G. Warnell, and P. Stone. Behavioral cloning from observation. In International Joint Conference on Artificial Intelligence , 2018. [26] I. Radosavovic, X. Wang, L. Pinto, and J. Malik. State-only imitation learning for dexterous manipulation. In International Conference on Intelligent Robots and Systems , 2021. [27] N. R. Arachchige, Z. Chen, W. Jung, W. C. Shin, R. Bansal, P. Barroso, Y. H. He, Y. C. Lin, B. Joffe, S. Kousik, et al. Sail: Faster-than-demonstration execution of imitation learning policies. In Conference on Robot Learning , 2025. [28] S. Kim, J. Kim, and J. J. Lim. Time optimal execution of action chunk policies beyond demon-stration speed. In International Conference on Learning Representations , 2026. [29] C. Chi, Z. Xu, C. Pan, E. Cousineau, B. Burchfiel, S. Feng, R. Tedrake, and S. Song. Universal manipulation interface: In-the-wild robot teaching without in-the-wild robots. In Robotics: Science and Systems , 2024. [30] Z. Zhaxizhuoma, K. Liu, C. Guan, Z. Jia, Z. Wu, X. Liu, T. Wang, S. Liang, P. Chen, P. Zhang, et al. Fastumi: A scalable and hardware-independent universal manipulation interface with dataset. In Conference on Robot Learning , 2025. 11 [31] D. A. Pomerleau. Alvinn: An autonomous land vehicle in a neural network. In Advances in Neural Information Processing Systems , 1988. [32] Y. Feng, J. Zheng, Z. Wang, D. Liu, J. Li, J. Pang, T. Wang, and X. Zhan. Demystifying action space design for robotic manipulation policies. arXiv preprint arXiv:2602.23408 , 2026. [33] O. Khatib. A unified approach for motion and force control of robot manipulators: The opera-tional space formulation. IEEE Journal on Robotics and Automation , 3(1):43–53, 1987. [34] L. Y. Chen, K. Hari, K. Dharmarajan, C. Xu, Q. Vuong, and K. Goldberg. Mirage: Cross-embodiment zero-shot policy transfer with cross-painting. In Robotics: Science and Systems ,2024. [35] L. Hao, R. Pagani, M. Beschi, and G. Legnani. Dynamic and friction parameters of an indus-trial robot: Identification, comparison and repetitiveness analysis. Robotics , 10(1):49, 2021. [36] T. Z. Zhao, V. Kumar, S. Levine, and C. Finn. Learning fine-grained bimanual manipulation with low-cost hardware. In Robotics: Science and Systems , 2023. [37] B. Akgun, M. Cakmak, J. W. Yoo, and A. L. Thomaz. Trajectories and keyframes for kinesthetic teaching: A human-robot interaction perspective. In International Conference on Human-Robot Interaction , 2012. [38] H. Li, Y. Cui, and D. Sadigh. How to train your robots? the impact of demonstration modality on imitation learning. In International Conference on Robotics and Automation , 2025. [39] S. Haykin and B. Widrow. Least-mean-square adaptive filters. 2003. [40] S. Ye, Y. Ge, K. Zheng, S. Gao, S. Yu, G. Kurian, S. Indupuru, Y. L. Tan, C. Zhu, J. Xiang, et al. World action models are zero-shot policies. arXiv preprint arXiv:2602.15922 , 2026. [41] P. Atreya, K. Pertsch, T. Lee, M. J. Kim, A. Jain, A. Kuramshin, C. Neary, E. S. Hu, K. Arora, K. Ellis, et al. Roboarena: Distributed real-world evaluation of generalist robot policies. In 
+
+Conference on Robot Learning , 2025. [42] L. Y. Chen, S. Adebola, and K. Goldberg. Berkeley UR5 demonstration dataset. https: //sites.google.com/view/berkeley-ur5/home .12 Appendix 
+
+## A Pseudo Code 
+
+Algorithm 1 SPACE rollout with Action Adapter  
+
+> 1:
+
+Given: Cartesian state delta policy πθ 
+
+> 2:
+
+Define: Action adapter ˆu “ W0∆p ` b0 and its learning rate μ 
+
+> 3:
+
+Collect M calibration trajectories with length K, Dcal “ tt p0, u 0, . . . , p K , u K uu Mi“1 
+
+> 4:
+
+Initialize W0 and b0 by linear regression on Dcal using Equation (1)  
+
+> 5:
+
+for t P r 0, . . . , T ´ 1s do  
+
+> 6:
+
+Predict target Cartesian state delta from ∆ptarget  
+
+> t
+
+„ πθ p¨ | otq 
+
+> 7:
+
+Run Action Adapter ˆut “ Wt∆ptarget  
+
+> t
+
+` bt 
+
+> 8:
+
+Execute ˆut and observe next robot pose pt`1 
+
+> 9:
+
+Compute prediction error et “ Wt∆pobs  
+
+> t
+
+` bt ´ ˆut for ∆pobs  
+
+> t
+
+“ pt`1 ´ pt 
+
+> 10:
+
+Update Wt`1 Ð Wt ´ μe tp∆pobs  
+
+> t
+
+qJ, bt`1 Ð bt ´ μe t
+
+## B Experiment Details 
+
+B.1 Action Adapter Calibration 
+
+We collect calibration data Dcal to train Action Adapter. We execute a random scripted policy πrand 
+
+for M “ 10 calibration trajectories, each with horizon K “ 50 , yielding up to 500 calibration steps. The policy generates Cartesian delta commands in a 6D end-effector space. Specifically, we sample a random vector ϵ „ N p0, I q and multiply the step size uniformly from r0.002 , 0.01 s for position and r0.005 , 0.02 s for orientation. The policy maintains a random direction vector and updates it every 10 steps by mixing 70% of the previous direction with 30% Gaussian noise. We record the achieved Cartesian state delta and the commanded action, forming calibration pairs p∆p, u q used to fit Action Adapter by ordinary least squares as follows: 
+
+min 
+
+> W0,b 0
+
+ÿ
+
+> p∆p,u qP Dcal
+
+}W0∆p ` b0 ´ u}22 . (2) The entire process takes approximately 1 minute on the FR3 robot, and Action Adapter fits in neg-ligible time using a closed-form solution. 
+
+B.2 Cross-Embodiment Experiment Transfer from UR5 to FR3. We use 250 demonstrations from the UR5 robot in the Berkeley UR5 Demonstration dataset [42] to train policies for the FR3 robot on four tasks: Bottle , Cup , Doll , and 
+
+Cloth . As shown in Figure 3, the robot places a bottle into the pot (Bottle), stacks a blue cup on top of the brown cup (Cup), places a doll from the red bowl into the white bowl (Doll), and sweeps the cloth to the left side of the table (Cloth). For the Bottle, Cup, and Doll tasks, we collect 20 FR3 demonstrations and co-train with the 250 UR5 demonstrations. During FR3 data collection, the object is randomly placed on the desk, and the evaluation is conducted at fixed locations on the desk. During training, we apply dataset balancing so that each batch has an equal amount of Franka data and UR5 data. This is realized by sampling each data point within the minibatch with uniform probability from the Franka or the UR5 robot. Also, we mask the UR5 proprioceptive state to be zero when co-training with Franka, since absolute proprioceptive states may not be shared between different embodiments. For the Cloth task, we use only UR5 data and evaluate zero-shot transfer to the FR3. 
+
+Transfer from human hand-held gripper data. We further test whether SPACE is also effective for utilizing hand-held gripper data, specifically from the FastUMI dataset [30] (which we refer 13 to as “UMI data” for simplicity). Since UMI data lacks a control command, we naturally adopt the Cartesian state delta as an action space, which is calculated from the recorded robot pose in FastUMI. We study co-training with UMI and robot data to enable execution in different domains beyond human data collection. We use the “PnP marker” task, which comprises 550 UMI trajectories in which a marker is grasped and placed into a bowl, and co-train with 10 FR3 robot trajectories collected for the same task. During evaluation, we vary the location of the marker in 8 different locations and fix the location of the bowl. The first 4 actions among an action chunk of length 16 are executed. We found that executing the full 16 actions in an open-loop leads to lower performance (5% success rate for both SPACE and control command policy), and executing only one action out of 16 action chunks leads to a significant pause for control command policy. We use zero vectors for proprioceptive input for the policy. 
+
+B.3 Cross-Hardware Experiment 
+
+We test whether SPACE improves performance when training and deploying across different hard-ware units of the same embodiment. 
+
+Transferring a policy across hardware units. To evaluate the impact of these dynamics differ-ences on policy performance, we compare SPACE and the control command policy, trained using 50 demonstrations of the PnP Box task where the robot moves a box from the floor onto the desk. The resulting policies are evaluated on both the original robot used for data collection (Seen) and a new hardware unit (Unseen). We use two Franka Research 3 robots for this purpose, one of which was manufactured in 2022 and the other in 2024. We use the same controller based on DROID and Polymetis [7], and also set the inertia matrices and other gravity compensation variables equally to ensure that dynamics differences do not originate from those factors. 
+
+Learning from multi-hardware data. We use the DROID dataset [7], a large-scale open-source dataset of FR3 robot demonstrations collected across multiple labs and hardware units. To reduce training cost, we filter DROID trajectories whose instructions contain “marker”, yielding 6614 tra-jectories with 1.4M samples, on which we fine-tune π0.5 for 5 epochs with a batch size of 64. The learned policy is evaluated on two tasks, “Marker to Cup” and “Remove Marker from Cup”, in which the robot moves a marker into a cup on the tray and moves a marker inside the cup onto the tray, respectively. During evaluation, we fix the location of the marker and the cup. 
+
+## C Extended Results 
+
+C.1 Replay Tracking Test                        
+
+> Task Replay method Pos Err (mm) Rot Err ( ˝)
+> Bottle Control command 123.7 33.57 Cartesian state delta + Action Adapter 15.2 8.52 Cup Control command 118.5 9.49 Cartesian state delta + Action Adapter 15.0 1.61 Doll Control command 116.0 7.96 Cartesian state delta + Action Adapter 17.4 1.96 Cloth Control command 169.7 15.04 Cartesian state delta + Action Adapter 19.8 2.72
+
+Table 2: Tracking error of replaying UR5 trajectories in Franka across four tasks. 
+
+Transfer from UR5 to FR3. In this section, we show that discrepancies in control command between UR5 and Franka Research 3 (FR3) robot by replaying UR5 control command in FR3 and comparing the replayed trajectories to the original trajectories. Table 2 displays the replay tracking 14 error in Cartesian coordinates (Pos) and orientation (Rot). As shown in Table 2, replaying the UR5 control command in FR3 leads to a large tracking error. Meanwhile, replaying Cartesian state delta using Action Adapter reduces tracking error by not relying on the original UR5 control commands. This double-confirms that executing Cartesian state delta with Action Adapter makes robot data shareable across different embodiments. 
+
+C.2 Action Adapter Ablation 
+
+PnP Box Success Rate Ours : Offline + online 96% 
+
+Offline only 15% Online only 0% Online only (continuous) 30 % 
+
+Table 3: Offline and online update ablation of Action Adapter on the PnP Box task. The success rates are measured across 20 rollouts, except for ours, which uses 50. 
+
+Offline and online update ablations. We ablate the components of Action Adapter to assess their contri-bution to performance. Specifically, we test whether (i) continuously updating Action Adapter online and (ii) initializing Action Adapter from calibration tra-jectories are both necessary. To this end, we con-sider two variants: (1) Offline only , which initial-izes W0 and b0 from Dcal but does not update them online, and (2) Online only , which skips calibration by initializing W0 “ I and b0 “ 0. We addition-ally consider Online only (continuous) , which ini-tializes the same way as Online only but continu-ously updates Action Adapter across the 20 rollouts (to which the success rate is also measured). This yields roughly 3000 steps of LMS update data, substantially more than the 500 steps in Dcal . The resulting success rates on the PnP Box task are reported in Table 3. As shown in Table 3, removing the online update (Offline only) leads to a significant drop in success rate, showing that the initial parameters of Action Adapter become inaccurate as the robot’s pose changes during rollout. In contrast, the Online only variant achieves a 0% success rate, demonstrat-ing the importance of offline initialization. Although Online only (continuous) improves the success rate to 30% by continuously adapting Action Adapter, it still lags far behind our full method that combines offline initialization with online updates. This is because LMS-based online updates are designed to track recent dynamics rather than to aggregate information across many rollouts, so they cannot effectively exploit the larger amount of accumulated data. -0.05              
+
+> 0.00
+> 0.05
+> x (m) -0.10
+> -0.05
+> 0.00
+> 0.05
+> 0.10
+> y (m)
+> -0.10
+> -0.05
+> 0.00
+> 0.05
+> 0.10
+> z (m)
+> Random (Ours)
+> -0.05
+> 0.00
+> 0.05
+> x (m) -0.10
+> -0.05
+> 0.00
+> 0.05
+> 0.10
+> y (m)
+> -0.05
+> 0.00
+> 0.05
+> z (m)
+> Circle
+> -0.01
+> -0.00
+> 0.00
+> 0.01
+> 0.01
+> x (m) -0.04
+> -0.02
+> 0.00
+> 0.02
+> 0.04
+> y (m)
+> -0.02
+> -0.01
+> 0.00
+> 0.01
+> 0.02
+> z (m)
+> Square
+> traj 1 traj 2 traj 3 traj 4 traj 5 traj 6 traj 7 traj 8 traj 9 traj 10 origin
+
+Figure 11: Different trajectory for Dcal used for ablation with circle and square shapes in addition to our original choice, random trajectories. 
+
+Calibration trajectories. We also ablate how different choices for initial calibration trajectories affect the Action Adapter performance. To test this, we attempt new calibration trajectories named 
+
+Circle and Square , in which calibration trajectories draw a circle and a square shape. Then, we multiply a random constant sampled uniformly from r0.2, 4.0s to vary the scale of the trajectory for increasing diversity, as shown in Figure 11. Then, we replay the trajectory used for the tracking test in Figure 5, using Cartesian state delta but with Action Adapter learned from those different calibration trajectories. 15 Calibration Pos Err (mm) Rot Err ( ˝)Ours : Random 6.39 1.36 Circle 66.96 6.87 Square 143.94 10.30 
+
+Table 4: Replay tracking errors of Action Adapter across different initial calibration tra-jectory choices for collecting Dcal .As shown in the table, using calibration trajecto-ries with circle and square shapes increases track-ing error significantly. We hypothesize that this is due to decreased diversity in calibration trajec-tories, which might overfit Action Adapter to a specific pattern in the calibration trajectories. In contrast, generating calibration trajectories using random actions allows the robot to visit diverse states, leading to less overfitting to less diverse poses. 
+
+C.3 Baselines of Action Adapter             
+
+> Method Pos Err (mm) Rot Err ( ˝)Success Rate (PnP Box) Action Adapter 14.6 1.4 94%
+> Gain tuning 29.9 2.9 20% Delta accumulation 40.1 2.4 45%
+
+Table 5: Comparison to alternatives of Action Adapter. Gain tuning searches for controller gains that can track the desired Cartesian state delta. Delta accumulation accumulates the predicted Cartesian state delta to compute an absolute pose for tracking. In this section, we explore the alternatives of Action Adapter in converting the Cartesian state delta to robot-specific commands that realize it. 
+
+Gain tuning. We attempt gain-tuning so that the robot well-tracks the Cartesian state delta with-out under-reaching. Concretely, we search for the combinations of increasing end-effector propor-tional gains by ˆr 2, 4, 6, 8s with damping gains by ˆr 1, 2, 3, 4s and choose the ones with the lowest tracking error on Action Adapter calibration trajectories, resulting in ˆ6 proportional gains and ˆ2damping gains. Then, we additionally vary the proportional and damping gains in the joint space for the best end-effector space gains identified, resulting in increased ˆ8 joint proportional gains with joint damping gain values retained. Using these tuned gains, we conduct a replay test using the same trajectory used in Table 4 and report the tracking error in Table 5. We additionally report the success rates of directly executing the Cartesian state delta policy under those tuned gains (mea-sured over 20 rollouts). As shown in Table 5, the Cartesian state delta policy under those tuned gains still underperforms SPACE using Action Adapter. We suppose this is due to the absence of online update in the gain-tuning baseline, given that removing online update in Action Adapter results in a significant performance drop (Table 3). Moreover, unless one searches over an extensive gain space at considerable computational cost, gain tuning offers less fine-grained control compared to Action Adapter, and it is inapplicable to closed-source robot controllers altogether. 
+
+Delta Accumulation. Additionally, we consider the delta accumulation technique, where the sequence of Cartesian state deltas p∆ptarget  
+
+> t
+
+, . . . , ∆ptarget 
+
+> t`H´1
+
+q „ πθ predicted by the policy action chunk is accumulated to construct absolute target poses. By accumulation, the controller tracks 
+
+ptarget  
+
+> t`k
+
+“ pt ` řkj“0 ∆ptarget  
+
+> t`j
+
+at rollout timestep t ` k for k “ 1, . . . , H when policy action chunk length is H. Compared to commanding delta, commanding absolute poses does not aggregate under-reaching error from individual steps and is thus expected to perform better at tracking. However, as shown in Table 5, the accumulation heuristic performs poorly compared to using Action Adapter. This is because using an absolute target does not fully reduce the tracking error, and the absence of an online update makes it unable to reflect the most recent robot dynamics. 16

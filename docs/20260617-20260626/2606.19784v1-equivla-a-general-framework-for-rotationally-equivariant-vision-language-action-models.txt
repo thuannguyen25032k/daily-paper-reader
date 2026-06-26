@@ -1,0 +1,732 @@
+Title: EquiVLA: A General Framework for Rotationally Equivariant Vision-Language-Action Models
+
+URL Source: https://arxiv.org/pdf/2606.19784v1
+
+Published Time: Fri, 19 Jun 2026 00:26:55 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# EquiVLA: A General Framework for Rotationally Equivariant Vision-Language-Action Models 
+
+Thien-Loc Ha 1∗ Quang-Tan Nguyen 1∗ Trong-Bao Ho 1∗ Long Dinh 1,2
+
+Minh Duc Nguyen 1,2 Gia-Binh Nguyen 1,2 Pham Tri Quang 1 Minh N. Vu 1,2
+
+Duy M. H. Nguyen 3,4,5 An Thai Le 1,2 Ngo Anh Vien 1,2
+
+> 1
+
+VinRobotics 2VinUniversity 3DFKI 4University of Stuttgart 5IMPRS-IS 
+
+> ∗
+
+Equal Contributors. 
+
+Abstract: Vision-Language-Action (VLA) models have emerged as a powerful paradigm for generalist robot manipulation, yet they lack geometric inductive biases: policies trained at specific orientations require substantially more data to generalize across rotational configurations. We present E QUI VLA, the first gen-eral framework for end-to-end SO(2) -equivariant VLA models, applicable to any architecture coupling a frozen vision-language backbone with a flow-matching Dif-fusion Transformer action head. E QUI VLA introduces E QUI PERCEPTOR , which produces approximately SO(2) -equivariant visual representations from frozen ViT features; and E QUI ACTOR , an exactly SO(2) -equivariant flow-matching Diffusion Transformer action head. Together, they establish an approximate SO(2) equivari-ance chain from camera observations to predicted action sequences. Instantiated on GR00T N1.5 and evaluated across four LIBERO suites, CALVIN ABCD →D, and five real-robot tasks on Mobile ALOHA, E QUI VLA achieves 92 .6% average success on LIBERO (vs. 78 .1% baseline), an average sequence length of 4.03 on CALVIN (vs. 3.45 ), and improves real-robot success from 54% to 72% . Project page: https://equivla.github.io/ 
+
+Keywords: Equivariance, Robot Manipulation, Vision-Language-Action 
+
+## 1 Introduction 
+
+Vision-Language-Action models [ 1 , 2, 3] have emerged as a powerful paradigm for generalist robot manipulation, achieving strong performance across diverse tasks by conditioning flow-matching action heads on rich representations from pretrained vision-language backbones. These models demonstrate impressive generalization through language-conditioned imitation learning, enabling robots to follow natural-language instructions across diverse objects and environments. However, despite their capabilities, current VLA models face a fundamental bottleneck: generalization to novel object orientations remains data-intensive, as policies trained at specific orientations must see substantially more data to generalize across rotational configurations encountered in deployment. The root cause of this bottleneck lies in a geometric structure that current VLA models fail to exploit. Robot manipulation tasks possess an inherent rotational symmetry: rotating the workspace and its objects yields an equivalent task that requires a correspondingly rotated action. This SO(2) structure means that knowledge learned at one orientation should transfer immediately to all others, yet current VLA architectures ignore this property entirely. Their VLM backbones process images without any awareness of rotational structure, encoding visual content at fixed spatial locations that change meaning under rotation, and their DiT action heads apply unconstrained transformations that treat rotationally related observations as independent inputs. The result is a model that must independently learn the same manipulation skill at every orientation it encounters - a structural absence of geometric inductive bias that data augmentation alone can mitigate but not fully resolve, as augmentation introduces no architectural guarantee of equivariance [4]. 
+
+> arXiv:2606.19784v1 [cs.RO] 18 Jun 2026
+
+Recent work has demonstrated that encoding SO(2) equivariance directly into policy architectures yields substantial benefits in both data efficiency and task performance, with equivariant policies consistently outperforming non-equivariant baselines across manipulation benchmarks [ 5, 6 , 7 , 8]. However, existing equivariant policy methods are limited to architectures trained from scratch on image observations or point clouds [ 5, 6, 9], or apply canonicalization as a model-agnostic wrapper [ 10 ]; none addresses the full VLM-plus-DiT pipeline that defines modern large-scale VLA models, leaving the most capable robot learning systems without the geometric structure that has proven so effective at a smaller scale. To bridge the gap, we present E QUI VLA, a general framework for end-to-end SO(2) -equivariant VLA models designed for architectures coupling a frozen VLM backbone with a flow-matching DiT action head. E QUI VLA comprises two composable modules, E QUI PERCEPTOR and E QUI ACTOR ,establishing an approximate SO(2) equivariance chain from raw camera images to predicted action sequences without modifying pretrained VLM weights. We instantiate E QUI VLA on GR00T N1.5 [ 1]and evaluate across LIBERO [ 11 ], CALVIN [ 12 ], and real-robot tasks on Mobile ALOHA [ 13 ]. EQUI VLA achieves 92 .6% average success on LIBERO under relative control (vs. 78 .1% for the baseline), an average sequence length of 4.03 on CALVIN ABCD →D (vs. 3.45 for the baseline, approaching history-based methods without temporal context), and improves average real-robot success from 54% to 72% across five tasks. We make several contributions in this work: 1. Token-level Frame Averaging (E QUI PERCEPTOR ): an extension of Frame Averaging (FA) [ 14 ]from globally pooled vectors to spatially indexed ViT patch token sequences, yielding approxi-mately SO(2) -equivariant visual representations from any frozen VLM. 2. Equivariant Flow-matching DiT (E QUI ACTOR ): the first SO(2) -equivariant Diffusion Trans-former action head for robot policy learning, with equivariant attention, state encoding, and action decoding via steerable layers in regular feature space. 3. End-to-end Equivariant VLA (E QUI VLA): a framework combining E QUI PERCEPTOR and EQUI ACTOR to establish an approximate SO(2) equivariance chain from camera observations to action sequences, demonstrated on GR00T N1.5 across simulation and real-robot benchmarks. 
+
+## 2 Related Work 
+
+Vision-Language-Action Models. VLA models unify visual perception, language understanding, and action generation for generalist robot manipulation [ 15 , 16 , 17 ]. Early autoregressive VLAs [ 3 ,15 , 16 ] tokenize actions with LLM backbones, while more recent diffusion and flow-matching VLAs [ 1, 2, 18 , 19 , 20 , 21 , 22 ] synthesize continuous action sequences via iterative denoising [ 23 ] or flow matching, yielding richer action distributions and smoother trajectories. Despite their strong performance, no existing VLA encodes rotational symmetry in the architecture, instead relying on data augmentation or increased demonstration diversity to generalize across object orientations, a costly substitute for the systematic guarantees that equivariance provides. Concurrent work on embodiment equivariance [ 18 ] addresses cross-embodiment transfer but does not encode spatial symmetries within a single embodiment’s observation-action pipeline. Our work addresses this gap by imposing SO(2) equivariance on both the VLM visual backbone and the flow-matching action head, enabling generalization to unseen orientations by construction rather than by memorization. 
+
+Equivariant Robot Policies. Equivariant policy learning exploits geometric symmetries to improve sample efficiency and generalization [ 4, 5, 7 , 6, 24 , 25 ]. Prior work establishes SO(2) and SIM(3) 
+
+equivariance across a range of policy architectures, from pick-and-place [ 24 , 25 ] to 6-DoF closed-loop diffusion policies [ 5], trajectory-level SE(3) -equivariant diffusion [ 8], and point-cloud-based policies [ 6], which consistently reduce data requirements and improve generalization to novel object poses. EquAct [ 9 ] introduces an SE(3) -equivariant point transformer for multi-task manipulation with language conditioning via invariant FiLM layers, achieving strong performance on RLBench [ 26 ], but operates on point clouds trained from scratch rather than leveraging pretrained VLM representations. Eq.Bot [ 10 ] takes a model-agnostic canonicalization approach, transforming observations into a canonical orientation before feeding them to an unmodified policy; while convenient, canonicalization 2provides only approximate equivariance that depends on the quality of frame estimation and does not propagate geometric structure through the action head. All of the above methods either train compact equivariant architectures from scratch or wrap existing policies with canonicalization; none integrates equivariance into the full pipeline of a large-scale VLA model combining a pretrained VLM backbone with a flow-matching DiT action head. 
+
+Symmetrizing Pretrained Models. To impose symmetry on pretrained models without retraining, Frame Averaging (FA) [ 14 ] averages predictions over a group orbit of transformed inputs; Wang et al. [4] apply FA to ResNet’s global image embedding in diffusion policy, demonstrating that even simple symmetry incorporation significantly improves sample efficiency. However, both works apply FA only to globally pooled single vectors and cannot be directly extended to ViT [ 27 ] spatial token sequences, where rotating the input displaces each patch token to a different grid position and naively averaging mixes spatially misaligned tokens, destroying the positional structure that manipulation policies require. EquiLLM [ 28 ] injects equivariance into a frozen LLM by routing only invariant features through the backbone while handling directional information via an equivariant GNN encoder, but operates on 3D molecular systems rather than visual robot manipulation. Our work brings SO(2) equivariance to the full pipeline of a VLA model by adapting the invariant-injection principle of EquiLLM [ 28 ] to the VLA setting, extending FA to spatially indexed ViT patch token sequences and introducing an equivariant flow-matching DiT action head, to our knowledge, the first 
+
+framework to impose end-to-end SO(2) equivariance on a large-scale VLA model without modifying pretrained VLM weights. 
+
+## 3 Method 
+
+EQUI VLA imposes SO(2) equivariance on VLA architectures that couple a pretrained VLM back-bone with a flow-matching action head through two composable modules, with no modification to pretrained VLM weights. Figure 1 illustrates the architecture; E QUI PERCEPTOR is described in Section 3.2 and E QUI ACTOR is in Section 3.3. Language Instruction 
+
+> State Noisy Action
+> Equivariant Action Encoder Equivariant Action Decoder Frame Average Equivariant Adapter Equivariant Projector Invariant Projector VLM
+> Vision Encoder
+> Language Encoder
+> Equivariant Cross Attention
+> N Layers
+> Equivariant Self Attention
+> Equivariant Diffusion Transformer
+> Equivariant Cross Attention
+> Equivariant Self Attention
+> EQUI-ACTOR
+> Wrist Image  Top Image
+> Equivariant State Encoder
+> ... ...
+> EQUI-PERCEPTOR
+
+Figure 1: EquiVLA architecture. (Top ) E QUI PERCEPTOR symmetrizes the frozen VLM’s visual pipeline via Token-level Frame Averaging, producing equivariant tokens zeq and invariant tokens zinv .The latter are fed into the frozen VLM alongside the wrist image and language instruction to produce context tokens zctx , fused with zeq via the Equivariant Adapter to form the visual representation passed to E QUI ACTOR . ( Bottom ) E QUI ACTOR replaces the standard DiT action head with an SO(2) -equivariant Diffusion Transformer, refining state and noisy action tokens through N equivariant cross-and self-attention layers conditioned on visual context, then decoding actions ˆat via flow matching. 33.1 Preliminaries Equivariance. A function f is equivariant if it commutes with the transformations of a symmetry group G: for all g ∈ G, f (ρin (g)x) = ρout (g)f (x), where ρ : G → GL( n) is a group representation 
+
+mapping each group element to an invertible matrix acting on the feature space. Invariance is the special case ρout (g) = I. We sometimes write this compactly as f (g · x) = g · f (x).
+
+Symmetry Group. We focus on SO(2) and its finite cyclic subgroup G = Cu ≤ SO(2) containing 
+
+u discrete rotations {1, r, r 2, . . . , r u−1} where r = R360 ◦/u . In all experiments, we use C8; this choice is ablated in Section 5. 
+
+Representations. Three representations of Cu are used throughout this paper. The trivial represen-tation ρ0 acts on an invariant scalar x ∈ R by ρ0(g)x = x. The irreducible representation ρω acts on a vector v ∈ R2 by a 2×2 rotation matrix at frequency ω: ρω (g)v =
+
+cos ωg − sin ωg 
+
+sin ωg cos ωg 
+
+
+
+v;in particular, ρ1 is the standard 2D rotation and ρ2 rotates at twice the frequency. The regular representation ρreg acts on x ∈ Ru by cyclically permuting its coordinates: for g = rm ∈ Cu,
+
+ρreg (g)x = ( xu−m+1 , . . . , x u, x 1, . . . , x u−m). Representations combine via direct sum ρa ⊕ ρb,where each component transforms independently. All equivariant layers are implemented using steerable CNNs [29, 30, 31]. 
+
+3.2 EQUI PERCEPTOR : Equivariant Visual Token Fusion 
+
+EQUI PERCEPTOR builds on the core insight of EquiLLM [ 28 ]: a frozen language model can act as an invariant feature processor, provided only invariant features are fed into it while equivariant information flows through a separate stream. However, EquiLLM was designed for 3D molecular systems using a geometric GNN encoder, and does not transfer directly to the vision-language pipeline of robot manipulation. We adapt this principle through two novel components. 
+
+Token-level Frame Averaging. A ViT outputs a token sequence {zi}Ni=1 in which each token is tied to a specific spatial patch. When the input image is rotated by a group element h ∈ G, each patch moves to a different grid position. Therefore, naively averaging token sequences across different group elements averages tokens that no longer correspond to the same spatial location. This produces an invariant representation, but it also removes the spatial localization needed for manipulation. The inverse group element h−1 must therefore be applied to “undo” each transformation before averaging, acting simultaneously at two levels: 1) a spatial permutation τ (h−1) that maps each displaced token back to its canonical patch position, and 2) a feature-space transformation ρreg (h−1)
+
+in the regular representation of G. Concretely, τ (h−1) is computed by applying h−1 to each patch center coordinate and assigning the result to the nearest canonical grid index. This nearest-neighbor assignment introduces a discretization error that is zero when h maps every patch center exactly onto another grid position (i.e., for C4 rotations on a square grid) and bounded by sub-patch displacement otherwise (we quantify this error empirically in Section 5). Let fθ : RH×W ×3 → RN ×D denote the frozen ViT. We define the equivariant and invariant streams as: 
+
+zeq (x) = 1
+
+|G|
+
+X
+
+> h∈G
+
+τ (h−1) ⊗ ρreg (h−1) · fθ (h · x) , (1) 
+
+zinv (x) = 1
+
+|G|
+
+X
+
+> h∈G
+
+fθ (h · x) , (2) where the tensor product in Equation (1) acts jointly on token positions (via τ ) and feature channels (via ρreg ). zeq satisfies zeq (g · x) = [ τ (g) ⊗ ρreg (g)] · zeq (x) for all g ∈ G (proof in Appendix C), while zinv is G-invariant by the standard averaging argument [14]. 
+
+Equivariant and Invariant Projectors project the two FA token maps into the VLM token dimension via separate lightweight layers: a standard MLP ψinv yielding ˜zinv = ψinv (zinv ), and a G-equivariant linear layer ψeq yielding ˜zeq = ψeq (zeq ). ˜zinv is concatenated with the wrist-camera and language tokens, then forwarded through the frozen VLM to produce language-grounded context tokens zctx .Both ˜zeq and zctx are then passed to the Equivariant Adapter, which we explain next. 4Equivariant Adapter fuses ˜zeq with zctx via a learned invariant gate, ensuring all gate inputs are restricted to invariant quantities to preserve equivariance. Three invariant summaries are extracted: mean-pooled language slang and vision svis from zctx , and group-pooled equivariant tokens ¯zeq =mean G(˜ zeq ). The gate α = σ(Wgate [slang ; svis ; ¯ zeq ]) , tiled to regular representation αreg =
+
+α ⊗ 1|G| (Kronecker product replicating α across |G| group channels), blends a semantic branch with an equivariant branch: 
+
+zout eq = αreg ⊙ Ws(sinv ⊗ 1|G|) + ( 1 − αreg ) ⊙ Wg (˜ zeq ) , (3) where sinv = ( slang + svis )/2. Since αreg is invariant and Wg is G-equivariant, zout eq is equivariant (Proof is in Theorem 6). Context tokens zctx are similarly updated by blending with an equivariant summary seq = mean N,G (zout eq ) via a per-token invariant gate (see Appendix Appendix D). The final output zout = [ zout eq ; zout inv ; zout lang ] is passed as cross-attention context to E QUI ACTOR .
+
+3.3 EQUI ACTOR : SO(2) -Equivariant Flow-Matching Action Head 
+
+EQUI ACTOR takes context tokens zout from E QUI PERCEPTOR , proprioceptive state embedding zst ,and noisy action tokens za,k t , and outputs action chunk ˆat via flow matching. It replaces the standard DiT action head with a fully SO(2) -equivariant counterpart: all linear projections, attention Q/K/V
+
+matrices, state/action encoders, and the action decoder are replaced by G-steerable layers in the regular feature space. Each token’s feature vector transforms under ρreg (g), while token positions are unchanged. Temporal ordering of state and action tokens is encoded via learned position embeddings in the trivial representation, projected equivariantly to regular feature space; since temporal order is invariant to scene rotation, preserving SO(2) equivariance. 
+
+Action Representation. We adopt the SO(2) -equivariant action representation from Wang et al. [5] ,where end-effector position and orientation transform as SO(2) vectors under scene rotation, gripper width is rotation-invariant, and the group action on at decomposes into irreducible representations as: 
+
+g · at =
+
+(  ρ31 ⊕ (ρ1 ⊕ ρ0) ⊕ ρ0
+
+ (g) at absolute control 
+
+P −1  ρ60 ⊕ ρ41 ⊕ ρ2
+
+ (g) P at relative control (4) where P reorders action components into irreducible blocks, For absolute control, ρ31 encodes the 6D end-effector rotation as three 2D vector pairs, ρ1 ⊕ ρ0 encodes xy translation and z height, and ρ0
+
+encodes gripper width. For relative control, ρ60 encodes invariant scalar offsets and ρ2 captures the frequency-2 component from quadratic terms in the relative rotation decomposition. 
+
+Equivariant Attention. Attention scores are computed via the geometric inner product ⟨q, k⟩ =P 
+
+> g
+
+q[g] · k[g], which is G-invariant since ρreg (g) is orthogonal. Invariant scores with equivariant V
+
+yield equivariant attention output. 
+
+Equivariant Self-attention and Cross-attention. Q, K, V are projected via regular-to-regular layers and equivariance follows directly from the geometric inner product. For cross-attention, in the full E QUI VLA setting, zout is equivariant, and all projections are regular-to-regular. In the base VLA + E QUI ACTOR ablation (no E QUI PERCEPTOR ), context tokens are invariant VLM outputs; Q
+
+and K are projected to the trivial representation to keep scores invariant, while V remains in regular representation. Equivariance of the action token stream is preserved in both cases. 
+
+3.4 EQUI VLA: End-to-end Equivariance 
+
+EQUI VLA combines E QUI PERCEPTOR and E QUI ACTOR as two composable modules. E QUI ACTOR 
+
+is trained from scratch, as steerable layers are structurally incompatible with unconstrained pretrained weights. This means the action head does not benefit from the usual large-scale pretraining. However, the visual representations from the frozen VLM are preserved intact, and the equivariant inductive bias compensates for the loss of pretrained action-head weights, as demonstrated empirically in Section 4. Together, E QUI PERCEPTOR and E QUI ACTOR establish an approximate SO(2) equivariance: for any planar rotation g ∈ Cu, rotating the camera observations ot and proprioceptive state st produces a correspondingly rotated action sequence, 5ˆat(g · ot, ρ s(g)st) ≈ ρa(g) · ˆat(ot, st) ∀ g ∈ Cu , (5) where ρa(g) is defined in Equation (4), and ρs(g) follows the absolute control representation therein, as the proprioceptive state is expressed in the world frame. The approximation error stemming from the approximate SO(2) equivariance of the frozen ViT in E QUI PERCEPTOR is bounded formally in Theorem 3 and Theorem 5 shows when the error vanishes. E QUI ACTOR alone satisfies this relation exactly when paired with invariant VLM context tokens (Theorem 9 with ∆ = 0 ). 
+
+## 4 Experiments 
+
+We experiment on the LIBERO and CALVIN simulation benchmarks and real-robot tasks with Mobile ALOHA [ 13 ], comparing three models. GR00T N1.5 [1] serves as the non-equivariant baseline. GR00T N1.5 + E QUI ACTOR isolates the contribution of action-head equivariance by replacing only the DiT head. EQUI VLA (ours) further incorporates E QUI PERCEPTOR on top of GR00T N1.5. All models share the same pretrained weights and are trained with identical hyperparameters (see Appendix B). 
+
+4.1 LIBERO Benchmark Setup. We evaluate on four LIBERO suites [ 11 ]: LIBERO-10 (long-horizon sequential tasks), LIBERO-Goal (language-conditioned goal specification), LIBERO-Object (object-centric manip-ulation), and LIBERO-Spatial (spatially precise placement). Each suite contains 10 tasks with approximately 40 demonstrations per task. A separate checkpoint is trained for each suite. We evaluate under both relative and absolute end-effector control, replanning at every timestep, and report success rate averaged over 50 rollouts per task (500 per suite) and two seeds. We additionally include published results for π0 [2], OpenVLA [ 3], and SmolVLA [ 21 ] as reference baselines; note that these use different pretraining data and hyperparameters, so comparisons are indicative rather than controlled. Table 1: Success rates (%) on LIBERO benchmarks. †
+
+denotes published results; all others are our runs.                                                      
+
+> Method Ctrl 10 Goal Obj Spat Avg. ↑
+> π0[2] †
+> Rel. 73.0 93.0 86.0 90.0 86.0 OpenVLA [3] †55.0 79.2 88.4 84.7 76.8 SmolVLA [21] 61.0 61.4 66.0 74.0 65.6 GR00T N1.5 [1] 72.0 75.0 83.4 82.0 78.1 GR00T N1.5 + E QUI ACTOR 82.6 88.0 95.2 98.2 91.0
+> EQUI VLA (ours) 87.6 89.4 98.0 95.4 92.6
+> GR00T N1.5 [1] Abs. 52.0 55.2 74.6 68.6 62.6 GR00T N1.5 + E QUI ACTOR 63.0 70.0 79.4 82.0 73.6
+> EQUI VLA (ours) 73.6 70.4 83.0 77.6 76.1
+
+Results. EQUI VLA achieves the highest average success rate under both control modes: 92 .6% under relative control, sur-passing SmolVLA ( 65 .6% ), π0 (86 .0% ), and GR00T N1.5 ( 78 .1% ); and 76 .1% un-der absolute control, (+ 13 .5 pp over the GR00T N1.5 absolute). The gains are progressive: E QUI ACTOR alone accounts for most of the improvement ( 91 .0% rela-tive, 73 .6% absolute), with E QUI PERCEP - 
+
+> TOR
+
+contributing a further 1.6 and 2.5 pp, confirming that equivariant visual features complement action-head equivariance. 
+
+4.2 CALVIN Benchmark Setup. We evaluate on the CALVIN ABCD →D benchmark [ 12 ], which requires completing chains of five language-conditioned manipulation tasks in a tabletop environment. Models are trained on environments A, B, C, D, and evaluated zero-shot on held-out environment D over 1000 instruction chains, using single-step observations (image + proprioception). We do not explore multi-frame variants, as visual token sequences scale proportionally with history length, making it prohibitively expensive at training time. However, we also report HULC [ 32 ] and MoDE [ 33 ] as multi-frame baselines, which are not directly comparable, but help contextualize benchmark difficulty. 
+
+Results. Without temporal history, GR00T N1.5 already surpasses HULC ( 3.45 vs. 3.07 ), reflecting the strength of large-scale VLA pretraining. E QUI ACTOR raises the average sequence length to 63.89 (+0 .44 ), and E QUI VLA reaches 4.03 (+0 .58 ), approaching MoDE [ 33 ] despite using single-frame observations. Gains are progressive across all five task positions and largest at the chain’s tail: Task 5 improves from 48 .5% to 64 .3% (+15 .8 pp ), suggesting that equivariance mitigates error accumulation in long-horizon execution. 
+
+4.3 Real Robot Experiments 
+
+Table 2: Average lengths (out of 5.0) and per-position suc-cess rates (%) over 1000 chains on CALVIN ABCD →D. †:published results; ⋆: multi-frame. Tx denotes Task x.                                       
+
+> Method T1 T2 T3 T4 T5 Avg. ↑
+> HULC [32] †⋆88.9 73.3 58.7 47.5 38.3 3.07 MoDE [33] †⋆97.1 92.5 87.9 83.5 77.9 4.39 GR00T N1.5 [1] 89.0 79.2 68.7 59.4 48.5 3.45 GR00T N1.5 + E QUI ACTOR 93.7 85.8 77.8 70.1 61.9 3.89
+> EQUI VLA (ours) 95.0 88.5 81.1 73.8 64.3 4.03
+
+Setup. We validate E QUI VLA on a mobile ALOHA platform [ 13 ] across five tabletop manipulation tasks, each trained with 150 teleoperated demon-strations. Four tasks use only the right arm, while Shorts Folding re-quires bimanual control. We compare GR00T N1.5 and E QUI VLA under identical conditions, reporting average success rate over 20 trials per task. 
+
+(a) Banana in Pot (b) Block Storing 
+
+(c) House Building (d) Letter Aligning (e) Shorts Folding 
+
+Figure 2: Real-robot tasks. For each task, the first and last frames show the initial and goal states, respectively. See Appendix A for full task descriptions. Table 3: Success rates (%) on five manipulation tasks on a mobile ALOHA robot. Model Banana in Pot Block Storing House Building Letter Aligning Shorts Folding 
+
+EQUI VLA (ours) 15/20 11/20 10/20 19/20 17/20 
+
+GR00T N1.5 12/20 9/20 3/20 13/20 17/20 
+
+Results. EQUI VLA matches or outperforms GR00T N1.5 on all five tasks. The largest gains arise on tasks requiring orientation-invariant grasping or placement: Letter Aligning, where the ‘I’ block appears at arbitrary orientations, yields 95% vs. 65% (+30 pp); House Building, where the triangular block must be grasped at the correct angle, despite varied placement, yields 50% vs. 15% (+35 pp). Conversely, Shorts Folding, where the folding strategy is largely orientation-independent, shows identical performance ( 85% for both), suggesting that the equivariant inductive bias incurs no cost when rotational symmetry is absent. Averaged across all tasks, E QUI VLA achieves 72% vs. 54% .
+
+## 5 Analysis and Ablation 
+
+Equivariance Error. We validate Theorem 3 empirically by measuring the equivariance error: 
+
+ϵeq = 1
+
+M |G|
+
+X
+
+> g, o
+
+∥ˆa(g · o) − ρa(g)ˆ a(o)∥ (6) over M =500 LIBERO observations across all g ∈ C8, where g · o rotates the top-down image and end-effector pose while keeping the wrist image fixed. GR00T N1.5 exhibits ϵeq = 7 .754 ± 3.572 ;7adding E QUI ACTOR reduces this by 9.3× to 0.837 ± 0.738 ; the full E QUI VLA further reduces to 
+
+0.284 ± 0.134 (27 .3× over baseline). Full breakdown is in Appendix C.6. 
+
+Sample Efficiency. To assess whether the geometric inductive bias of E QUI VLA translates into data efficiency, we train three model variants: GR00T N1.5, GR00T N1.5 + E QUI ACTOR , and E QUI VLA, at three demonstration budgets: 10% (≈5 demos/task), 40% (≈20 demos/task), and 100% (≈40 
+
+demos/task) of the full LIBERO training set, while keeping all other hyperparameters identical (see Appendix B). E QUI VLA consistently outperforms GR00T N1.5 across all demonstration budgets, with gains of +1 .8, +10 .6, and +14 .5 pp at 10% , 40% , and 100% respectively, demonstrating that the SO(2) equivariance inductive bias is most beneficial under limited demonstration data. Table 4: Avg. success rate on LIBERO (relative control) at varying demonstration budgets.              
+
+> Method 10% 40% 100% GR00T N1.5 58.4 73.9 78.1 GR00T N1.5 + E QUI ACTOR 58.8 84.1 91.0
+> EQUI VLA (ours) 60.2 84.5 92.6
+
+Table 5: Avg. success rate on LIBERO (relative control) using different symmetry groups.                           
+
+> CN10 Goal Obj Spat Avg. ↑ms/step ↓
+> C482.5 94.0 94.5 95.5 91.6 161
+> C887.5 89.5 98.0 95.5 92.6 194
+> C16 87.0 95.4 98.2 96.4 94.3 243
+
+Group Choice Trade-offs. We ablate different choices of CN ∈ { C4, C 8, C 16 } for E QUI ACTOR ’s steerable layers across all four LIBERO suites, reporting success rates and per-step wall-clock time on a single H100 in Table 5. For reference, GR00T N1.5 runs at 64 ms/step and GR00T N1.5 + EQUI ACTOR at 147 ms/step, confirming that steerable layers add only modest overhead over the standard DiT head. The dominant cost in E QUI VLA comes from E QUI PERCEPTOR ’s |G| ViT passes, adding 14 –96 ms depending on group size. C16 achieves the highest accuracy ( 94 .3% ) but at a 25% 
+
+latency premium over C8 for +1 .7 pp gain. C8 offers the best accuracy–latency trade-off ( 92 .6% ,
+
+194 ms/step) and is adopted as the default group in E QUI VLA. 
+
+## 6 Conclusion 
+
+EQUI VLA demonstrates that SO(2) equivariance and large-scale VLA pretraining are complementary when geometric structure is injected at the right points in the pipeline. By symmetrizing the visual adapter and action head while leaving the frozen VLM unmodified, we preserve the rich visual and semantic priors of large-scale pretraining while gaining systematic rotational generalization. The benefit scales with data: E QUI VLA outperforms the non-equivariant baseline even at 10% of demonstrations, with the gap widening at full data, confirming consistent benefits regardless of scale. More broadly, the results suggest that a modular approach to symmetrizing VLAs is viable: geometric inductive biases need not be baked in from scratch but can be composed onto existing pretrained systems. We hope this work encourages the broader adoption of geometric structure as a design principle for capable and data-efficient robot learning systems, especially for models with large pretrained language-vision backbones. 
+
+Limitations. Symmetry scope: we focus on SO(2) (planar rotation about the gravity axis), which is the dominant symmetry for tabletop manipulation with a top-down camera. Tasks involving out-of-plane rotations (e.g., wall-mounted manipulation) would require extending to SO(3) or SE(3) , and since escnn supports SO(3) steerable layers, adapting E QUI ACTOR to 3D symmetries is a natural next step, though the increased representational complexity of 3D irreducible representations warrants careful design. Computational cost: Token-level Frame Averaging requires |G|=8 forward passes through the frozen ViT, increasing E QUI VLA’s inference latency to 194 ms/step vs. 64 ms/step for GR00T N1.5; future work could explore stochastic frame averaging [ 34 ], which samples a random subset of G per step, to reduce this overhead while approximately preserving equivariance guarantees. Action head from scratch: EQUI ACTOR cannot reuse pretrained DiT weights due to the structural constraints of steerable layers; distilling pretrained weights into equivariant architectures via knowledge distillation or equivariant fine-tuning is an important open problem. 8References 
+
+[1] J. Bjorck, F. Casta ˜neda, N. Cherniadev, X. Da, R. Ding, L. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, et al. Gr00t n1: An open foundation model for generalist humanoid robots. arXiv preprint arXiv:2503.14734 , 2025. [2] K. Black, N. Brown, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, L. Groom, K. Hausman, B. Ichter, et al. π0: A vision-language-action flow model for general robot control. arXiv preprint arXiv:2410.24164 , 2024. [3] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, et al. Openvla: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 , 2024. [4] D. Wang, B. Hu, S. Song, R. Walters, and R. Platt. A practical guide for incorporating symmetry in diffusion policy. arXiv preprint arXiv:2505.13431 , 2025. [5] D. Wang, S. Hart, D. Surovik, T. Kelestemur, H. Huang, H. Zhao, M. Yeatman, J. Wang, R. Walters, and R. Platt. Equivariant diffusion policy. arXiv preprint arXiv:2407.01812 , 2024. [6] J. Yang, Z.-a. Cao, C. Deng, R. Antonova, S. Song, and J. Bohg. Equibot: Sim (3)-equivariant diffusion policy for generalizable and data efficient learning. arXiv preprint arXiv:2407.01479 ,2024. [7] D. Wang, R. Walters, and R. Platt. SO(2) -equivariant reinforcement learning. arXiv preprint arXiv:2203.04439 , 2022. [8] C. Tie, Y. Chen, R. Wu, B. Dong, Z. Li, C. Gao, and H. Dong. ET-SEED: Efficient trajectory-level SE(3) equivariant diffusion policy. In International Conference on Learning Representa-tions , 2025. [9] X. Zhu, Y. Qi, Y. Zhu, R. Walters, and R. Platt. Equact: An se (3)-equivariant multi-task transformer for open-loop robotic manipulation. arXiv preprint arXiv:2505.21351 , 2025. [10] J. Deng, Y. Wang, Y. Zhu, T. Feng, T. Wo, and Z. Shao. Eq.Bot: Enhance robotic manipulation learning via group equivariant canonicalization. arXiv preprint arXiv:2511.15194 , 2025. [11] B. Liu, Y. Zhu, C. Gao, Y. Feng, Q. Liu, Y. Zhu, and P. Stone. Libero: Benchmarking knowledge transfer for lifelong robot learning. Advances in Neural Information Processing Systems , 36: 44776–44791, 2023. [12] O. Mees, L. Hermann, E. Rosete-Beas, and W. Burgard. Calvin: A benchmark for language-conditioned policy learning for long-horizon robot manipulation tasks. IEEE Robotics and Automation Letters , 7(3):7327–7334, 2022. [13] Z. Fu, T. Z. Zhao, and C. Finn. Mobile aloha: Learning bimanual mobile manipulation with low-cost whole-body teleoperation. arXiv preprint arXiv:2401.02117 , 2024. [14] O. Puny, M. Atzmon, H. Ben-Hamu, I. Misra, A. Grover, E. J. Smith, and Y. Lipman. Frame averaging for invariant and equivariant network design. arXiv preprint arXiv:2110.03336 , 2021. [15] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn, K. Gopalakrishnan, K. Haus-man, A. Herzog, J. Hsu, et al. Rt-1: Robotics transformer for real-world control at scale. arXiv preprint arXiv:2212.06817 , 2022. [16] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid, et al. Rt-2: Vision-language-action models transfer web knowledge to robotic control. In Conference on Robot Learning , pages 2165–2183. PMLR, 2023. 9[17] O. M. Team, D. Ghosh, H. Walke, K. Pertsch, K. Black, O. Mees, S. Dasari, J. Hejna, T. Kreiman, C. Xu, et al. Octo: An open-source generalist robot policy. arXiv preprint arXiv:2405.12213 ,2024. [18] P. Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai, et al. π0.5: a vision-language-action model with open-world generalization. 
+
+arXiv preprint arXiv:2504.16054 , 2025. [19] S. Liu, L. Wu, B. Li, H. Tan, H. Chen, Z. Wang, K. Xu, H. Su, and J. Zhu. Rdt-1b: a diffusion foundation model for bimanual manipulation. arXiv preprint arXiv:2410.07864 , 2024. [20] Q. Li, Y. Liang, Z. Wang, L. Luo, X. Chen, M. Liao, F. Wei, Y. Deng, S. Xu, Y. Zhang, et al. Cogact: A foundational vision-language-action model for synergizing cognition and action in robotic manipulation. arXiv preprint arXiv:2411.19650 , 2024. [21] M. Shukor, D. Aubakirova, F. Capuano, P. Kooijmans, S. Palma, A. Zouitine, M. Aractingi, C. Pascal, M. Russi, A. Marafioti, et al. Smolvla: A vision-language-action model for affordable and efficient robotics. arXiv preprint arXiv:2506.01844 , 2025. [22] M. J. Kim, C. Finn, and P. Liang. Fine-tuning vision-language-action models: Optimizing speed and success. arXiv preprint arXiv:2502.19645 , 2025. [23] C. Chi, S. Feng, Y. Du, Z. Xu, E. Cousineau, B. Burchfiel, R. Tedrake, and S. Song. Diffusion policy: Visuomotor policy learning via action diffusion. In Robotics: Science and Systems ,2023. [24] H. Huang, D. Wang, R. Walters, and R. Platt. Equivariant transporter network. arXiv preprint arXiv:2202.09400 , 2022. [25] M. Jia, D. Wang, G. Su, D. Klee, X. Zhu, R. Walters, and R. Platt. Seil: Simulation-augmented equivariant imitation learning. arXiv preprint arXiv:2211.00194 , 2022. [26] S. James, Z. Ma, D. R. Arrojo, and A. J. Davison. Rlbench: The robot learning benchmark & learning environment. IEEE Robotics and Automation Letters , 5(2):3019–3026, 2020. [27] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. [28] Z. Li, J. Cen, B. Su, W. Huang, T. Xu, Y. Rong, and D. Zhao. Large language-geometry model: When llm meets equivariance. arXiv preprint arXiv:2502.11149 , 2025. [29] M. Weiler and G. Cesa. General e (2)-equivariant steerable cnns. Advances in neural information processing systems , 32, 2019. [30] M. Weiler, P. Forr ´e, E. Verlinde, and M. Welling. Equivariant and coordinate independent convolutional networks. A Gauge Field Theory of Neural Networks , 110, 2023. [31] G. Cesa, L. Lang, and M. Weiler. A program to build e (n)-equivariant steerable cnns. In 
+
+International conference on learning representations , 2022. [32] O. Mees, L. Hermann, and W. Burgard. What matters in language conditioned robotic imitation learning over unstructured data. IEEE Robotics and Automation Letters , 7(4):11205–11212, 2022. [33] M. Reuss, J. Pari, P. Agrawal, and R. Lioutikov. Efficient diffusion transformer policies with mixture of expert denoisers for multitask learning. In International Conference on Learning Representations , volume 2025, pages 17247–17275, 2025. 10 [34] A. A. Duval, V. Schmidt, A. Hern ´andez-Garcıa, S. Miret, F. D. Malliaros, Y. Bengio, and D. Rolnick. Faenet: Frame averaging equivariant gnn for materials modeling. In International Conference on Machine Learning , pages 9013–9033. PMLR, 2023. [35] J. Y. Park, S. Bhatt, S. Zeng, L. L. Wong, A. Koppel, S. Ganesh, and R. Walters. Approximate equivariance in reinforcement learning. arXiv preprint arXiv:2411.04225 , 2024. [36] B. Elesedy and S. Zaidi. Provably strict generalisation benefit for equivariant models. In 
+
+International conference on machine learning , pages 2959–2969. PMLR, 2021. 11 Appendix Contents 
+
+A Real-Robot Environment Details 13 B Training Details 14 C Equivariance Analysis 14 
+
+C.1 Exact Equivariance . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 C.2 Approximate Equivariance Bound . . . . . . . . . . . . . . . . . . . . . . . . . . 15 C.3 Geometric Characterization of the Defect . . . . . . . . . . . . . . . . . . . . . . 16 C.4 Component Equivariance: Adapter and Flow Matching . . . . . . . . . . . . . . . 17 C.5 End-to-End Pipeline Bound . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 C.6 Empirical Equivariance Error . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 
+
+D Equivariant Adapter: Invariant Stream Update 20 E Controlled Orientation-Shift Experiment 21 
+
+12 A Real-Robot Environment Details 
+
+We evaluate E QUI VLA on five real-robot manipulation tasks using the Mobile ALOHA platform [ 13 ], a bimanual mobile manipulation system with two ViperX 6-DoF arms. Each task uses a top-down RGB camera and a wrist-mounted RGB camera ( 640 × 480 resolution each) as visual inputs. Four tasks use only the right arm, while Shorts Folding requires bimanual manipulation. All experiments are conducted on a single workstation equipped with an NVIDIA RTX 4070 GPU. Each task is trained from 150 teleoperated demonstrations. Representative rollout sequences are shown in Figure 3. Task definitions and environment randomization details are provided below. 
+
+> Banana in Pot
+> Block Storing
+> House Building
+> Letter Aligning
+> Shorts Folding
+
+Figure 3: Representative real-robot rollouts on the five Mobile ALOHA tasks. Each row shows six keyframes from initialization to task completion. The figures illustrate the diversity of manipulation skills evaluated in our real-world benchmark, including object placement, drawer interaction, precise orientation alignment, stacking, and bimanual deformable-object manipulation. 
+
+Banana in Pot: The robot picks up a banana and places it into a pot, then grasps the pot lid and covers the pot. This task requires reasoning about spatial relationships among multiple objects, while exploiting the natural rotational symmetry of the pot and lid about the vertical axis. The banana, pot, and lid are initialized with random positions and orientations throughout the workspace. 
+
+Block Storing: The robot opens a drawer, picks up a square block, and places it inside the drawer, then closes the drawer. This sequential three-phase task requires precise interaction with a constrained target and represents a high-equivariant regime, where both the drawer and block can appear at varied orientations. The drawer and block are randomly placed at arbitrary positions within the workspace. The block is additionally randomized over full 360 ◦ rotations. 
+
+House Building: The robot picks up the triangular block and stacks it on the square block to form a house-like structure. Success requires precise gripper orientation to grasp each triangular block at the correct angle, as the blocks appear at varied orientations and will slip if grasped incorrectly. Both the triangular and square blocks are randomly placed and oriented ( 360 ◦) on a square wooden platform. 13 Letter Alignment: A letter “A” block is placed at one of the four corners of the table, and a letter “I” block is placed at a random position and orientation elsewhere on the table. The robot must pick up the “I” block and align it next to the “A” block to form the word “AI”. Since the “I” block appears at arbitrary orientations and must be precisely oriented relative to the fixed “A”, this task represents the strongest test of rotational generalization in our real-robot suite. 
+
+Shorts Folding (bimanual): The robot picks up a pair of shorts from the table and folds them in half. This task involves deformable object manipulation with minimal rotational variation, as the folding strategy is largely independent of the shorts’ initial orientation. The shorts are placed at the center of the table with small position perturbations ( ±10 cm) and orientation perturbations ( ±10 ◦). 
+
+## B Training Details 
+
+Flow-Matching Objective. EQUI ACTOR is trained with the conditional flow-matching objective [ 1]. Given a demonstration action chunk at, a noise sample ϵ ∼ N (0, I), and a flow time k ∼ U [0 , 1] ,the noisy action is akt = (1 − k)ϵ + k at. The model predicts the velocity field vθ (akt , k, zout , zst )
+
+and is trained to minimize: 
+
+L = Ek, ϵ,at
+
+h
+
+vθ (akt , k, zout , zst ) − (at − ϵ) 2i
+
+. (7) At inference, actions are generated by integrating the learned velocity field from ϵ to ˆat using an ODE solver. The flow-matching objective is G-invariant and the ODE integration preserves equivariance, with a proof shown in Theorem 7. 
+
+Hyperparameters. We train all three variants (GR00T N1.5, GR00T N1.5 + E QUI ACTOR , and EQUI VLA) with identical hyperparameters for each benchmark to ensure fair comparison. For LIBERO, the batch size and learning rate are set to 64 and 1 × 10 −4. Training steps scale with the demonstration budget: 30 k steps for 100% data, 15 k steps for 40% , and 10 k steps for 10% .For CALVIN, the batch size and maximum training steps are 64 and 120k steps, with the same learning rate. For real-robot tasks on Mobile ALOHA, models are fine-tuned from the publicly released GR00T N1.5 3B checkpoint [ 1] with batch size 32, learning rate 1 × 10 −4, and 150k steps. At inference, actions are decoded via Euler integration with K=8 denoising steps for simulation benchmarks and K=4 for real-robot tasks. All three variants are trained on an NVIDIA H100 GPU. 
+
+Training Time. GR00T N1.5 takes approximately 5 hours for LIBERO and 19 hours for CALVIN; GR00T N1.5 + E QUI ACTOR takes 11 and 43 hours respectively; E QUI VLA takes 17 and 63 hours. For real-robot fine-tuning, GR00T N1.5 and E QUI VLA take approximately 18 and 60 hours, respectively. 
+
+Architecture Details. EQUI ACTOR consists of N =16 equivariant DiT layers, each comprising an equivariant cross-attention block and an equivariant self-attention block. All linear projections are replaced by G-steerable layers operating in regular feature space: the hidden dimension d is factored as d = nchannels × | G|, where nchannels =192 is the number of regular feature channels and |G|=8 
+
+for C8. The number of attention heads is inherited from GR00T N1.5 and kept unchanged. The equivariant state encoder, action encoder, and action decoder share the same regular feature space of dimension d.
+
+## C Equivariance Analysis 
+
+We provide a theoretical analysis of the equivariance guarantees of token-level Frame Averaging (Sec-tion 3.2), the Equivariant Adapter, and the end-to-end E QUI VLA pipeline, deriving exact conditions under which equivariance holds, bounding the approximation error when it does not, and connecting the bound to sample complexity. 
+
+Notation. Let G = Cu be a cyclic group of u planar rotations acting on images via g · x. Let 
+
+fθ : RH×W ×3 → RN ×D be the frozen ViT producing N patch tokens of dimension D. Define the 
+
+output action A(h) = τ (h) ⊗ ρreg (h), where τ (h) ∈ Perm( N ) is the spatial token permutation and 14 ρreg (h) is the regular representation of G. The tensor product acts jointly on token positions ( τ )and feature channels ( ρreg ), mapping RN ×D into RN ×D×| G|. When τ is approximated by nearest-neighbor grid reassignment, we write ˜τ and ˜A(h) = ˜ τ (h) ⊗ ρreg (h). We denote the full observation (camera images and proprioceptive state) by o and its image component by x.
+
+C.1 Exact Equivariance Proposition 1 (Exact Token-Level FA Equivariance) . Suppose τ : G → Perm( N ) is a group homomorphism, i.e., τ (gh ) = τ (g) ◦ τ (h) for all g, h ∈ G. Then the token-level Frame Average 
+
+zeq (x) = 1
+
+|G|
+
+X
+
+> h∈G
+
+A(h−1) · fθ (h · x) (8) 
+
+is exactly G-equivariant: zeq (g · x) = A(g) · zeq (x) for all g ∈ G, regardless of the choice of fθ .Proof. 
+
+zeq (g · x) = 1
+
+|G|
+
+X
+
+> h∈G
+
+A(h−1) · fθ (hg · x) h′=hg 
+
+= 1
+
+|G|
+
+X
+
+> h′
+
+A g(h′)−1 · fθ (h′ · x)
+
+> (⋆)
+
+= A(g) 1
+
+|G|
+
+X
+
+> h′
+
+A (h′)−1 · fθ (h′ · x) = A(g) · zeq (x), (9) where (⋆) uses A(g(h′)−1) = A(g) A(( h′)−1), which holds because τ is a homomorphism and ρreg 
+
+is a group representation, so A = τ ⊗ ρreg is a homomorphism. 
+
+Invariance of zinv . The invariant stream zinv (x) = 1
+
+> |G|
+
+P 
+
+> h∈G
+
+fθ (h · x) is exactly G-invariant for any fθ , by the standard change-of-variable h′ = hg : zinv (g · x) = 1
+
+> |G|
+
+P 
+
+> h
+
+fθ (hg · x) = 
+
+> 1
+> |G|
+
+P 
+
+> h′
+
+fθ (h′ · x) = zinv (x) [14]. 
+
+C.2 Approximate Equivariance Bound 
+
+When ˜τ is not a group homomorphism (as occurs for any Cu with u ∤ 4 on a square patch grid), the Frame Average achieves only approximate equivariance. We introduce the representation defect to quantify this gap. 
+
+Definition 2 (Representation Defect) . For the approximate output action ˜A(h) = ˜ τ (h) ⊗ ρreg (h),define: 
+
+D(g, h ) := ˜A(gh ) − ˜A(g) ˜A(h), g, h ∈ G. (10) Since ρreg is an exact (unitary) representation, the defect reduces to the spatial component: 
+
+∥D(g, h )∥op = ∥˜τ (gh ) − ˜τ (g) ◦ ˜τ (h)∥op . (11) The maximum defect is ∆ := max g,h ∈G ∥D(g, h )∥op .
+
+Theorem 3 (Approximate FA Equivariance Bound) . Let ˜zeq be the token-level FA with approximate spatial reassignment ˜τ . Then for all g ∈ G:
+
+˜zeq (g · x) = ˜A(g) · ˜zeq (x) + ε(g, x), (12) 
+
+where the equivariance residual satisfies: 
+
+∥ε(g, x)∥ ≤ 1
+
+|G|
+
+X
+
+> h∈G
+
+D(g, h −1) op · ∥ fθ (h · x)∥ ≤ ∆ · B(x), (13) 
+
+with B(x) = max h∈G ∥fθ (h · x)∥. In particular, ∆ = 0 implies exact equivariance. 
+
+15 Proof. Following the same substitution as Equation (9): 
+
+˜zeq (g · x) = 1
+
+|G|
+
+X
+
+> h′
+
+˜A g(h′)−1 · fθ (h′ · x). (14) Decomposing via the defect ˜A(g(h′)−1) = ˜A(g) ˜A(( h′)−1) + D(g, (h′)−1):
+
+= ˜A(g) · 1
+
+|G|
+
+X
+
+> h′
+
+˜A (h′)−1 · fθ (h′ · x)
+
+| {z }
+
+> = ˜ zeq (x)
+
++ 1
+
+|G|
+
+X
+
+> h′
+
+D g, (h′)−1 · fθ (h′ · x)
+
+| {z } 
+
+> =ε(g, x)
+
+. (15) The first bound follows from the triangle inequality. The second uses D(g, h −1) op ≤ ∆ and 
+
+∥fθ (h · x)∥ ≤ B(x).
+
+C.3 Geometric Characterization of the Defect 
+
+We characterize when the representation defect vanishes, bound its magnitude for the groups used in practice, and formally connect it to the spatial displacement error. 
+
+Definition 4 (Maximum Spatial Displacement) . For h ∈ G and patch center pi on an n × n grid with spacing p, define the spatial displacement δh(i) = p˜τ (h)( i) − h · pi 2 and the maximum displacement δmax = max h∈G, i ∈[N ] δh(i). For interior patches whose rotated positions remain within the grid’s convex hull, δh(i) ≤ p√2/2 (half-diagonal of a grid cell). Near boundaries, δh(i)
+
+can exceed this bound when rotated positions fall outside the grid (see Table 6). 
+
+Proposition 5 (Grid-Aligned Rotations) . Let G = Cu act on a square n × n patch grid centered at the image center. 
+
+(a) Exact case. δh(i) = 0 ∀ h, i =⇒ ∆ = 0 (exact equivariance). On a square grid, this holds when u | 4, since 90 ◦ rotations map patch centers exactly onto other patch centers. 
+
+(b) C4 subgroup. For C8, the C4 subgroup {0◦, 90 ◦, 180 ◦, 270 ◦} satisfies δh = 0 for all positions and all h ∈ C4. The defect arises solely from the 45 ◦-offset coset {45 ◦, 135 ◦, 225 ◦, 315 ◦}.
+
+(c) Coset structure. For g ∈ C4 ≤ C8, the defect D(g, h ) vanishes whenever h ∈ C4, since both 
+
+˜τ (g) and ˜τ (h) are exact permutations and ˜τ (gh ) is exact by closure. Thus at most |G \ C4| = 4 
+
+terms in the sum (13) are non-zero, yielding the refined bound: 
+
+∥ε(g, x)∥ ≤ |G \ C4||G| · ∆ · B(x) = 12 ∆ · B(x), g ∈ C4. (16) (d) Permutation-norm bound. Since ˜τ (gh ) and ˜τ (g) ◦ ˜τ (h) are both permutation matrices, their difference satisfies ∥D(g, h )∥op ≤ 2 universally, and ∥D(g, h )∥F = p2 m(g, h ) where 
+
+m(g, h ) = {i : [˜ τ (g) ◦ ˜τ (h)]( i)̸ = ˜ τ (gh )( i)} counts the number of positions where the com-position of nearest-neighbor reassignments disagrees with the nearest-neighbor of the composed rotation. 
+
+(e) Displacement–defect connection. For any g, h ∈ G and position i ∈ [N ], a disagreement 
+
+[˜ τ (g) ◦ ˜τ (h)]( i)̸ = ˜ τ (gh )( i) can occur only if 
+
+δh(i) + δg
+
+ ˜τ (h)( i) + δgh (i) ≥ p, (17) 
+
+where p is the grid spacing. Consequently m(g, h ) ≤ i : δh(i) + δg (˜ τ (h)( i)) + δgh (i) ≥ p .Proof. (a) When all displacements vanish, every rotation maps each patch center exactly onto another, so ˜τ (h) is the unique permutation that tracks h’s action on the grid. Uniqueness forces 
+
+˜τ (gh )( i) = [˜ τ (g) ◦ ˜τ (h)]( i) for all i, hence ˜τ is a homomorphism and ∆ = 0 . On a square grid, the 
+
+90 ◦ rotation (x, y ) 7 → (−y, x ) is a bijection on integer coordinates; all multiples of 90 ◦ compose to grid bijections, so C4 has δmax = 0 . In contrast, a 45 ◦ rotation maps (x, y ) 7 →   x−y√2 , x+y√2
+
+, which generically leaves the integer lattice. 16 (b) Follows from (a) applied to the C4 subgroup. (c) For g, h ∈ C4: ˜τ (g) and ˜τ (h) are exact homomorphisms, and gh ∈ C4 by closure, so ˜τ (gh ) = ˜τ (g) ◦ ˜τ (h) and D(g, h ) = 0 . The bound (16) follows by restricting the sum in (13) to h / ∈ C4.(d) ˜τ (gh ) and ˜τ (g) ◦ ˜τ (h) are N × N permutation matrices. Each position where they disagree contributes exactly 2 to the squared Frobenius norm (two mismatched unit entries per row), hence 
+
+∥·∥ F = √2m. The operator norm bound ≤ 2 follows from the triangle inequality on permutation operator norms. (e) The composed path ˜τ (g) ◦ ˜τ (h) maps i to the nearest grid point to g · p˜τ (h)( i), while ˜τ (gh ) maps 
+
+i to the nearest grid point to (gh ) · pi. Since g is an isometry: 
+
+g · p˜τ (h)( i) − (gh ) · pi = p˜τ (h)( i) − h · pi = δh(i).
+
+By the triangle inequality, the distance between the two target grid points satisfies 
+
+p[˜ τ (g)◦˜τ (h)]( i) − p˜τ (gh )( i) ≤ δh(i) + δg
+
+ ˜τ (h)( i) + δgh (i).
+
+If the two target grid points are distinct, their distance is at least p (the grid spacing), yielding (17) by contraposition. 
+
+Computed defect values. Table 6 reports the representation defect for C8 on standard ViT patch grids. For all grid sizes, the C4 subgroup has zero defect (confirming Theorem 5(a–c)), while the 45 ◦-offset coset contributes all non-zero terms. The fraction of mismatched positions stabilizes around 31 –35% 
+
+for worst-case (g, h ) pairs, with the mismatch count concentrated near grid boundaries where rotated patch centers exit the grid’s convex hull. Table 6: Representation defect of C8 on n × n patch grids (unit spacing p = 1 ). All C4 × C4 pairs have m = 0 ; the 45 ◦-offset coset is the sole source of non-zero defect. 
+
+n N δmax max m m/N ∥D∥F non-zero pairs 14 196 2.74 68 34.7% 11.66 38/64 16 256 3.15 80 31.2% 12.65 34/64 24 576 4.79 176 30.6% 18.76 38/64 32 1024 6.44 328 32.0% 25.61 38/64 
+
+C.4 Component Equivariance: Adapter and Flow Matching 
+
+We establish the equivariance properties of the Equivariant Adapter (Equation (3)) and the flow-matching training objective Equation (7), both of which feed into the end-to-end bound. 
+
+Proposition 6 (Equivariant Adapter) . Let ˜zeq be G-equivariant (in the regular representation), let 
+
+sinv , slang , svis be G-invariant, let Wg be a G-equivariant linear map (regular-to-regular), and let 
+
+Ws be a G-equivariant linear map. Then the adapter output (3) 
+
+zout eq = αreg ⊙ Ws(sinv ⊗ 1|G|) + ( 1 − αreg ) ⊙ Wg (˜ zeq )
+
+is G-equivariant: zout eq (g · x) = ρreg (g) · zout eq (x).Proof. Since α = σ(Wgate [slang ; svis ; ¯ zeq ]) is composed entirely of invariant inputs, α is G-invariant. Its regular-representation tiling αreg = α ⊗ 1|G| is invariant under ρreg (g), since ρreg (g)
+
+cyclically permutes coordinates and 1|G| is fixed by any permutation. 
+
+Semantic branch. sinv ⊗ 1|G| lies in regular-representation space but is G-invariant (constant across group channels). Since Ws is equivariant, Ws(sinv ⊗ 1|G|) is also G-invariant. 
+
+Equivariant branch. Wg is G-equivariant: Wg (ρreg (g)˜ zeq ) = ρreg (g)Wg (˜ zeq ).17 Combination. Since αreg is invariant and ρreg (g) is a coordinate permutation, Hadamard products commute: ρreg (g)[ αreg ⊙ v] = αreg ⊙ ρreg (g)v for any v. Applying this to both branches: 
+
+ρreg (g) zout eq = αreg ⊙ ρreg (g)Ws(sinv ⊗ 1|G|)
+
+| {z }
+
+> invariant, unchanged
+
++( 1 − αreg ) ⊙ ρreg (g)Wg (˜ zeq )
+
+| {z }   
+
+> =Wg(ρreg (g)˜ zeq )
+
+,
+
+which equals zout eq evaluated at g · x, since ˜zeq (g · x) = ρreg (g)˜ zeq (x) and all invariant quantities are unchanged. 
+
+Proposition 7 (Flow-Matching Compatibility with Equivariance) . Let ρa denote the SO(2) represen-tation acting on the action space, and suppose EQUI ACTOR implements a G-equivariant velocity field vθ :
+
+vθ
+
+ ρa(g)ak, k, ˜A(g)z, ρ (g)zs = ρa(g) vθ (ak, k, z, zs) ∀ g ∈ G. (18) 
+
+Then: 
+
+(i) The flow-matching loss (7) is G-invariant in distribution: for any g ∈ G, L(g · o, ρ a(g)at) = 
+
+L(o, at) in expectation over ϵ and k.
+
+(ii) The ODE integration ˆat = ODESolve( vθ , ϵ, 0 → 1) satisfies ˆat(g · o, ρ (g)zs, ρ a(g)ϵ) = 
+
+ρa(g)ˆ at(o, zs, ϵ).Proof. (i) The noisy action ak = (1 − k)ϵ + kat transforms as ρa(g)ak = (1 − k)ρa(g)ϵ + kρ a(g)at
+
+by linearity. Since ρa(g) is orthogonal and ϵ ∼ N (0, I), we have ρa(g)ϵ ∼ N (0, I) (rotational invariance of the isotropic Gaussian). The target velocity transforms as ρa(g)( at − ϵ), and by (18) the predicted velocity transforms identically, so the squared loss ∥vθ − (at − ϵ)∥2 is unchanged under the simultaneous action of g (using ∥ρa(g)v∥ = ∥v∥). (ii) At each ODE step ak+∆ k = ak + ∆ k · vθ (ak, k, · · · ), applying ρa(g) to both sides and using (18) shows ρa(g)ak+∆ k = ρa(g)ak + ∆ k · vθ (ρa(g)ak, k, · · · ). By induction over integration steps, equivariance propagates from the initial noise to the final prediction [8]. 
+
+C.5 End-to-End Pipeline Bound 
+
+We compose the approximate equivariance of E QUI PERCEPTOR with the exact equivariance of EQUI ACTOR to bound the full pipeline error. 
+
+Assumption 8 (Lipschitz Continuity of E QUI ACTOR ). EQUI ACTOR A is L-Lipschitz in its visual context input: for any two context representations z1, z2 with shared proprioceptive state and noise, 
+
+∥A (z1) − A (z2)∥ ≤ L · ∥ z1 − z2∥. This is a standard regularity assumption for neural networks with bounded weights; for transformer architectures, L scales with the product of attention and MLP layer norms, and can be controlled via spectral normalization or weight decay [29]. 
+
+Corollary 9 (End-to-End Equivariance) . Under Theorem 8, the full EQUI VLA policy π(o) = 
+
+A P(o) satisfies: 
+
+∥π(g · o) − ρa(g) · π(o)∥ ≤ L · ∆ · B(o), (19) 
+
+where ρa denotes the SO(2) action on the action space, ∆ is the representation defect of ˜τ , B(o) = max h∈G ∥fθ (h · x)∥ is the maximum ViT feature norm (with x the image component of o), and L is the Lipschitz constant of EQUI ACTOR .Proof. Write P(g · o) = ˜A(g) · P (o) + ε with ∥ε∥ ≤ ∆ · B by Theorem 3. Since E QUI ACTOR is exactly equivariant (Theorem 7) and the Equivariant Adapter preserves equivariance (Theorem 6): 
+
+π(g · o) = A  ˜A(g) · P (o) + ε (20) 
+
+= A  ˜A(g) · P (o)| {z } 
+
+> =ρa(g)·π(o)
+
++A  ˜A(g) · P (o) + ε − A   ˜A(g) · P (o) . (21) By the Lipschitz property, the bracketed remainder has norm ≤ L ∥ε∥ ≤ L · ∆ · B.18 Remark 10 (Structure, Practical Implications, and Relation to Prior Work) . The bound (19) cleanly separates three independent factors controlling equivariance quality: 1. ∆: the spatial homomorphism defect, a pure geometric quantity determined by G and the patch grid. For C4 on a square grid, ∆ = 0 (exact). For C8, only the 45 ◦-offset coset contributes, and 
+
+∆ can be computed in closed form for any given grid (Table 6). The per-element bound (left inequality in (13) ) is significantly tighter when many (g, h ) pairs have zero defect, as the coset structure guarantees for the C4 subgroup. 2. B: the ViT feature magnitude, which is bounded for normalized inputs and architectures with LayerNorm. 3. L: the Lipschitz constant of E QUI ACTOR , controlled by weight norms and architecture depth. For transformers with spectral normalization, L scales polynomially rather than exponentially in depth. EQUI ACTOR alone (with invariant VLM context, i.e., without E QUI PERCEPTOR ) achieves exact equivariance by construction via steerable layers, since no approximate spatial reassignment is involved. The full E QUI VLA pipeline incurs approximation error from E QUI PERCEPTOR ’s nearest-neighbor reassignment, but benefits from richer, spatially equivariant visual features. We validate empirically in Section 5 that the measured equivariance error is small and consistent with the bound structure. 
+
+Relation to prior work. The representation defect framework extends the exact equivariance guar-antees of Frame Averaging [ 14 ] to the approximate regime arising from spatial discretization, a setting not addressed in the original FA theory. Wang et al. [4] apply FA to globally pooled ResNet features without spatial structure, making the exact FA guarantee trivially applicable; our token-level extension requires the approximate analysis because spatial permutations on finite grids break the homomorphism property. In the broader landscape of approximate equivariance, Park et al. [35] bound Q-function errors for approximately equivariant MDPs; our bound is analogous but operates at the representation level rather than the value-function level. 
+
+Corollary 11 (Sample Complexity Benefit of Equivariance) . Let F be a function class for the policy, and FG = {f ∈ F : f (g · o) = ρa(g)f (o) ∀g ∈ G} its G-equivariant subclass. Then the empirical Rademacher complexity satisfies [36]: 
+
+ˆRn(FG) ≤ 1
+
+|G| ˆRn(F). (22) 
+
+By standard generalization bounds, this implies the G-equivariant class requires a factor of |G|
+
+fewer samples to achieve the same generalization error, yielding up to an 8× reduction for C8.For the approximately equivariant EQUI VLA pipeline, the effective reduction is modulated by the equivariance residual: if ∥ε∥ ≤ ϵ0, the generalization gap is bounded by 1 
+
+> |G|
+
+ˆRn(F) + O(ϵ0),interpolating between the full equivariant benefit ( ϵ0 = 0 ) and the unconstrained baseline ( ϵ0 → ∞ ). 
+
+C.6 Empirical Equivariance Error 
+
+We complement the theoretical bounds of Theorem 3 with empirical measurements of the equivariance error ϵeq (defined in Equation (6)). We evaluated over M =500 randomly sampled observations from the LIBERO validation set across all g ∈ C8. To construct the rotated observation g · o, we apply rotation g to the top-down camera image and end-effector pose, while keeping the wrist camera image fixed, as the wrist view rotates with the end-effector and is thus invariant to base-frame scene rotation. GR00T N1.5 exhibits large equivariance error ( 7.754 ± 3.572 ), consistent with the absence of any equivariance constraint across vision, state, and action components. GR00T N1.5 + E QUI ACTOR 
+
+reduces the error by 9.3× to 0.837 ± 0.738 : the equivariant action head correctly transforms actions under C8 rotations, and the proprioceptive state is handled equivariantly through the steerable layers; however, the non-equivariant visual backbone still produces rotation-inconsistent visual features, which propagate into the action head as a residual violation. The full E QUI VLA further reduces 19 Table 7: Empirical equivariance error ϵeq (mean ± std) over M =500 observations and all g ∈ C8,measured on the LIBERO validation set.                
+
+> Method ϵeq (mean ±std) ↓
+> GR00T N1.5 [1] 7.754 ±3.572
+> GR00T N1.5 + E QUI ACTOR 0.837 ±0.738
+> EQUI VLA (ours) 0.284 ±0.134
+
+error to 0.284 ± 0.134 (a 27 .3× reduction over the baseline) as E QUI PERCEPTOR suppresses the upstream vision equivariance violation via token-level Frame Averaging, leaving only the small approximation error from the frozen ViT’s spatial discretization, consistent with Theorem 3. Figure 4 reports the per-group equivariance error ϵeq at each C8 rotation angle, complementing the aggregate statistics in Table 7. The per-angle breakdown confirms three predictions from the theoretical analysis: 1. GR00T N1.5 (no equivariance constraint) shows error growing monotonically from 0◦ to 180 ◦,consistent with the cosine distance of rotations on a non-equivariant feature space. 2. GR00T N1.5 + E QUI ACTOR shows an oscillating pattern with higher error at 45 ◦-offset angles (45 ◦, 135 ◦, 225 ◦, 315 ◦) than at C4 angles ( 90 ◦, 180 ◦, 270 ◦), consistent with Theorem 5(b–c): the 
+
+C4 subgroup has zero defect, while the 45 ◦-offset coset contributes all non-zero defect terms. 3. EQUI VLA remains near-zero and approximately flat across all angles, confirming that E QUI PER - 
+
+> CEPTOR
+
+suppresses the upstream vision equivariance violation uniformly across the group.   
+
+> 0◦
+> 45 ◦
+> 90 ◦
+> 135 ◦
+> 180 ◦
+> 225 ◦
+> 270 ◦
+> 315 ◦
+> 2.8
+> 5.5
+> 8.3
+> 11
+> GR00T N1.5 GR00T N1.5 + E QUI ACTOR EQUI VLA (ours)
+
+Figure 4: Per-group equivariance error ϵeq at each C8 rotation angle, measured over M =500 
+
+observations from the LIBERO validation set. GR00T N1.5 (red) grows monotonically toward 180 ◦.GR00T N1.5 + E QUI ACTOR (orange) shows an oscillating pattern with higher error at 45 ◦-offset angles, consistent with the coset structure in Theorem 5(b). E QUI VLA (green) remains near-zero across all angles. 
+
+## D Equivariant Adapter: Invariant Stream Update 
+
+The invariant tokens in zctx (language and wrist-camera streams) are updated via a second per-token gate that incorporates information from the equivariant stream. An equivariant summary 20 seq = mean N,G (zout eq ) is computed by pooling over both token positions and group channels, yielding an invariant vector. For each invariant context token zctx  
+
+> i
+
+, the update is: 
+
+zout  
+
+> i
+
+= βi ⊙ Wtok (zctx  
+
+> i
+
+) + ( 1 − βi) ⊙ Wctx (seq ), (23) where βi = σ Wgate inv [zctx  
+
+> i
+
+; seq ] is an invariant gate. Since both zctx  
+
+> i
+
+and seq are G-invariant, the gate βi is invariant and zout  
+
+> i
+
+is invariant by construction. The final adapter output concatenates all streams: 
+
+zout = zout eq ; zout inv ; zout lang 
+
+, (24) where zout eq is G-equivariant (Equation (3) in the main text) and the remaining tokens are G-invariant. 
+
+## E Controlled Orientation-Shift Experiment 
+
+While Section 5 validates equivariance error on the discrete C8 grid, a key open question is whether EQUI VLA generalizes to out-of-subgroup angles, rotations that lie strictly between C8 grid points and were never explicitly seen during training augmentation. Since E QUI PERCEPTOR achieves only approximate SO(2) equivariance and training augmentation covers only 8 discrete angles, some performance degradation at larger rotations is expected for all models. The relevant question is whether equivariant models degrade more gracefully than the non-equivariant baseline, that is, whether geometric inductive bias provides a meaningful advantage even at unseen rotation angles. We design a controlled orientation-shift experiment to directly test this hypothesis. 
+
+Setup. We evaluate on LIBERO-Object at 11 rotation angles {− 25 ◦, −20 ◦, . . . , +20 ◦, +25 ◦} in 5◦
+
+increments, reporting success rate averaged over 50 rollouts per angle across all 10 tasks. We restrict the range to ±25 ◦ for two reasons: first, LIBERO’s camera is mounted at a slight downward angle rather than directly overhead, so scene rotation induces increasing perspective distortion at larger angles; second, the training demonstrations exhibit limited rotational diversity, meaning large rotations push observations outside the training distribution regardless of architectural equivariance. Within 
+
+±25 ◦, the evaluation isolates the effect of geometric inductive bias rather than out-of-distribution generalization more broadly. At each angle θ, we apply a planar rotation of θ degrees about the scene center to the object positions and end-effector pose in the proprioceptive state, while keeping all camera images unchanged. This simulates a scene in which objects and the robot’s end-effector appear at rotated configurations relative to the canonical training distribution.         
+
+> −25 ◦−20 ◦−15 ◦−10 ◦−5◦
+> +5 ◦+10 ◦+15 ◦+20 ◦+25 ◦
+
+Figure 5: Example LIBERO-Object scenes at each rotation angle used in the controlled orientation-shift experiment. Row 1: negative rotations ( −25 ◦ to −5◦); Row 2: positive rotations ( +5 ◦ to +25 ◦). Object positions and end-effector pose are rotated while camera views remain unchanged. 
+
+Results. Figure 6 reveals a clear separation between equivariant and non-equivariant models within the moderate rotation range. GR00T N1.5 peaks near the canonical orientation ( −5◦: 86 .6% ,21 −25 ◦  
+
+> −20 ◦
+> −15 ◦
+> −10 ◦
+> −5◦
+> 0◦
+> 5◦
+> 10 ◦
+> 15 ◦
+> 20 ◦
+> 25 ◦0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Scene Rotation (degrees)
+> Success Rate (%)
+> Orientation Generalization on LIBERO-Object
+> GR00T N1.5 (avg: 33.0%) GR00T N1.5 + EquiActor (avg: 40.3%) EquiVLA (ours) (avg: 43.7%)
+
+Figure 6: Success rate on LIBERO-Object under controlled scene rotations from −25 ◦ to +25 ◦.EQUI VLA and GR00T N1.5 + E QUI ACTOR maintain higher and flatter performance across the rotation range compared to GR00T N1.5, which peaks near 0◦ and degrades rapidly at larger rotations. 
+
+0◦: 83 .4% ) and degrades rapidly, dropping to 25 .0% at +10 ◦ and near zero at ±25 ◦, confirming the absence of rotational generalization. Both equivariant variants maintain substantially higher performance within [−15 ◦, +15 ◦]: GR00T N1.5 + E QUI ACTOR achieves 95 .2% at 0◦ and retains 
+
+56 .6% at +10 ◦; E QUI VLA reaches 98 .0% at 0◦ and 54 .4% at +10 ◦. Beyond ±15 ◦, all models degrade substantially as large rotations push observations outside the training distribution, consistent with the camera and dataset limitations described in the setup. Averaged across all angles, E QUI VLA achieves 43 .7% vs. 40 .3% and 33 .0% , confirming that equivariant structure provides a consistent advantage within the practical rotation range. The progressive improvement mirrors the equivariance error reduction in Appendix C.6, providing direct empirical evidence that architectural equivariance translates to rotation generalization in practice. 22
