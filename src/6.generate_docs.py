@@ -32,18 +32,26 @@ except Exception:  # pragma: no cover
 
 try:
     from legacy_paper_markers import (
+        LEGACY_AT_A_GLANCE,
         LEGACY_DEEP_READ_ZONE,
+        LEGACY_DETAILED_SUMMARY_AUTO,
         LEGACY_HOME,
+        LEGACY_ORIGINAL_ABSTRACT,
         LEGACY_QUICK_SKIM_ZONE,
         LEGACY_QUOTA_EXHAUSTED,
     )
+    from i18n_guard import GLANCE_FRONT_MATTER_KEYS, contains_han, mapping_has_han
 except Exception:  # pragma: no cover
     from src.legacy_paper_markers import (
+        LEGACY_AT_A_GLANCE,
         LEGACY_DEEP_READ_ZONE,
+        LEGACY_DETAILED_SUMMARY_AUTO,
         LEGACY_HOME,
+        LEGACY_ORIGINAL_ABSTRACT,
         LEGACY_QUICK_SKIM_ZONE,
         LEGACY_QUOTA_EXHAUSTED,
     )
+    from src.i18n_guard import GLANCE_FRONT_MATTER_KEYS, contains_han, mapping_has_han
 
 CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -316,6 +324,94 @@ def extract_section_tail(md_text: str, heading: str) -> str:
     if idx == -1:
         return ""
     return md_text[idx + len(key) :].strip()
+
+
+def extract_detailed_summary_tail(md_text: str) -> str:
+    for heading in ("Detailed Summary (auto-generated)", LEGACY_DETAILED_SUMMARY_AUTO):
+        tail = extract_section_tail(md_text, heading)
+        if tail:
+            return tail
+    return ""
+
+
+def parse_glance_overview_fields(glance: str) -> Dict[str, str]:
+    fields = {
+        "tldr": "",
+        "motivation": "",
+        "method": "",
+        "result": "",
+        "conclusion": "",
+    }
+    for line in str(glance or "").split("\n"):
+        line = line.strip().rstrip("\\").strip()
+        if line.startswith("**TLDR**：") or line.startswith("**TLDR**:"):
+            fields["tldr"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+        elif line.startswith("**Motivation**：") or line.startswith("**Motivation**:"):
+            fields["motivation"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+        elif line.startswith("**Method**：") or line.startswith("**Method**:"):
+            fields["method"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+        elif line.startswith("**Result**：") or line.startswith("**Result**:"):
+            fields["result"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+        elif line.startswith("**Conclusion**：") or line.startswith("**Conclusion**:"):
+            fields["conclusion"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+    return fields
+
+
+def sync_glance_front_matter_fields(md_text: str, glance: str) -> Tuple[str, bool]:
+    fields = parse_glance_overview_fields(glance)
+    updated = md_text
+    changed = False
+    for key, value in fields.items():
+        if not value:
+            continue
+        updated, field_changed = upsert_front_matter_field(
+            updated,
+            key,
+            yaml_escape_value(value),
+        )
+        changed = changed or field_changed
+    return updated, changed
+
+
+def should_force_english_regen() -> bool:
+    return os.getenv("DPR_FORCE_ENGLISH_REGEN", "").strip() in {"1", "true", "yes", "on"}
+
+
+def glance_content_needs_regen(existing: str, front_meta: Dict[str, Any] | None) -> bool:
+    if should_force_english_regen():
+        return True
+    if mapping_has_han(front_meta or {}, GLANCE_FRONT_MATTER_KEYS):
+        return True
+    if LEGACY_AT_A_GLANCE in existing or LEGACY_ORIGINAL_ABSTRACT in existing:
+        return True
+    if "## At a Glance" in existing and contains_han(extract_section_tail(existing, "At a Glance")):
+        return True
+    return False
+
+
+def detailed_summary_needs_regen(existing: str) -> bool:
+    if should_force_english_regen():
+        return True
+    tail = extract_detailed_summary_tail(existing)
+    if not tail:
+        return True
+    return contains_han(tail)
+
+
+def normalize_sidebar_legacy_zone_labels(lines: List[str]) -> List[str]:
+    replacements = (
+        (LEGACY_DEEP_READ_ZONE, "Deep Read"),
+        (LEGACY_QUICK_SKIM_ZONE, "Quick Skim"),
+        (LEGACY_HOME, "Home"),
+    )
+    out: List[str] = []
+    for line in lines:
+        updated = line
+        for legacy, english in replacements:
+            if legacy in updated:
+                updated = updated.replace(legacy, english)
+        out.append(updated)
+    return out
 
 
 def strip_auto_sections(md_text: str) -> str:
@@ -1442,9 +1538,10 @@ def process_paper(
                         f.write(updated + ("\n" if not updated.endswith("\n") else ""))
                     existing = updated
 
-        # Skip glance if present unless force_glance=true
-        has_glance = "## At a Glance" in existing
-        if force_glance or not has_glance:
+        # Regenerate glance when missing, legacy-formatted, or still Chinese in front matter / body.
+        has_glance_block = "## At a Glance" in existing
+        needs_glance_regen = force_glance or not has_glance_block or glance_content_needs_regen(existing, existing_meta)
+        if needs_glance_regen:
             glance = generate_glance_overview(title, abstract_en, client=paper_llm_client) or build_glance_fallback(paper)
             if glance:
                 paper["_glance_overview"] = glance
@@ -1483,22 +1580,27 @@ def process_paper(
                 f.write(updated + ("\n" if not updated.endswith("\n") else ""))
             existing = updated
 
-        # Insert/replace glance content
-        if glance and (force_glance or "## At a Glance" not in existing):
-            updated = upsert_glance_block_in_text(existing, glance)
-            if updated != existing:
+        # Insert/replace glance content and sync YAML front matter used by the frontend renderer.
+        if glance and needs_glance_regen:
+            updated, changed = sync_glance_front_matter_fields(existing, glance)
+            if changed:
                 with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(updated)
+                    f.write(updated + ("\n" if not updated.endswith("\n") else ""))
                 existing = updated
+            if force_glance or not has_glance_block:
+                updated = upsert_glance_block_in_text(existing, glance)
+                if updated != existing:
+                    with open(md_path, "w", encoding="utf-8") as f:
+                        f.write(updated)
+                    existing = updated
 
         if glance_only:
             # Glance-only: no PDF fetch or deep summary
             return paper_id, title
 
         if section == "deep":
-            # Deep section: skip if detailed summary exists
-            tail = extract_section_tail(existing, "Detailed Summary (auto-generated)")
-            if tail:
+            # Deep section: skip only when an English detailed summary already exists.
+            if not detailed_summary_needs_regen(existing):
                 return paper_id, title
 
             # Generate detailed summary
@@ -1747,7 +1849,7 @@ def update_sidebar(
         i += 1
 
     with open(sidebar_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+        f.writelines(normalize_sidebar_legacy_zone_labels(lines))
 
 
 def build_day_report_markdown(

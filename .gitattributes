@@ -1,4 +1,12 @@
 # Fork user runtime files: when upstream updates conflict, default to preserving the user's fork version.
+# Localized fork code paths: keep the English fork version when syncing upstream (upstream main is still Chinese).
+app/** merge=ours
+src/** merge=ours
+tests/** merge=ours
+.github/workflows/** merge=ours
+index.html merge=ours
+docs_init/** merge=ours
+
 config.yaml merge=ours
 docs/config.yaml merge=ours
 docs/README.md merge=ours
