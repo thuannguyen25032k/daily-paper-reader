@@ -21,7 +21,7 @@ app.log
 
 # Local environment configuration
 .env
-secret.private
+# secret.private
 
 # Temporary/test files
 test.pdf
