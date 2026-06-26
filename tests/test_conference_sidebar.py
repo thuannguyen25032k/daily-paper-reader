@@ -109,7 +109,6 @@ class ConferenceSidebarTest(unittest.TestCase):
 
             self.assertIn("* Conference Papers", text)
             self.assertIn("  * ICML 2025 <!--dpr-conference:icml-2025-->", text)
-            self.assertNotIn("推荐论文", text)
             self.assertIn("    * rl <!--dpr-conference-topic:icml-2025:query-rl-->", text)
             self.assertIn("      * <a class=\"dpr-sidebar-item-link dpr-sidebar-item-structured\"", text)
             self.assertIn("href=\"#/conference/icml-2025/openreview-icml-2025-abc123-a-conference-paper\"", text)
@@ -124,7 +123,7 @@ class ConferenceSidebarTest(unittest.TestCase):
             paper_md = tmp_path / "docs" / "conference" / "icml-2025" / "openreview-icml-2025-abc123-a-conference-paper.md"
             self.assertTrue(paper_md.exists())
             md_text = paper_md.read_text(encoding="utf-8")
-            self.assertNotIn("title_zh:", md_text)
+            self.assertNotIn("title_alt:", md_text)
             self.assertIn("pdf: \"https://openreview.net/pdf?id=abc123\"", md_text)
             self.assertIn("source: ICML-2025-Accepted", md_text)
             self.assertIn('tags: ["query:rl"]', md_text)
@@ -142,7 +141,6 @@ class ConferenceSidebarTest(unittest.TestCase):
             self.assertIn("### 1. Search relevance", md_text)
             self.assertIn("### 4. Source and original text", md_text)
             self.assertNotIn("# A Conference Paper", md_text)
-            self.assertNotIn("## 命中理由", md_text)
 
     def test_update_sidebar_filters_score_three_and_keeps_four(self):
         with tempfile.TemporaryDirectory() as tmp:

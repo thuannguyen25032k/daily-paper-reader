@@ -57,33 +57,33 @@ window.SubscriptionsManager = (function () {
     '    {',
       '      "keyword": "short keyword phrase for BM25 recall",',
       '      "query": "semantic rewrite for this keyword",',
-      '      "keyword_cn": "optional English description or explanation",',
+      '      "note": "optional English description or explanation",',
     '    },',
     '  ],',
     '  "intent_queries": [',
     '    {',
       '      "query": "intent-oriented semantic query 1",',
-      '      "query_cn": "optional; can be omitted",',
+      '      "note": "optional; can be omitted",',
     '    },',
     '    {',
       '      "query": "intent-oriented semantic query 2",',
-      '      "query_cn": "optional; can be omitted",',
+      '      "note": "optional; can be omitted",',
     '    }',
     '  ],',
     '}',
     'Requirements:',
-    '1) keywords: output 5-12 objects; each item must include keyword and query, keyword_cn optional.',
+    '1) keywords: output 5-12 objects; each item must include keyword and query; note is optional.',
     '2) keyword and query MUST be English retrieval text only.',
-    '3) keyword_cn and query_cn are optional English descriptions or explanations; they may be omitted.',
+    '3) note is an optional English description or explanation; it may be omitted.',
     '4) keywords are used for recall and should be meaningful atomic noun phrases, normally 2-4 English words.',
     '5) Do NOT output acronym-only or abbreviation-only keywords such as "rl", "xrl", "sr", "llm". Expand them to full phrases like "reinforcement learning" or "large language model".',
     '6) Do NOT output incomplete modifier phrases ending with generic words like "driven", "based", "related", "guided", "enhanced", "for", or "with".',
     '7) Avoid coupling core terms (e.g., "symbolic regression", "reinforcement learning", "genetic programming", "Transformer") with extra qualifiers into one keyword. Keep core terms atomic in keyword and use query for full intent.',
     '8) Suggested example:',
-    '   {"keyword":"symbolic regression","query":"deep symbolic regression methods","keyword_cn":"symbolic regression methods"},',
-    '   {"keyword":"reinforcement learning","query":"policy gradient symbolic regression","keyword_cn":"policy gradient for symbolic regression"},',
+    '   {"keyword":"symbolic regression","query":"deep symbolic regression methods","note":"symbolic regression methods"},',
+    '   {"keyword":"reinforcement learning","query":"policy gradient symbolic regression","note":"policy gradient for symbolic regression"},',
     '   {"keyword":"Monte Carlo tree search","query":"Monte Carlo tree search for symbolic regression"}',
-    '9) intent_queries: output 1-4 actionable intent queries. The query field MUST be English only; query_cn is optional.',
+    '9) intent_queries: output 1-4 actionable intent queries. The query field MUST be English only; note is optional.',
     '10) intent_queries must be specific semantic search sentences, not acronym-only strings.',
     '11) Do not output extra fields like must_have / optional / exclude / rewrite_for_embedding / must_have.',
     '12) Return pure JSON only, no explanations.',
@@ -133,11 +133,11 @@ window.SubscriptionsManager = (function () {
     const base = normalizeText(value);
     if (!base) return '';
     const tag = base
-      .replace(/\((?:19|20)\d{2}(?:年)?\)/g, '')
-      .replace(/（(?:19|20)\d{2}(?:年)?）/g, '')
+      .replace(/\((?:19|20)\d{2}(?:\u5e74)?\)/g, '')
+      .replace(/\uFF08(?:19|20)\d{2}(?:\u5e74)?\uFF09/g, '')
       .replace(/([\u4e00-\u9fffA-Za-z]+)\s*(?:19|20)\d{2}(?!\d)/g, '$1')
       .replace(/(?:19|20)\d{2}(?!\d)([\u4e00-\u9fffA-Za-z]+)/g, '$1')
-      .replace(/[\s_-]*(?:19|20)\d{2}(?:年)?[\s_-]*/g, '')
+      .replace(/[\s_-]*(?:19|20)\d{2}(?:\u5e74)?[\s_-]*/g, '')
       .replace(/\+/g, '-')
       .replace(/[\s_]+/g, '-')
       .replace(/[^A-Za-z-]+/g, '')
@@ -380,7 +380,7 @@ window.SubscriptionsManager = (function () {
       if (!text) return null;
       return {
         keyword: text,
-        keyword_cn: '',
+        note: '',
         query: text,
       };
     }
@@ -396,11 +396,18 @@ window.SubscriptionsManager = (function () {
         item.keyword ||
         '',
     );
-    const keywordCn = normalizeText(item.keyword_cn || item.keyword_zh || item.zh || '');
+    const keywordNote = (() => {
+      const reader = (typeof window !== 'undefined' && window.LegacyConfigFields)
+        || globalThis.LegacyConfigFields;
+      if (reader && typeof reader.readNote === 'function') {
+        return normalizeText(reader.readNote(item));
+      }
+      return normalizeText(item.note || '');
+    })();
 
     return {
       keyword,
-      keyword_cn: keywordCn,
+      note: keywordNote,
       query: query || keyword,
       embedding_cache:
         item.embedding_cache && typeof item.embedding_cache === 'object'
@@ -429,7 +436,7 @@ window.SubscriptionsManager = (function () {
       if (!query) return null;
       return {
         query,
-        query_cn: '',
+        note: '',
         enabled: true,
         source: 'manual',
       };
@@ -438,14 +445,20 @@ window.SubscriptionsManager = (function () {
 
     const query = normalizeText(item.query || item.text || item.keyword || item.expr || '');
     if (!query) return null;
-    const queryCn = normalizeText(item.query_cn || item.query_zh || item.zh || item.note || '');
+    const queryNote = (() => {
+      const reader = (typeof window !== 'undefined' && window.LegacyConfigFields)
+        || globalThis.LegacyConfigFields;
+      if (reader && typeof reader.readNote === 'function') {
+        return normalizeText(reader.readNote(item));
+      }
+      return normalizeText(item.note || '');
+    })();
 
     return {
       query,
-      query_cn: queryCn,
+      note: queryNote,
       enabled: item.enabled !== false,
       source: normalizeText(item.source || 'manual'),
-      note: normalizeText(item.note || ''),
       embedding_cache:
         item.embedding_cache && typeof item.embedding_cache === 'object'
           ? cloneDeep(item.embedding_cache)

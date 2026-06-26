@@ -218,6 +218,8 @@ html {
   font-size: 1.1rem !important;
   line-height: 1.6 !important;
 }
+.paper-title-alt,
+.paper-title-primary,
 .paper-title-zh,
 .paper-title-en {
   font-size: 1.5rem !important;
@@ -2043,7 +2045,7 @@ body.close #sidebar-resizer {
   }
 }
 
-/* Paper-page title bar: English on the right, Chinese on the left, vertical bar in between, ~3 lines tall */
+/* Paper-page title bar: primary English title with optional alternate title on the left */
 body.dpr-paper-page .dpr-title-bar {
   display: flex;
   align-items: stretch;
@@ -2057,6 +2059,8 @@ body.dpr-paper-page .dpr-title-bar {
   overflow: hidden;
 }
 
+body.dpr-paper-page .dpr-title-alt,
+body.dpr-paper-page .dpr-title-primary,
 body.dpr-paper-page .dpr-title-cn,
 body.dpr-paper-page .dpr-title-en {
   flex: 1 1 0;
@@ -2070,6 +2074,7 @@ body.dpr-paper-page .dpr-title-en {
   word-break: break-word;
 }
 
+body.dpr-paper-page .dpr-title-alt,
 body.dpr-paper-page .dpr-title-cn {
   text-align: left;
   font-weight: 600;
@@ -2077,6 +2082,7 @@ body.dpr-paper-page .dpr-title-cn {
   order: 0;
 }
 
+body.dpr-paper-page .dpr-title-primary,
 body.dpr-paper-page .dpr-title-en {
   text-align: left;
   font-weight: 600;
@@ -2093,6 +2099,7 @@ body.dpr-paper-page .dpr-title-sep {
 
 /* With only one title: fill the left, hide the right */
 body.dpr-paper-page .dpr-title-bar.dpr-title-single .dpr-title-sep,
+body.dpr-paper-page .dpr-title-bar.dpr-title-single .dpr-title-primary,
 body.dpr-paper-page .dpr-title-bar.dpr-title-single .dpr-title-en {
   display: none;
 }
@@ -2110,7 +2117,9 @@ body.dpr-paper-page .dpr-title-bar.dpr-title-single .dpr-title-en {
     display: none;
   }
 
+  body.dpr-paper-page .dpr-title-alt,
   body.dpr-paper-page .dpr-title-cn,
+  body.dpr-paper-page .dpr-title-primary,
   body.dpr-paper-page .dpr-title-en {
     flex: none !important;  /* Cancel flex: 1 1 0 to avoid height collapse */
     -webkit-line-clamp: 4;
@@ -2421,7 +2430,7 @@ article.markdown-section {
   max-width: var(--sidebar-max-width, 480px);
 }
 
-/* Sidebar fonts: make Chinese and English more harmonious within one font stack */
+/* Sidebar fonts: mixed Latin and international-script fallback stack */
 .sidebar,
 .sidebar .sidebar-nav,
 .sidebar .sidebar-nav a,
@@ -2448,7 +2457,7 @@ article.markdown-section {
   text-rendering: optimizeLegibility;
 }
 
-/* Slightly reduce heading font weight so Chinese does not look one size bolder */
+/* Slightly reduce heading font weight for visual balance across scripts */
 .sidebar .dpr-sidebar-title {
   font-weight: 500;
 }
@@ -5816,11 +5825,13 @@ article.markdown-section {
   text-align: left;
 }
 
+.paper-title-alt,
 .paper-title-zh {
   color: #333;
   font-weight: 600;
 }
 
+.paper-title-primary,
 .paper-title-en {
   color: #666;
   font-weight: 400;

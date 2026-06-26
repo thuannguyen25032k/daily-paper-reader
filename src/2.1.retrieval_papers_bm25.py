@@ -24,6 +24,10 @@ from query_boolean import (
   match_term,
 )
 try:
+  from legacy_config_fields import read_note
+except Exception:  # pragma: no cover
+  from src.legacy_config_fields import read_note
+try:
   from source_backend_router import group_queries_by_source, merge_pipeline_results
   from source_config import ARXIV_SOURCE_KEY, get_source_backend, load_config_with_source_migration, normalize_source_list
 except Exception:  # pragma: no cover - compatibility for package import path
@@ -105,7 +109,7 @@ def group_end() -> None:
 
 
 def tokenize(text: str) -> List[str]:
-  """Simple tokenization: English by word, Chinese by single character."""
+  """Simple tokenization: English by word, non-Latin scripts character-by-character."""
   if not text:
     return []
   return TOKEN_RE.findall(text.lower())
@@ -729,7 +733,7 @@ def rank_papers_for_queries_via_supabase(
         "paper_tag": q.get("paper_tag"),
         "paper_sources": q.get("paper_sources") or [q.get("active_source") or ARXIV_SOURCE_KEY],
         "query_text": q_text,
-        "logic_cn": q.get("logic_cn") or "",
+        "note": read_note(q),
         "boolean_expr": q.get("boolean_expr") or "",
         "bm25_mode": "supabase",
         "sim_scores": sim_scores,
@@ -906,7 +910,7 @@ def rank_papers_for_queries(
         "paper_tag": q.get("paper_tag"),
         "paper_sources": q.get("paper_sources") or [ARXIV_SOURCE_KEY],
         "query_text": q_text,
-        "logic_cn": q.get("logic_cn") or "",
+        "note": read_note(q),
         "boolean_expr": "",
         "bm25_mode": query_mode,
         "sim_scores": sim_scores,

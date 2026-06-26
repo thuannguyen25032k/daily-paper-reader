@@ -91,12 +91,21 @@
     };
   };
 
+  const readTitleAlt = (meta) => {
+    const reader = globalThis.LegacyConfigFields
+      || (typeof window !== 'undefined' ? window.LegacyConfigFields : null);
+    if (reader && typeof reader.readTitleAlt === 'function') {
+      return normalizeText(reader.readTitleAlt(meta));
+    }
+    return normalizeText((reader && reader.readTitleAlt && reader.readTitleAlt(meta)) || '');
+  };
+
   const buildMetaSection = (meta, pageUrl, generatedAt) => {
     const safeMeta = meta && typeof meta === 'object' ? meta : {};
-    const titleZh = normalizeText(safeMeta.title_zh);
+    const titleAlt = readTitleAlt(safeMeta);
     const title = normalizeText(safeMeta.title);
-    const heading = titleZh || title || 'Paper Share';
-    const subtitle = titleZh && title ? title : '';
+    const heading = titleAlt || title || 'Paper Share';
+    const subtitle = titleAlt && title ? title : '';
     const tags = Array.isArray(safeMeta.tags) ? safeMeta.tags : [];
 
     const lines = [];

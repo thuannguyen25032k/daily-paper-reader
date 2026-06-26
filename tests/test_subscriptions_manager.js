@@ -6,6 +6,7 @@ global.document = global.document || {
   addEventListener() {},
 };
 
+require('../app/legacy-config-fields.js');
 require('../app/subscriptions.manager.js');
 
 const {
@@ -111,9 +112,9 @@ function testNormalizeSubscriptionsPreservesCustomBiorxivBackendFields() {
   assert.equal(backend.vector_rpc_exact, 'match_biorxiv_papers_exact');
 }
 
-function testNormalizeSubscriptionsConvertsChineseTagToEnglishFallback() {
+function testNormalizeSubscriptionsConvertsNonEnglishTagToEnglishFallback() {
   const config = buildBaseConfig();
-  config.subscriptions.intent_profiles[0].tag = '强化学习';
+  config.subscriptions.intent_profiles[0].tag = '\u5f3a\u5316\u5b66\u4e60';
   config.subscriptions.intent_profiles[0].keywords = [
     {
       keyword: 'reinforcement learning',
@@ -296,7 +297,7 @@ async function testQuickFetchIncludesAnySelectedProfile() {
 (async () => {
   testNormalizeSubscriptionsAddsBiorxivBackend();
   testNormalizeSubscriptionsPreservesCustomBiorxivBackendFields();
-  testNormalizeSubscriptionsConvertsChineseTagToEnglishFallback();
+  testNormalizeSubscriptionsConvertsNonEnglishTagToEnglishFallback();
   await testRunProfileQuickFetchPassesProfileTagToWorkflow();
   testConferenceCurrentYearDisabledForPendingSources();
   testConferenceDefaultYearOnlySelects2025();

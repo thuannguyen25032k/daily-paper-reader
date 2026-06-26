@@ -40,47 +40,56 @@ window.SubscriptionsSmartQuery = (function () {
     '    {',
     '      "keyword": "short keyword phrase for BM25 recall",',
     '      "query": "semantic rewrite for this keyword",',
-    '      "keyword_cn": "optional secondary label, e.g. a translation",',
+    '      "note": "optional English description or explanation",',
     '    }',
     '  ],',
     '  "intent_queries": [',
     '    {',
     '      "query": "intent-oriented semantic query 1",',
-    '      "query_cn": "optional secondary label, e.g. a translation",',
+    '      "note": "optional; can be omitted",',
     '    },',
     '    {',
-      '      "query": "intent-oriented semantic query 2",',
-      '      "query_cn": "optional secondary label, e.g. a translation",',
+    '      "query": "intent-oriented semantic query 2",',
+    '      "note": "optional; can be omitted",',
     '    }',
     '  ],',
     '}',
     'Requirements:',
-    '1) keywords: output 5-12 objects; each item must include keyword and query, keyword_cn optional.',
-    '2) keyword and query MUST be English retrieval text only. Do not put Chinese in keyword or query.',
-    '3) keyword_cn and query_cn are optional secondary labels (e.g. a translation in the user native language) when present.',
+    '1) keywords: output 5-12 objects; each item must include keyword and query; note is optional.',
+    '2) keyword and query MUST be English retrieval text only.',
+    '3) note is an optional English description or explanation; it may be omitted.',
     '4) keywords are used for BM25 recall and should be meaningful atomic noun phrases, normally 2-4 English words.',
     '5) Do NOT output acronym-only or abbreviation-only keywords such as "rl", "xrl", "sr", "llm". Expand them to full phrases like "reinforcement learning" or "large language model".',
     '6) Do NOT output incomplete modifier phrases ending with generic words like "driven", "based", "related", "guided", "enhanced", "for", or "with".',
     '7) Do NOT output standalone adjective/modifier keywords like "explainable", "interpretable", "deep", or "neural"; attach the target concept, e.g. "explainable reinforcement learning".',
     '8) Keep keywords atomic and avoid packing multiple concepts into one phrase.',
     '9) Do not include concrete example topics in the prompt.',
-    '10) intent_queries: output 1-4 actionable intent queries. The query field MUST be English only; query_cn is an optional secondary label.',
+    '10) intent_queries: output 1-4 actionable intent queries. The query field MUST be English only; note is optional.',
     '11) intent_queries must be specific semantic search sentences, not acronym-only strings.',
     '12) Do not output extra fields like must_have / optional / exclude / rewrite_for_embedding.',
     '13) Return pure JSON only, no explanations.',
     '14) intent_queries should be concise, timeless, and must not include years or year-like tokens.',
     '15) Tag suggestion must be concise: at most 12 characters total, counting hyphens.',
     '16) Tag suggestion must NOT include any year. Do not append or embed years (including digits like 2026/2025/2024 etc.) in tag.',
-    '17) Tag suggestion must be English words or an English acronym only. Never output Chinese in tag.',
+    '17) Tag suggestion must be English words or an English acronym only.',
     '18) Tag suggestion must use hyphen-separated words when multiple words are needed, for example "reinforcement-learning". Do not use spaces or underscores in tag.',
     '19) If the descriptive tag would exceed 12 characters, output an English acronym or a shorter hyphenated label.',
   ].join('\n');
 
   const normalizeText = (v) => String(v || '').trim();
-  const containsCjk = (v) => /[\u3400-\u9fff\uf900-\ufaff]/.test(String(v || ''));
+  const readKeywordNote = (item) => {
+    const reader = (typeof window !== 'undefined' && window.LegacyConfigFields)
+      || globalThis.LegacyConfigFields;
+    if (reader && typeof reader.readNote === 'function') {
+      return normalizeText(reader.readNote(item));
+    }
+    return normalizeText(item && item.note);
+  };
+  const readQueryNote = readKeywordNote;
+  const containsNonEnglishScript = (v) => /[\u3400-\u9fff\uf900-\ufaff]/.test(String(v || ''));
   const isEnglishRetrievalText = (v) => {
     const text = normalizeText(v);
-    return !!text && !containsCjk(text);
+    return !!text && !containsNonEnglishScript(text);
   };
   const PAPER_SOURCE_ORDER = [
     'arxiv',
@@ -182,9 +191,9 @@ window.SubscriptionsSmartQuery = (function () {
     const base = normalizeText(value);
     if (!base) return '';
     let text = base
-      .replace(/\((?:19|20)\d{2}(?:年)?\)/g, '')
-      .replace(/（(?:19|20)\d{2}(?:年)?）/g, '')
-      .replace(/(?:19|20)\d{2}(?:年)?/g, '')
+      .replace(/\((?:19|20)\d{2}(?:\u5e74)?\)/g, '')
+      .replace(/\uFF08(?:19|20)\d{2}(?:\u5e74)?\uFF09/g, '')
+      .replace(/(?:19|20)\d{2}(?:\u5e74)?/g, '')
       .replace(/[\s_-]{2,}/g, ' ')
       .trim();
     if (text) {
@@ -200,11 +209,11 @@ window.SubscriptionsSmartQuery = (function () {
     const base = normalizeText(value);
     if (!base) return '';
     let tag = base
-      .replace(/\((?:19|20)\d{2}(?:年)?\)/g, '')
-      .replace(/（(?:19|20)\d{2}(?:年)?）/g, '')
+      .replace(/\((?:19|20)\d{2}(?:\u5e74)?\)/g, '')
+      .replace(/\uFF08(?:19|20)\d{2}(?:\u5e74)?\uFF09/g, '')
       .replace(/([\u4e00-\u9fffA-Za-z]+)\s*(?:19|20)\d{2}(?!\d)/g, '$1')
       .replace(/(?:19|20)\d{2}(?!\d)([\u4e00-\u9fffA-Za-z]+)/g, '$1')
-      .replace(/[\s_-]*(?:19|20)\d{2}(?:年)[\s_-]*/g, '')
+      .replace(/[\s_-]*(?:19|20)\d{2}(?:\u5e74)[\s_-]*/g, '')
       .replace(/[\s_-]*(?:19|20)\d{2}[\s_-]*/g, '');
     tag = tag
       .replace(/\+/g, '-')
@@ -473,7 +482,7 @@ window.SubscriptionsSmartQuery = (function () {
           if (!keyword) return null;
           return {
             keyword,
-            keyword_cn: '',
+            note: '',
             query: keyword,
           };
         }
@@ -488,10 +497,10 @@ window.SubscriptionsSmartQuery = (function () {
             item.keyword ||
             '',
         );
-        const keywordCn = normalizeText(item.keyword_cn || item.keyword_zh || item.zh || '');
+        const keywordNote = readKeywordNote(item);
         return {
           keyword,
-          keyword_cn: keywordCn,
+          note: keywordNote,
           query: query || keyword,
           embedding_cache:
             item.embedding_cache && typeof item.embedding_cache === 'object'
@@ -512,7 +521,7 @@ window.SubscriptionsSmartQuery = (function () {
           if (!query) return null;
           return {
             query,
-            query_cn: '',
+            note: '',
             enabled: true,
             source: 'generated',
           };
@@ -520,13 +529,12 @@ window.SubscriptionsSmartQuery = (function () {
         if (!item || typeof item !== 'object') return null;
         const query = sanitizeNoYear(item.query || item.text || item.keyword || item.expr || '');
         if (!query) return null;
-        const queryCn = sanitizeNoYear(item.query_cn || item.query_zh || item.zh || item.note || '');
+        const queryNote = sanitizeNoYear(readQueryNote(item));
         return {
           query,
-          query_cn: queryCn,
+          note: queryNote,
           enabled: item.enabled !== false,
           source: normalizeText(item.source || 'generated'),
-          note: normalizeText(item.note || ''),
           embedding_cache:
             item.embedding_cache && typeof item.embedding_cache === 'object'
               ? deepClone(item.embedding_cache)
@@ -840,25 +848,15 @@ window.SubscriptionsSmartQuery = (function () {
         );
         if (!isEnglishRetrievalText(rawKeyword)) return null;
         if (isLowQualityKeyword(rawKeyword)) return null;
-        const keywordCn = normalizeText(
-          typeof item === 'string'
-            ? ''
-            : normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
-        );
+        const keywordNote = readKeywordNote(item);
         const rawQuery = normalizeText(
           typeof item === 'string' ? rawKeyword : normalizeText(item.query || item.rewrite || rawKeyword),
-        );
-        const queryCn = normalizeText(
-          typeof item === 'string'
-            ? ''
-            : normalizeText(item.query_cn || item.query_zh || item.note || ''),
         );
         const query = isEnglishRetrievalText(rawQuery) && !isWeakAcronymKeyword(rawQuery) ? rawQuery : rawKeyword;
         return {
           keyword: rawKeyword,
-          keyword_cn: keywordCn,
+          note: keywordNote,
           query: query || rawKeyword,
-          query_cn: queryCn || (containsCjk(rawQuery) ? rawQuery : ''),
         };
       })
       .filter(Boolean);
@@ -1152,7 +1150,7 @@ window.SubscriptionsSmartQuery = (function () {
         kwSeen.add(key);
         kwList.push({
           keyword,
-          keyword_cn: normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
+          note: readKeywordNote(item),
           query: normalizeText(item.query || item.text || keyword),
           embedding_cache:
             item.embedding_cache && typeof item.embedding_cache === 'object'
@@ -1179,7 +1177,7 @@ window.SubscriptionsSmartQuery = (function () {
         intentSeen.add(qKey);
         mergedIntentQueries.push({
           query,
-          query_cn: normalizeText(item.query_cn || item.query_zh || item.zh || ''),
+          note: readQueryNote(item),
           embedding_cache:
             item.embedding_cache && typeof item.embedding_cache === 'object'
               ? deepClone(item.embedding_cache)
@@ -1232,7 +1230,7 @@ window.SubscriptionsSmartQuery = (function () {
             ? selectedKeywords
                 .map((item, idx) => ({
                   keyword: normalizeText(item.keyword || item.text || item.expr || ''),
-                  keyword_cn: normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
+                  note: readKeywordNote(item),
                   query: normalizeText(item.query || item.text || item.keyword || ''),
                   embedding_cache:
                     item.embedding_cache && typeof item.embedding_cache === 'object'
@@ -1244,10 +1242,9 @@ window.SubscriptionsSmartQuery = (function () {
         intent_queries: intentQueries
           .map((queryObj) => ({
             query: normalizeText(queryObj && queryObj.query),
-            query_cn: normalizeText(queryObj.query_cn || queryObj.query_zh || queryObj.zh || ''),
+            note: readQueryNote(queryObj),
             enabled: queryObj.enabled !== false,
             source: normalizeText(queryObj.source || 'manual'),
-            note: normalizeText(queryObj.note || ''),
             embedding_cache:
               queryObj.embedding_cache && typeof queryObj.embedding_cache === 'object'
                 ? deepClone(queryObj.embedding_cache)
@@ -1280,16 +1277,16 @@ window.SubscriptionsSmartQuery = (function () {
     if (kind === 'intent') {
       return {
         primary: 'query',
-        secondary: 'query_cn',
+        secondary: 'note',
         primaryPlaceholder: '(English intent)',
-        secondaryPlaceholder: '(optional secondary label)',
+        secondaryPlaceholder: '(optional note)',
       };
     }
     return {
       primary: 'keyword',
-      secondary: 'keyword_cn',
+      secondary: 'note',
       primaryPlaceholder: '(English keyword)',
-      secondaryPlaceholder: '(optional secondary label)',
+      secondaryPlaceholder: '(optional note)',
     };
   };
 
@@ -1769,7 +1766,7 @@ window.SubscriptionsSmartQuery = (function () {
     const keywords = rawKeywords.map((k) => ({
       keyword: normalizeText(k.keyword || ''),
       query: normalizeText(k.query || k.keyword || ''),
-      keyword_cn: normalizeText(k.keyword_cn || ''),
+      note: readKeywordNote(k),
       embedding_cache:
         k.embedding_cache && typeof k.embedding_cache === 'object'
           ? deepClone(k.embedding_cache)
@@ -1785,8 +1782,8 @@ window.SubscriptionsSmartQuery = (function () {
 
   const renderCloudCards = (items, kind, options = {}) => {
     const textField = options.textField || 'text';
-    const descField = options.descField || 'logic_cn';
-    const descFallbackField = options.descFallbackField || 'logic_cn';
+    const descField = options.descField || 'note';
+    const descFallbackField = options.descFallbackField || 'note';
     const defaultDesc = options.defaultDesc || '';
     const realKind = normalizeCandidateKind(kind);
     return (items || [])
@@ -2162,14 +2159,14 @@ window.SubscriptionsSmartQuery = (function () {
 
     const kwHtml = renderCloudCards(modalState.keywords || [], 'kw', {
       textField: 'keyword',
-      descField: 'keyword_cn',
-      defaultDesc: '(optional secondary label to be filled in)',
+      descField: 'note',
+      defaultDesc: '(optional note to be filled in)',
     });
     const intentHtml = renderCloudCards(modalState.intent_queries || [], 'intent', {
       textField: 'query',
-      descField: 'query_cn',
+      descField: 'note',
       descFallbackField: 'note',
-      defaultDesc: '(optional secondary label to be filled in)',
+      defaultDesc: '(optional note to be filled in)',
     });
     const hasKeywordSection = Array.isArray(modalState.keywords) && modalState.keywords.length > 0;
     const hasIntentSection = Array.isArray(modalState.intent_queries) && modalState.intent_queries.length > 0;
@@ -2566,7 +2563,7 @@ window.SubscriptionsSmartQuery = (function () {
         }
         modalState.keywords.push({
           keyword: kwText,
-          keyword_cn: logic,
+          note: logic,
           query: query || kwText,
           _selected: true,
         });
@@ -2907,7 +2904,7 @@ window.SubscriptionsSmartQuery = (function () {
     __test: {
       buildPromptFromTemplate,
       defaultPromptTemplate,
-      containsCjk,
+      containsNonEnglishScript,
       deriveTagFromCandidates,
       isEnglishRetrievalText,
       normalizeGenerated,
